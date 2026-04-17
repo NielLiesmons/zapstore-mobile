@@ -7,7 +7,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:zapstore/utils/extensions.dart';
-import 'package:zapstore/widgets/common/profile_avatar.dart';
+import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/profiles_rich_text.dart';
 
 class RelevantWhoFollowContainer extends HookConsumerWidget {
@@ -269,7 +269,7 @@ class RelevantWhoFollowContainer extends HookConsumerWidget {
           child: SizedBox(
             width: avatarSize,
             height: avatarSize,
-            child: ProfileAvatar(profile: author, radius: avatarSize / 2),
+            child: ProfilePic(profile: author, size: avatarSize),
           ),
         ),
       ),
@@ -322,7 +322,7 @@ class RelevantWhoFollowContainer extends HookConsumerWidget {
               child: SizedBox(
                 width: avatarSize,
                 height: avatarSize,
-                child: ProfileAvatar(profile: zapper, radius: avatarSize / 2),
+                child: ProfilePic(profile: zapper, size: avatarSize),
               ),
             ),
           ),

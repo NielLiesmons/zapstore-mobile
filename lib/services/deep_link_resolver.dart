@@ -20,7 +20,7 @@ String? resolveDeepLinkPath(Uri uri) {
         final id = uri.pathSegments[1];
         if (id.isNotEmpty) {
           final route = section == 'apps' ? 'app' : 'stack';
-          return '/search/$route/$id';
+          return '/$route/$id';
         }
       }
     }
@@ -31,7 +31,7 @@ String? resolveDeepLinkPath(Uri uri) {
     if (uri.host == 'details' || uri.path == '/details') {
       final id = uri.queryParameters['id'];
       if (id != null && id.isNotEmpty) {
-        return '/search/app/$id';
+        return '/app/$id';
       }
     }
 
@@ -39,7 +39,7 @@ String? resolveDeepLinkPath(Uri uri) {
       final query = uri.queryParameters['q'];
       if (query != null && query.isNotEmpty) {
         debugPrint('Market intent: search query = $query');
-        return '/search/app/$query';
+        return '/app/$query';
       }
     }
 

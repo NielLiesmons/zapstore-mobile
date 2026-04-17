@@ -4,7 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
-
+import 'package:zapstore/theme.dart';
 class NoteParser {
   static final RegExp nip19Regex = RegExp(
     r'(?:nostr:)?(npub|nsec|note|nprofile|nevent|naddr|nrelay)1[02-9ac-hj-np-z]+',
@@ -301,7 +301,7 @@ class EventEntityWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(
+        border: AppBorder.all(
           color: colorPair[0].withValues(alpha: 0.2),
           width: 1.0,
         ),

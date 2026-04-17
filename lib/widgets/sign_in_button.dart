@@ -33,7 +33,7 @@ class SignInButton extends ConsumerWidget {
             actions: [
               (
                 'Open Amber',
-                () async => context.push('/search/app/$kAmberNaddr'),
+                () async => context.push('/app/$kAmberNaddr'),
               ),
             ],
           );

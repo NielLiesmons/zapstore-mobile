@@ -197,7 +197,7 @@ class _ToastOverlay extends HookWidget {
                   decoration: BoxDecoration(
                     color: backgroundColor,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: borderColor, width: 1),
+                    border: AppBorder.all(color: borderColor, width: 1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.4),
@@ -472,7 +472,7 @@ class _ToastActionButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: accentColor.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(
+            border: AppBorder.all(
               color: accentColor.withValues(alpha: 0.3),
               width: 1,
             ),

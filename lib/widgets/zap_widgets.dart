@@ -12,7 +12,7 @@ import 'package:zapstore/services/settings_service.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/widgets/auth_widgets.dart';
 import 'package:zapstore/widgets/common/base_dialog.dart';
-import 'package:zapstore/widgets/common/profile_avatar.dart';
+import 'package:zapstore/widgets/common/profile_pic.dart';
 
 /// Zap button for apps - shows a button to zap the app or relay
 class ZapButton extends HookConsumerWidget {
@@ -152,7 +152,7 @@ class ZappersHorizontalList extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ProfileAvatar(profile: profileByPubkey[e.key], radius: 12),
+                  ProfilePic(profile: profileByPubkey[e.key], size: 24),
                   const SizedBox(width: 6),
                   Text(
                     formatSatsCompact(e.value),
@@ -288,9 +288,9 @@ class ZapAmountDialog extends HookConsumerWidget {
                             if (author != null) ...[
                               WidgetSpan(
                                 alignment: PlaceholderAlignment.middle,
-                                child: ProfileAvatar(
+                                child: ProfilePic(
                                   profile: author,
-                                  radius: 9,
+                                  size: 18,
                                 ),
                               ),
                               const WidgetSpan(

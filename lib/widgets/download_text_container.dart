@@ -101,7 +101,7 @@ class DownloadTextContainer extends StatelessWidget {
     final double effectiveFontSize =
         size ?? context.textTheme.bodySmall?.fontSize ?? 12;
     final double diameter =
-        effectiveFontSize * 1.6; // Mirrors ProfileAvatar sizing
+        effectiveFontSize * 1.6; // Mirrors ProfilePic sizing
 
     // Known domains → asset icons
     if (host == 'github.com') {

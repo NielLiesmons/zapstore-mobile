@@ -9,12 +9,16 @@ import 'package:skeletonizer/skeletonizer.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
+import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/app_card.dart';
+import 'package:zapstore/widgets/app_small_card.dart';
 import 'package:zapstore/widgets/author_container.dart';
 import 'package:zapstore/widgets/comments_section.dart';
 import 'package:zapstore/widgets/common/badges.dart';
 import 'package:zapstore/widgets/common/time_utils.dart';
 import 'package:zapstore/widgets/floating_overflow_menu.dart';
+import 'package:zapstore/widgets/social/details_tab.dart';
+import 'package:zapstore/widgets/social/social_tabs.dart';
 import 'package:zapstore/theme.dart';
 
 class AppStackScreen extends HookConsumerWidget {
@@ -300,7 +304,9 @@ class _AppStackContent extends HookConsumerWidget {
                       children: [
                         Text(
                           'Apps in this stack',
-                          style: context.textTheme.titleLarge,
+                          style: AppTextStyles.h2.copyWith(
+                            color: Theme.of(context).extension<AppColors>()!.white,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         CountBadge(
@@ -316,14 +322,42 @@ class _AppStackContent extends HookConsumerWidget {
                     _EmptyAppsPlaceholder()
                   else
                     ...sortedApps.map(
-                      (app) => AppCard(app: app, showUpdateArrow: app.hasUpdate),
+                      (app) => Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        child: AppSmallCard(app: app),
+                      ),
                     ),
-                  // Comments section - hidden for private/encrypted stacks
-                  if (stack.content.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 24),
-                      child: StackCommentsSection(stack: stack),
+                  // Social tabs: Comments · Zaps · Labels · Details
+                  if (stack.content.isEmpty) ...[
+                    const SizedBox(height: 24),
+                    SocialTabs(
+                      contentBuilder: (tab) {
+                        switch (tab) {
+                          case SocialTab.comments:
+                            return StackCommentsSection(stack: stack);
+                          case SocialTab.zaps:
+                            return const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(child: Text('No zaps yet')),
+                            );
+                          case SocialTab.labels:
+                            return const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(child: Text('No labels yet')),
+                            );
+                          case SocialTab.details:
+                            return DetailsTab(
+                              publicationLabel: 'Stack',
+                              shareableId: stack.identifier,
+                              pubkey: stack.pubkey,
+                            );
+                        }
+                      },
                     ),
+                  ],
                 ],
               ),
             ),
@@ -373,10 +407,8 @@ class _StackHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitleColor = Theme.of(context).colorScheme.onSurfaceVariant;
-    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: subtitleColor,
-        );
+    final c = Theme.of(context).extension<AppColors>()!;
+    final subtitleStyle = AppTextStyles.reg13.copyWith(color: c.white33);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,16 +419,12 @@ class _StackHeader extends StatelessWidget {
             Flexible(
               child: Text(
                 stack.name ?? stack.identifier,
-                style: context.textTheme.headlineMedium,
+                style: AppTextStyles.h1.copyWith(color: c.white),
               ),
             ),
             if (_isEncrypted) ...[
               const SizedBox(width: 8),
-              Icon(
-                Icons.lock,
-                size: 20,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+              Icon(Icons.lock, size: 20, color: c.white66),
             ],
           ],
         ),
@@ -415,7 +443,7 @@ class _StackHeader extends StatelessWidget {
         // Metadata row: updated timestamp + private indicator
         Row(
           children: [
-            Icon(Icons.update, size: 14, color: subtitleColor),
+            Icon(Icons.update, size: 14, color: c.white33),
             const SizedBox(width: 4),
             Text('Updated ', style: subtitleStyle),
             TimeAgoText(stack.event.createdAt, style: subtitleStyle),
@@ -424,17 +452,17 @@ class _StackHeader extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: subtitleColor.withValues(alpha: 0.15),
+                  color: c.white8,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.lock_outline, size: 12, color: subtitleColor),
+                    Icon(Icons.lock_outline, size: 12, color: c.white33),
                     const SizedBox(width: 4),
                     Text(
                       'Private',
-                      style: subtitleStyle?.copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.bold13.copyWith(color: c.white33),
                     ),
                   ],
                 ),
@@ -446,9 +474,7 @@ class _StackHeader extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+            style: AppTextStyles.reg15.copyWith(color: c.white66),
           ),
         ],
       ],

@@ -10,6 +10,7 @@ import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/widgets/batch_progress_banner.dart';
 import 'package:zapstore/widgets/common/badges.dart';
+import 'package:zapstore/widgets/common/base_dialog.dart';
 import 'package:zapstore/widgets/app_card.dart';
 
 class UpdatesScreen extends ConsumerWidget {
@@ -416,21 +417,13 @@ class _ManualUpdatesHelpIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Manual Updates'),
-          content: const Text(
-            'Apps not installed or updated by the latest Zapstore will show here '
+      onTap: () => showAppConfirm(
+        context,
+        title: 'Manual Updates',
+        message: 'Apps not installed or updated by the latest Zapstore will show here '
             'and require manual confirmation of the Android system prompt once per app.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Got it'),
-            ),
-          ],
-        ),
+        confirmLabel: 'Got it',
+        cancelLabel: 'Close',
       ),
       child: Icon(
         Icons.help_outline,
@@ -454,7 +447,7 @@ class _UncatalogedAppCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-        border: Border.all(
+        border: AppBorder.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),

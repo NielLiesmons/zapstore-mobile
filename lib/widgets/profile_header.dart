@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import 'package:models/models.dart';
 import '../theme.dart';
-import 'common/profile_avatar.dart';
+import 'common/profile_pic.dart';
 import 'common/profile_name_widget.dart';
 
 /// Profile header widget with skeleton loading state
@@ -21,7 +21,7 @@ class ProfileHeader extends StatelessWidget {
   final String pubkey;
   final Profile? profile;
   final bool isLoading;
-  final double radius;
+  final double radius; // kept for call-site compat; treated as size (diameter)
   final bool showBio;
   final Widget? additionalInfo;
 
@@ -32,7 +32,7 @@ class ProfileHeader extends StatelessWidget {
       child: Column(
         children: [
           // Profile avatar (handles null profile with fallback)
-          ProfileAvatar(profile: profile, radius: radius),
+          ProfilePic(profile: profile, pubkey: pubkey, size: radius * 2),
           const SizedBox(height: 16),
 
           // Display name with loading state

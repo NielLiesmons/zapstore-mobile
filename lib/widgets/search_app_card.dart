@@ -43,7 +43,7 @@ class SearchAppCard extends ConsumerWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-          border: Border.all(
+          border: AppBorder.all(
             color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
             width: 1,
           ),
@@ -194,7 +194,7 @@ class SearchAppCard extends ConsumerWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-            border: Border.all(
+            border: AppBorder.all(
               color: Theme.of(
                 context,
               ).colorScheme.outline.withValues(alpha: 0.2),

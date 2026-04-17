@@ -6,7 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
-
+import 'package:zapstore/theme.dart';
 /// Shared stack link card used in profile and user screens.
 /// Shows stack name, app count badge, and padlock icon for private stacks.
 class StackLinkCard extends HookConsumerWidget {
@@ -71,7 +71,7 @@ class StackLinkCard extends HookConsumerWidget {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
+            border: AppBorder.all(
               color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),

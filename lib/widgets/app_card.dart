@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:skeletonizer/skeletonizer.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
+import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/utils/url_utils.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/widgets/zap_widgets.dart';
 
-import 'common/profile_avatar.dart';
+import 'common/app_pic.dart';
+import 'common/profile_pic.dart';
 import 'common/profile_name_widget.dart';
 import 'version_pill_widget.dart';
 import 'install_button.dart';
@@ -62,7 +63,7 @@ class AppCard extends HookConsumerWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-          border: Border.all(
+          border: AppBorder.all(
             color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
             width: 1,
           ),
@@ -82,7 +83,12 @@ class AppCard extends HookConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // App Icon (stretches to match name + version height, ~20% width)
-                    _buildAppIcon(context, iconSize),
+                    AppPic(
+                      iconUrl: firstValidHttpUrl(app!.icons),
+                      name: app!.name,
+                      identifier: app!.identifier,
+                      size: iconSize,
+                    ),
 
                     const SizedBox(width: 14),
 
@@ -179,60 +185,14 @@ class AppCard extends HookConsumerWidget {
     );
   }
 
-  Widget _buildAppIcon(BuildContext context, double size) {
-    final iconUrl = firstValidHttpUrl(app!.icons);
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: iconUrl != null
-              ? CachedNetworkImage(
-                  imageUrl: iconUrl,
-                  fit: BoxFit.cover,
-                  fadeInDuration: const Duration(milliseconds: 500),
-                  fadeOutDuration: const Duration(milliseconds: 200),
-                  placeholder: (_, url) => const SizedBox.shrink(),
-                  errorWidget: (context, url, error) => Center(
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      size: 32,
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                )
-              : Center(
-                  child: Icon(
-                    Icons.apps_outlined,
-                    size: 32,
-                    color: Colors.grey[400],
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildAppNameWithPublisher(
     BuildContext context,
     Profile? publisher,
     bool isPublisherLoading,
   ) {
     final appName = app!.name ?? app!.identifier;
-    final titleStyle = context.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w900,
+    final titleStyle = AppTextStyles.bold17.copyWith(
+      color: Theme.of(context).extension<AppColors>()!.white,
     );
 
     // If not showing signed by or relay-signed, just show name
@@ -257,20 +217,17 @@ class AppCard extends HookConsumerWidget {
         children: [
           TextSpan(text: appName, style: titleStyle),
           TextSpan(text: '  by ', style: byStyle),
-          WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: SizedBox(
-                width: avatarSize,
-                height: avatarSize,
-                child: ProfileAvatar(
-                  profile: publisher,
-                  radius: avatarSize / 2,
-                ),
-              ),
-            ),
-          ),
+                  WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: ProfilePic(
+                                profile: publisher,
+                                pubkey: app!.event.pubkey,
+                                size: avatarSize,
+                              ),
+                            ),
+                          ),
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: ProfileNameWidget(
@@ -345,7 +302,7 @@ class AppCard extends HookConsumerWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-            border: Border.all(
+            border: AppBorder.all(
               color: Theme.of(
                 context,
               ).colorScheme.outline.withValues(alpha: 0.2),
@@ -520,7 +477,7 @@ class _ZapEncouragementInCard extends HookConsumerWidget {
         decoration: BoxDecoration(
           color: Colors.orange.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
+          border: AppBorder.all(
             color: Colors.orange.withValues(alpha: 0.2),
             width: 1,
           ),

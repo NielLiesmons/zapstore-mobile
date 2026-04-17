@@ -4,8 +4,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
-import 'package:zapstore/widgets/common/profile_avatar.dart';
-
+import 'package:zapstore/widgets/common/profile_pic.dart';
+import 'package:zapstore/theme.dart';
 const _kAvatarSize = 24.0;
 const _kOverlap = 8.0;
 
@@ -127,14 +127,14 @@ class _OverlappingAvatars extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(
+                    border: AppBorder.all(
                       color: Theme.of(context).scaffoldBackgroundColor,
                       width: 1.5,
                     ),
                   ),
-                  child: ProfileAvatar(
+                  child: ProfilePic(
                     profile: profiles[i],
-                    radius: (_kAvatarSize - 3) / 2,
+                    size: _kAvatarSize - 3,
                   ),
                 ),
               ),

@@ -18,15 +18,15 @@ import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/services/settings_service.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
+import 'package:zapstore/widgets/common/base_dialog.dart';
 import 'package:zapstore/widgets/common/profile_identity_row.dart';
 import 'package:zapstore/widgets/common/stack_link_card.dart';
-import 'package:zapstore/theme.dart';
 import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
 import 'package:zapstore/widgets/nwc_widgets.dart';
 import 'package:zapstore/widgets/relay_management_card.dart';
 import 'package:zapstore/screens/app_stacks_screen.dart';
-
+import 'package:zapstore/theme.dart';
 /// Profile screen for authentication and app settings
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -281,7 +281,7 @@ class _StackMigrationWarning extends ConsumerWidget {
               context,
             ).colorScheme.errorContainer.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
+            border: AppBorder.all(
               color: Theme.of(context).colorScheme.error.withValues(alpha: 0.4),
             ),
           ),
@@ -600,7 +600,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
           color: Theme.of(context).colorScheme.surfaceContainerHighest
               .withValues(alpha: isHistorical ? 0.15 : 0.3),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
+          border: AppBorder.all(
             color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
           ),
         ),
@@ -675,7 +675,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
                     context,
                   ).colorScheme.surface.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
+                  border: AppBorder.all(
                     color: Theme.of(
                       context,
                     ).colorScheme.outline.withValues(alpha: 0.15),
@@ -852,7 +852,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
               context,
             ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
+            border: AppBorder.all(
               color: Theme.of(
                 context,
               ).colorScheme.outline.withValues(alpha: 0.2),
@@ -1106,7 +1106,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
+        border: AppBorder.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),
@@ -1187,7 +1187,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
+        border: AppBorder.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),
@@ -1473,77 +1473,25 @@ class _DataManagementSection extends ConsumerWidget {
     );
   }
 
-  void _showClearAllDataDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.warning, color: Theme.of(context).colorScheme.error),
-            const SizedBox(width: 8),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text('Clear local storage'),
-              ),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Clears all cached data and restarts the app. '
+  void _showClearAllDataDialog(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Clear local storage',
+      message: 'Clears all cached data and restarts the app. '
           'Your sign-in and wallet connection will be preserved.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              // Close the confirmation dialog first
-              Navigator.pop(context);
-              // Proceed with clearing data
-              await _clearAllData(context, ref);
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: const Text('Clear storage'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Clear storage',
+      isDestructive: true,
     );
+    if (confirmed == true && context.mounted) {
+      await _clearAllData(context, ref);
+    }
   }
 
   Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     try {
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => const AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(
-                color: AppColors.darkSkeletonHighlight,
-                backgroundColor: AppColors.darkSkeletonBase,
-              ),
-              SizedBox(height: 16),
-              Text('Restarting...'),
-            ],
-          ),
-        ),
-      );
-
-      // Native restart - storage will be cleared on next launch
       await restartApp();
     } catch (e) {
       if (context.mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
         context.showError('Restart failed', technicalDetails: e.toString());
       }
     }

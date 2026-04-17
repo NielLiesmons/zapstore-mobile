@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:models/models.dart';
-import 'package:skeletonizer/skeletonizer.dart';
 import 'package:zapstore/utils/extensions.dart';
+import 'shimmer.dart';
 
 /// Centralized widget for displaying profile names with proper loading states.
 ///
@@ -53,56 +53,11 @@ class ProfileNameWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveStyle = style ?? Theme.of(context).textTheme.bodyMedium;
-    final textHeight = effectiveStyle?.fontSize ?? 14;
+    final textHeight = (effectiveStyle?.fontSize ?? 14).roundToDouble();
 
-    // Loading state (no cached data): skeleton with shimmer, white npub overlaid
+    // Loading: use our design-system Shimmer (gray palette, no blurple tint).
     if (isLoading) {
-      // Darker skeleton colors for profile name
-      const darkerSkeletonConfig = SkeletonizerConfigData(
-        effect: ShimmerEffect(
-          baseColor: Color(0xFF0F1A2A), // Very dark blue-gray
-          highlightColor: Color(0xFF1A2D45), // Slightly lighter
-          duration: Duration(milliseconds: 1000),
-        ),
-      );
-
-      return SkeletonizerConfig(
-        data: darkerSkeletonConfig,
-        child: Skeletonizer(
-          enabled: true,
-          child: SizedBox(
-            height: textHeight * 1.2,
-            width: skeletonWidth,
-            child: Stack(
-              children: [
-                // Skeleton bone that shimmers
-                Positioned.fill(
-                  child: Bone(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                // White abbreviated npub overlaid on top
-                Positioned.fill(
-                  child: Skeleton.ignore(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        _abbreviatedNpub,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: maxLines,
-                        overflow: overflow,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      return Shimmer(width: skeletonWidth, height: textHeight, radius: 4);
     }
 
     // Data state: show profile name or abbreviated npub if not found

@@ -5,7 +5,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:models/models.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/extensions.dart';
+import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/app_detail_widgets.dart';
 import 'package:zapstore/widgets/download_text_container.dart';
 import 'package:zapstore/theme.dart';
@@ -18,15 +20,13 @@ class AppInfoTable extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = Theme.of(context).extension<AppColors>()!;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-          width: 1,
-        ),
+        color: c.gray33,
+        borderRadius: BorderRadius.circular(16),
+        border: AppBorder.all(color: c.white8, width: 0.33),
       ),
       child: Column(children: _buildInfoRows(context, ref)),
     );
@@ -240,6 +240,7 @@ class _InfoRowSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<AppColors>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -247,9 +248,7 @@ class _InfoRowSkeleton extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            style: AppTextStyles.med15.copyWith(color: c.white33),
             maxLines: 1,
           ),
           const SizedBox(width: 16),
@@ -318,6 +317,7 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<AppColors>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -325,9 +325,7 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            style: AppTextStyles.med15.copyWith(color: c.white33),
             maxLines: 1,
           ),
           const SizedBox(width: 16),
@@ -341,7 +339,7 @@ class _InfoRow extends StatelessWidget {
                     : Flexible(
                         child: AutoSizeText(
                           value,
-                          style: context.textTheme.bodyMedium,
+                          style: AppTextStyles.reg15.copyWith(color: c.white),
                           maxLines: 1,
                           textAlign: TextAlign.right,
                           minFontSize: 12,
@@ -350,18 +348,12 @@ class _InfoRow extends StatelessWidget {
                       ),
                 if (copyValue != null) ...[
                   const SizedBox(width: 6),
-                  IconButton(
-                    icon: const Icon(Icons.copy, size: 16),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    style: IconButton.styleFrom(
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                    ),
-                    onPressed: () {
+                  GestureDetector(
+                    onTap: () {
                       Clipboard.setData(ClipboardData(text: copyValue!));
                     },
+                    child: AppIcon(AppIcons.copy, size: 16,
+    outlineColor: c.white33, outlineThickness: 1.4),
                   ),
                 ],
               ],

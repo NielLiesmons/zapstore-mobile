@@ -137,25 +137,6 @@ class AppStacksScreen extends HookConsumerWidget {
 
     final unmigrated = userStacksState?.models.toList() ?? [];
 
-    final authorPubkeys = items.map((s) => s.event.pubkey).toSet();
-    final authorsState = authorPubkeys.isNotEmpty
-        ? ref.watch(
-            query<Profile>(
-              authors: authorPubkeys,
-              source: const LocalAndRemoteSource(
-                relays: {'social', 'vertex'},
-                cachedFor: Duration(hours: 2),
-              ),
-              subscriptionPrefix: 'app-all-stacks-authors',
-            ),
-          )
-        : null;
-    final authorsMap = {
-      for (final profile in authorsState?.models ?? <Profile>[])
-        profile.pubkey: profile,
-    };
-    final isAuthorsLoading = authorsState is StorageLoading;
-
     final allPreviewIds = <String>{};
     final stackPreviewIds = <String, List<String>>{};
     for (final stack in items) {
@@ -287,11 +268,8 @@ class AppStacksScreen extends HookConsumerWidget {
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final stack = items[index];
-                  final author = authorsMap[stack.event.pubkey];
                   return StackCard(
                     stack: stack,
-                    author: author,
-                    isAuthorLoading: isAuthorsLoading && author == null,
                     previewIdentifiers: stackPreviewIds[stack.id] ?? [],
                     appsMap: appsMap,
                     showAuthor: true,
@@ -327,25 +305,6 @@ class _MigrationBanner extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isLoading = useState(false);
     final progressCount = useState(0);
-
-    // Query authors for the pending stacks
-    final authorPubkeys = stacks.map((s) => s.event.pubkey).toSet();
-    final authorsState = authorPubkeys.isNotEmpty
-        ? ref.watch(
-            query<Profile>(
-              authors: authorPubkeys,
-              source: const LocalAndRemoteSource(
-                relays: {'social', 'vertex'},
-                cachedFor: Duration(hours: 2),
-              ),
-              subscriptionPrefix: 'app-migration-stacks-authors',
-            ),
-          )
-        : null;
-    final authorsMap = {
-      for (final profile in authorsState?.models ?? <Profile>[])
-        profile.pubkey: profile,
-    };
 
     final allPreviewIds = <String>{};
     final stackPreviewIds = <String, List<String>>{};
@@ -383,7 +342,7 @@ class _MigrationBanner extends HookConsumerWidget {
           context,
         ).colorScheme.primaryContainer.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
+        border: AppBorder.all(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
         ),
       ),
@@ -429,12 +388,8 @@ class _MigrationBanner extends HookConsumerWidget {
             itemCount: stacks.length,
             itemBuilder: (context, index) {
               final stack = stacks[index];
-              final author = authorsMap[stack.event.pubkey];
               return StackCard(
                 stack: stack,
-                author: author,
-                isAuthorLoading:
-                    authorsState is StorageLoading && author == null,
                 previewIdentifiers: stackPreviewIds[stack.id] ?? [],
                 appsMap: appsMap,
                 showAuthor: false,

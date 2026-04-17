@@ -3,7 +3,7 @@ import 'dart:io' show File, Platform;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show SystemChrome, SystemUiMode, SystemUiOverlayStyle, rootBundle;
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
@@ -22,12 +22,23 @@ import 'package:zapstore/services/package_manager/android_package_manager.dart';
 import 'package:zapstore/services/package_manager/dummy_package_manager.dart';
 import 'package:zapstore/services/deep_link_service.dart';
 import 'package:zapstore/utils/extensions.dart';
+import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/widgets/breathing_logo.dart';
 
 /// Global provider container for error reporting (accessible outside widget tree)
 late final ProviderContainer _providerContainer;
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Edge-to-edge: let content draw behind system bars.
+  // The barrier overlay and modal backdrop will now cover the full screen.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+  ));
+
   // Create provider container with overrides
   _providerContainer = ProviderContainer(
     overrides: [
@@ -132,16 +143,18 @@ class ZapstoreApp extends HookConsumerWidget {
     // Always show the main app UI, even during initialization
     return MaterialApp.router(
       title: title,
-      theme: darkTheme,
+      theme: grayTheme,
       routerConfig: ref.watch(routerProvider),
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
-        // Limit text scale factor to prevent extreme sizes on different devices
         final mediaQuery = MediaQuery.of(context);
-        final constrainedTextScale = mediaQuery.textScaler
-            .scale(1.0)
-            .clamp(1.0, 1.2);
-        final constrainedTextScaler = TextScaler.linear(constrainedTextScale);
+        // User's preferred scale (0.9 / 1.0 / 1.1) loaded from SharedPreferences.
+        // Falls back to 1.0 while loading — zero extra build cycles during normal use.
+        final userScale = ref.watch(textScaleFactorProvider);
+        // Clamp device accessibility scale then multiply by user preference.
+        final deviceScale = mediaQuery.textScaler.scale(1.0).clamp(1.0, 1.2);
+        final effectiveScale = (deviceScale * userScale).clamp(0.85, 1.32);
+        final constrainedTextScaler = TextScaler.linear(effectiveScale);
 
         // Show error overlay if initialization failed (do not block UI during loading)
         if (initState is AsyncError) {
@@ -192,10 +205,7 @@ class ZapstoreApp extends HookConsumerWidget {
 
         return MediaQuery(
           data: mediaQuery.copyWith(textScaler: constrainedTextScaler),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            child: child!,
-          ),
+          child: child!,
         );
       },
     );

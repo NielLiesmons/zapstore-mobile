@@ -6,7 +6,8 @@ import 'package:purplebase/purplebase.dart';
 import 'package:zapstore/services/app_restart_service.dart';
 import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/services/settings_service.dart';
-
+import 'package:zapstore/widgets/common/base_dialog.dart';
+import 'package:zapstore/theme.dart';
 /// App Catalog Relay Management Card - manages app catalog relays.
 /// These are relays for discovering apps, NOT social relays like Damus/Primal.
 ///
@@ -116,37 +117,12 @@ class RelayManagementCard extends HookConsumerWidget {
 
     Future<void> applyChanges() async {
       // Show confirmation dialog
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.dns, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text('Apply Relay Changes'),
-                ),
-              ),
-            ],
-          ),
-          content: const Text(
-            'Changing app catalog relays will clear cached app data and restart the app. '
+      final confirmed = await showAppConfirm(
+        context,
+        title: 'Apply Relay Changes',
+        message: 'Changing app catalog relays will clear cached app data and restart the app. '
             'Your sign-in and wallet connection will be preserved.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Apply Changes'),
-            ),
-          ],
-        ),
+        confirmLabel: 'Apply Changes',
       );
 
       if (confirmed != true || !context.mounted) return;
@@ -284,7 +260,7 @@ class RelayManagementCard extends HookConsumerWidget {
                             .surfaceContainerHighest
                             .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
+                        border: AppBorder.all(
                           color: Theme.of(
                             context,
                           ).colorScheme.outline.withValues(alpha: 0.2),

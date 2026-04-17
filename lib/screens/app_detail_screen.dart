@@ -1,24 +1,31 @@
+import 'dart:ui';
+
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
-import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:zapstore/constants/app_constants.dart';
+import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/debug_utils.dart';
+import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/extensions.dart';
+import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/widgets/app_detail_widgets.dart';
 import 'package:zapstore/widgets/app_header.dart';
 import 'package:zapstore/widgets/app_info_table.dart';
 import 'package:zapstore/widgets/author_container.dart';
 import 'package:zapstore/widgets/comments_section.dart';
+import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/download_text_container.dart';
 import 'package:zapstore/widgets/expandable_markdown.dart';
-import 'package:zapstore/widgets/floating_overflow_menu.dart';
-import 'package:zapstore/widgets/install_button.dart';
 import 'package:zapstore/widgets/screenshots_gallery.dart';
+import 'package:zapstore/widgets/social/details_tab.dart';
+import 'package:zapstore/widgets/social/social_tabs.dart';
 import 'package:zapstore/widgets/stacked_by_row.dart';
 
 class AppDetailScreen extends HookConsumerWidget {
@@ -70,9 +77,7 @@ class AppDetailScreen extends HookConsumerWidget {
         subscriptionPrefix: 'app-detail-$appId',
       ),
       (previous, next) async {
-        // When query completes with no models (app not found on relay)
         if (next is StorageData<App> && next.models.isEmpty) {
-          // Remove stale local data for this app
           await ref.storage.clear(
             RequestFilter<App>(
               tags: {
@@ -80,7 +85,6 @@ class AppDetailScreen extends HookConsumerWidget {
               },
             ).toRequest(),
           );
-          // Navigate back
           if (context.mounted) {
             context.pop();
           }
@@ -95,8 +99,6 @@ class AppDetailScreen extends HookConsumerWidget {
     }
 
     if (app == null) {
-      // StorageLoading with no models yet: show skeleton
-      // StorageData with no models: app not found (handled by ref.listen pop)
       return const Scaffold(
         body: SafeArea(
           child: SingleChildScrollView(
@@ -136,7 +138,10 @@ class _ErrorScaffold extends StatelessWidget {
   }
 }
 
-/// Internal widget that displays app details
+// ─────────────────────────────────────────────────────────────────────────────
+// Main detail content
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _AppDetailContent extends HookConsumerWidget {
   final App app;
 
@@ -144,11 +149,11 @@ class _AppDetailContent extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-
+    final c = Theme.of(context).extension<AppColors>()!;
     final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
     final showDebugSections = isDebugMode(signedInPubkey);
 
-    // Query author profile from social relays
+    // Author profile
     final authorState = ref.watch(
       query<Profile>(
         authors: {app.pubkey},
@@ -161,19 +166,44 @@ class _AppDetailContent extends HookConsumerWidget {
     );
     final author = authorState.models.firstOrNull;
 
+    // Zapstore catalog profile (used in the detail header community stack)
+    final catalogProfileState = ref.watch(
+      query<Profile>(
+        authors: {kZapstoreCommunityPubkey},
+        source: const LocalAndRemoteSource(
+          relays: {'social', 'vertex'},
+          cachedFor: Duration(hours: 6),
+        ),
+        subscriptionPrefix: 'app-detail-catalog-profile',
+      ),
+    );
+    final catalogProfile = catalogProfileState.models.firstOrNull;
+
     final latestRelease = app.latestRelease.value;
     final latestMetadata = app.installable;
 
     return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.only(top: 16, bottom: 80),
+      body: Column(
+        children: [
+          // Fixed blurred detail header
+          _DetailHeader(
+            app: app,
+            author: author,
+            catalogProfile: catalogProfile,
+            latestMetadata: latestMetadata,
+          ),
+
+          // Scrollable body
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(context).bottom + 40,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // App header
+                  // App header (pic + name + platform pill + install button)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: AppHeader(app: app),
@@ -208,17 +238,7 @@ class _AppDetailContent extends HookConsumerWidget {
                             oneLine: true,
                             size: 14,
                             app: app,
-                            onTap: () {
-                              final segments = GoRouterState.of(
-                                context,
-                              ).uri.pathSegments;
-                              final first = segments.isNotEmpty
-                                  ? segments.first
-                                  : 'search';
-                              context.push(
-                                '/$first/user/${author.pubkey}',
-                              );
-                            },
+                            onTap: () => pushUser(context, author.pubkey),
                           )
                         else
                           const AuthorSkeleton(),
@@ -255,7 +275,7 @@ class _AppDetailContent extends HookConsumerWidget {
                                 height: 1.6,
                               ),
                               blockquoteDecoration: BoxDecoration(
-                                color: const Color(0xFF1E3A5F), // Dark blue
+                                color: const Color(0xFF1E3A5F),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
@@ -275,138 +295,214 @@ class _AppDetailContent extends HookConsumerWidget {
                     ),
                   ),
 
-                  // Latest release section — always shown; skeletons until metadata loads
+                  // Latest release panel
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                height: 1,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Text(
-                                'LATEST RELEASE',
-                                style: context.textTheme.labelLarge?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.85),
-                                  letterSpacing: 1.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Container(
-                                height: 1,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.2),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          'Latest Release',
+                          style: AppTextStyles.h2.copyWith(color: c.white),
                         ),
-                        const SizedBox(height: 16),
-                        latestMetadata != null
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface.withValues(alpha: 0.05),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: c.gray33,
+                            borderRadius: BorderRadius.circular(AppRadius.r16),
+                          ),
+                          child: latestMetadata != null
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'Version:',
-                                      style: context.textTheme.bodyMedium,
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Version',
+                                          style: AppTextStyles.reg15.copyWith(
+                                            color: c.white66,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          latestMetadata.version,
+                                          style: AppTextStyles.semibold15
+                                              .copyWith(color: c.white),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '(${formatDate(latestMetadata.createdAt)})',
+                                          style: AppTextStyles.reg13.copyWith(
+                                            color: c.white33,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    Gap(4),
-                                    Text(
-                                      latestMetadata.version,
-                                      style: context.textTheme.bodyMedium
-                                          ?.copyWith(fontWeight: FontWeight.bold),
-                                    ),
-                                    Gap(4),
-                                    Text(
-                                      '(${formatDate(latestMetadata.createdAt)})',
-                                      style: context.textTheme.bodyMedium?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.6),
-                                      ),
-                                    ),
+                                    if (latestRelease != null) ...[
+                                      const SizedBox(height: 12),
+                                      ReleaseNotes(release: latestRelease),
+                                    ],
                                   ],
-                                ),
-                              )
-                            : ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: SizedBox(
-                                  height: 32,
-                                  width: 220,
-                                  child: buildGradientLoader(context),
-                                ),
-                              ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 20),
-                          child: latestRelease != null
-                              ? ReleaseNotes(release: latestRelease)
+                                )
                               : const ReleaseNotesSkeleton(),
                         ),
                       ],
                     ),
                   ),
 
+                  const SizedBox(height: 8),
+
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: AppInfoTable(app: app, fileMetadata: latestMetadata),
                   ),
 
-                  if (latestMetadata != null)
-                    CommentsSection(app: app, fileMetadata: latestMetadata),
+                  // Social tabs: Comments · Zaps · Labels · Details
+                  const SizedBox(height: 16),
+                  SocialTabs(
+                    contentBuilder: (tab) {
+                      switch (tab) {
+                        case SocialTab.comments:
+                          if (latestMetadata != null) {
+                            return CommentsSection(
+                              app: app,
+                              fileMetadata: latestMetadata,
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        case SocialTab.zaps:
+                          return const Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Center(child: Text('No zaps yet')),
+                          );
+                        case SocialTab.labels:
+                          return const Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Center(child: Text('No labels yet')),
+                          );
+                        case SocialTab.details:
+                          return DetailsTab(
+                            publicationLabel: 'App',
+                            shareableId: app.identifier,
+                            pubkey: app.pubkey,
+                            repository: app.repository,
+                          );
+                      }
+                    },
+                  ),
 
-                  // Debug section
                   if (showDebugSections)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: DebugVersionsSection(app: app),
                     ),
-
-                  const SizedBox(height: 100),
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-            // Sticky install button
-            InstallButton(app: app),
+// ─────────────────────────────────────────────────────────────────────────────
+// Fixed blurred detail header
+// ─────────────────────────────────────────────────────────────────────────────
 
-            // Floating three-dot menu
-            FloatingOverflowMenu(
-              shareUrl: getAppShareUrl(app),
-              publisherPubkey: app.pubkey,
-              app: app,
-            ),
+class _DetailHeader extends StatelessWidget {
+  const _DetailHeader({
+    required this.app,
+    required this.author,
+    required this.catalogProfile,
+    required this.latestMetadata,
+  });
 
-          ],
+  final App app;
+  final Profile? author;
+  final Profile? catalogProfile;
+  final Installable? latestMetadata;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<AppColors>()!;
+    final topPad = MediaQuery.paddingOf(context).top;
+
+    final publisherName = author?.name ?? _shortenPubkey(app.pubkey);
+
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          color: c.black.withValues(alpha: 0.7),
+          padding: EdgeInsets.fromLTRB(14, topPad + 10, 14, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Back button
+              GestureDetector(
+                onTap: () => context.pop(),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: c.white8,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Center(
+                    child: AppIcon(
+                      AppIcons.chevronLeft,
+                      size: 16,
+                      outlineColor: c.white66,
+                      outlineThickness: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              // Author avatar
+              ProfilePic(profile: author, size: 28),
+
+              const SizedBox(width: 8),
+
+              // Publisher name
+              Expanded(
+                child: Text(
+                  publisherName,
+                  style: AppTextStyles.med15.copyWith(color: c.white66),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+
+              // Release timestamp
+              if (latestMetadata != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  formatDate(latestMetadata!.createdAt),
+                  style: AppTextStyles.reg13.copyWith(color: c.white33),
+                ),
+              ],
+
+              // Zapstore catalog profile pic
+              if (catalogProfile != null) ...[
+                const SizedBox(width: 10),
+                ProfilePic(profile: catalogProfile, size: 24),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
+  String _shortenPubkey(String pubkey) {
+    if (pubkey.length <= 12) return pubkey;
+    return '${pubkey.substring(0, 6)}…${pubkey.substring(pubkey.length - 4)}';
+  }
 }

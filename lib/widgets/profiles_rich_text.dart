@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/utils/extensions.dart';
-import 'package:zapstore/widgets/common/profile_avatar.dart';
+import 'package:zapstore/widgets/common/profile_pic.dart';
 
 /// Generic widget for displaying a list of user profiles in a readable sentence format
 /// Handles multiple users with proper grammar ("John", "John and Jane")
@@ -106,7 +106,7 @@ class ProfilesRichText extends StatelessWidget {
       spans.add(
         WidgetSpan(
           alignment: PlaceholderAlignment.middle,
-          child: ProfileAvatar(profile: profile, radius: avatarRadius),
+          child: ProfilePic(profile: profile, size: avatarRadius * 2),
         ),
       );
       // Small gap between avatar and name

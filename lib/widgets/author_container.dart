@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:models/models.dart';
-import 'common/profile_avatar.dart';
+import 'common/profile_pic.dart';
 import 'common/profile_name_widget.dart';
 import '../utils/extensions.dart';
 
@@ -61,7 +61,7 @@ class AuthorContainer extends StatelessWidget {
               child: SizedBox(
                 width: _size * 1.4,
                 height: _size * 1.4,
-                child: ProfileAvatar(profile: profile, radius: _size * 0.7),
+                child: ProfilePic(profile: profile, size: _size * 1.4),
               ),
             ),
           ),

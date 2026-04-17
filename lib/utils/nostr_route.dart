@@ -11,16 +11,22 @@ final _zapstoreUrlPattern = RegExp(
   caseSensitive: false,
 );
 
-/// Resolves the current navigation branch from the GoRouter state so that
-/// pushed routes stay within the active tab (search / updates / profile).
-String _currentBranch(BuildContext context) {
+/// Resolves the route prefix for the current navigation branch.
+///
+/// New route structure (no shell):
+///   /           → home (no prefix)
+///   /updates    → updates branch (prefix = '/updates')
+///   /profile    → profile branch (prefix = '/profile')
+String _branchPrefix(BuildContext context) {
   final segments = GoRouterState.of(context).uri.pathSegments;
-  return segments.isNotEmpty ? segments.first : 'search';
+  final first = segments.isNotEmpty ? segments.first : '';
+  if (first == 'updates' || first == 'profile') return '/$first';
+  return '';
 }
 
 /// Push to a user profile screen within the current branch.
 void pushUser(BuildContext context, String pubkey) {
-  context.push('/${_currentBranch(context)}/user/$pubkey');
+  context.push('${_branchPrefix(context)}/user/$pubkey');
 }
 
 /// Push to an app detail screen within the current branch.
@@ -38,7 +44,7 @@ void pushApp(BuildContext context, String identifier, {String? author, int kind 
           ),
         )
       : identifier;
-  context.push('/${_currentBranch(context)}/app/$id');
+  context.push('${_branchPrefix(context)}/app/$id');
 }
 
 /// Push to a stack detail screen within the current branch.
@@ -53,12 +59,12 @@ void pushStack(BuildContext context, String identifier, {String? author, int kin
           ),
         )
       : identifier;
-  context.push('/${_currentBranch(context)}/stack/$id');
+  context.push('${_branchPrefix(context)}/stack/$id');
 }
 
 /// Push to the all-stacks screen within the current branch.
 void pushStacks(BuildContext context) {
-  context.push('/${_currentBranch(context)}/stacks');
+  context.push('${_branchPrefix(context)}/stacks');
 }
 
 /// Attempt to navigate in-app for a URL or Nostr identifier.
@@ -126,8 +132,7 @@ bool _tryNavigateNip19(BuildContext context, String token) {
 /// The id might be an naddr or a plain identifier (e.g. `com.example.app`).
 void _navigateNip19OrIdentifier(BuildContext context, String id, {required String fallbackKind}) {
   if (_tryNavigateNip19(context, id)) return;
-  final branch = _currentBranch(context);
-  context.push('/$branch/$fallbackKind/$id');
+  context.push('${_branchPrefix(context)}/$fallbackKind/$id');
 }
 
 void _launchExternal(String url) async {

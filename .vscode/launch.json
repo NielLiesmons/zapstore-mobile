@@ -2,21 +2,32 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "zapstore",
-      "request": "launch",
-      "type": "dart"
-    },
-    {
-      "name": "zapstore (profile mode)",
+      "name": "zapstore (emulator debug)",
       "request": "launch",
       "type": "dart",
-      "flutterMode": "profile"
+      "flutterMode": "debug",
+      "deviceId": "emulator",
+      "args": ["--dart-define=FLUTTER_WEB_USE_SKIA=false"]
     },
     {
-      "name": "zapstore (release mode)",
+      "name": "zapstore (emulator profile)",
       "request": "launch",
       "type": "dart",
-      "flutterMode": "release"
+      "flutterMode": "profile",
+      "deviceId": "emulator"
+    },
+    {
+      "name": "zapstore (emulator release)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "deviceId": "emulator"
+    },
+    {
+      "name": "zapstore (any device)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug"
     }
   ]
 }

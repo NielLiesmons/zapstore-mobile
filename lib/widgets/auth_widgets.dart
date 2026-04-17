@@ -32,7 +32,7 @@ class SignInPrompt extends HookConsumerWidget {
           actions: [
             (
               'Open Amber',
-              () async => context.push('/search/app/$kAmberNaddr'),
+              () async => context.push('/app/$kAmberNaddr'),
             ),
           ],
         );

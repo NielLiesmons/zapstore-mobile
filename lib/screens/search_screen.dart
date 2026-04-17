@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
+import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/nostr_route.dart';
+import 'package:zapstore/theme.dart';
 
 import '../widgets/app_stack_container.dart';
+import '../widgets/common/section_header.dart';
 import '../widgets/latest_releases_container.dart';
 import '../widgets/search_app_card.dart';
 import '../utils/extensions.dart';
@@ -60,18 +63,21 @@ class SearchScreen extends HookConsumerWidget {
                   controller: searchController,
                   focusNode: searchFocusNode,
                   hintText: 'Search apps',
-                  leading: Icon(
-                    Icons.search_rounded,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  leading: Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: AppIcon(
+                      AppIcons.search,
+                      size: 20,
+                      color: Theme.of(context).extension<AppColors>()!.white33,
+                    ),
                   ),
                   trailing: [
                     if (hasText)
                       IconButton(
-                        icon: Icon(
-                          Icons.clear_rounded,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                        icon: AppIcon(
+                          AppIcons.cross,
+                          size: 16,
+                          color: Theme.of(context).extension<AppColors>()!.white33,
                         ),
                         onPressed: () {
                           searchController.clear();
@@ -84,17 +90,14 @@ class SearchScreen extends HookConsumerWidget {
                   onSubmitted: performSearch,
                   elevation: WidgetStateProperty.all(0),
                   backgroundColor: WidgetStateProperty.all(
-                    Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.8),
+                    Theme.of(context).extension<AppColors>()!.gray33,
                   ),
                   shape: WidgetStateProperty.all(
                     RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outline.withValues(alpha: 0.3),
-                        width: 1,
+                        color: Theme.of(context).extension<AppColors>()!.white16,
+                        width: 0.33,
                       ),
                     ),
                   ),
@@ -117,21 +120,44 @@ class SearchScreen extends HookConsumerWidget {
                       scrollController: scrollController,
                     ),
 
-                  // App Stacks Container
+                  // ── Apps section ──────────────────────────
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: AppStackContainer(
-                      showSkeleton: !(initState.hasValue || initState.hasError),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SectionHeader(
+                          title: 'Apps',
+                          linkText: 'See more',
+                          onLinkTap: () => Navigator.of(context).pushNamed('/updates'),
+                        ),
+                        LatestReleasesContainer(
+                          showSkeleton: !(initState.hasValue || initState.hasError),
+                          scrollController: scrollController,
+                        ),
+                      ],
                     ),
                   ),
 
-                  // Latest Releases Container
-                  LatestReleasesContainer(
-                    showSkeleton: !(initState.hasValue || initState.hasError),
-                    scrollController: scrollController,
+                  // ── Stacks section ──────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SectionHeader(
+                          title: 'Stacks',
+                          linkText: 'See more',
+                          onLinkTap: () => pushStacks(context),
+                        ),
+                        AppStackContainer(
+                          showSkeleton: !(initState.hasValue || initState.hasError),
+                        ),
+                      ],
+                    ),
                   ),
 
-                  const SizedBox(height: 16), // Bottom padding
+                  const SizedBox(height: 16),
                 ],
               ),
             ),

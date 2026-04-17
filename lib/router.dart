@@ -1,27 +1,24 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
-import 'package:zapstore/screens/main_scaffold.dart';
+import 'package:zapstore/screens/home_screen.dart';
 import 'package:zapstore/screens/app_detail_screen.dart';
 import 'package:zapstore/screens/app_stacks_screen.dart';
 import 'package:zapstore/screens/app_stack_screen.dart';
 import 'package:zapstore/screens/user_screen.dart';
-import 'package:zapstore/screens/search_screen.dart';
 import 'package:zapstore/screens/updates_screen.dart';
 import 'package:zapstore/screens/profile_screen.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/services/updates_service.dart';
 
-/// Root paths for each navigation branch (used for back navigation handling)
-const kBranchRoots = ['/search', '/updates', '/profile'];
-
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 typedef _ResolvedRoute = ({String identifier, String? author});
 
+/// No animation for root-level route replacements (e.g. initial home load).
 CustomTransitionPage<void> _noTransitionPage({
   required GoRouterState state,
   required Widget child,
@@ -36,6 +33,32 @@ CustomTransitionPage<void> _noTransitionPage({
   );
 }
 
+/// Slide-from-right for all push navigations (detail screens, Updates, Profile).
+CustomTransitionPage<void> _slideTransitionPage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(1.0, 0.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        )),
+        child: child,
+      );
+    },
+    transitionDuration: const Duration(milliseconds: 280),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
+  );
+}
+
 _ResolvedRoute _resolveNaddrRouteId(String rawId) {
   if (rawId.startsWith('naddr1')) {
     try {
@@ -43,21 +66,18 @@ _ResolvedRoute _resolveNaddrRouteId(String rawId) {
       if (decoded is AddressData) {
         return (identifier: decoded.identifier, author: decoded.author);
       }
-    } catch (_) {
-      // Fall back to treating it as a plain identifier.
-    }
+    } catch (_) {}
   }
   return (identifier: rawId, author: null);
 }
 
-/// Helper to build app detail route
 GoRoute _appDetailRoute() {
   return GoRoute(
     path: 'app/:id',
     pageBuilder: (context, state) {
       final rawId = state.pathParameters['id']!;
       final resolved = _resolveNaddrRouteId(rawId);
-      return _noTransitionPage(
+      return _slideTransitionPage(
         state: state,
         child: AppDetailScreen(
           appId: resolved.identifier,
@@ -68,14 +88,13 @@ GoRoute _appDetailRoute() {
   );
 }
 
-/// Helper to build stack detail route
 GoRoute _stackDetailRoute() {
   return GoRoute(
     path: 'stack/:id',
     pageBuilder: (context, state) {
       final rawId = state.pathParameters['id']!;
       final resolved = _resolveNaddrRouteId(rawId);
-      return _noTransitionPage(
+      return _slideTransitionPage(
         state: state,
         child: AppStackScreen(
           stackId: resolved.identifier,
@@ -86,23 +105,22 @@ GoRoute _stackDetailRoute() {
   );
 }
 
-/// Helper to build all-stacks route
 GoRoute _allStacksRoute() {
   return GoRoute(
     path: 'stacks',
-    pageBuilder: (context, state) {
-      return _noTransitionPage(state: state, child: const AppStacksScreen());
-    },
+    pageBuilder: (context, state) => _slideTransitionPage(
+      state: state,
+      child: const AppStacksScreen(),
+    ),
   );
 }
 
-/// Helper to build user route
 GoRoute _userRoute() {
   return GoRoute(
     path: 'user/:pubkey',
     pageBuilder: (context, state) {
       final pubkey = state.pathParameters['pubkey']!;
-      return _noTransitionPage(
+      return _slideTransitionPage(
         state: state,
         child: UserScreen(pubkey: pubkey),
       );
@@ -115,76 +133,58 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   final router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/search',
+    initialLocation: '/',
     onException: (context, state, router) {
-      router.go('/search');
+      router.go('/');
     },
     routes: [
-      // Single stateful shell route that handles everything
-      StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) =>
-            MainScaffold(navigationShell: navigationShell),
-        branches: [
-          // Search tab branch with nested detail routes
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/search',
-                pageBuilder: (context, state) => _noTransitionPage(
-                  state: state,
-                  child: const SearchScreen(),
-                ),
-                routes: [
-                  _appDetailRoute(),
-                  _stackDetailRoute(),
-                  _allStacksRoute(),
-                  _userRoute(),
-                ],
-              ),
-            ],
-          ),
-          // Updates tab branch with nested detail routes
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/updates',
-                pageBuilder: (context, state) => _noTransitionPage(
-                  state: state,
-                  child: const UpdatesScreen(),
-                ),
-                routes: [
-                  _appDetailRoute(),
-                  _stackDetailRoute(),
-                  _allStacksRoute(),
-                  _userRoute(),
-                ],
-              ),
-            ],
-          ),
-          // Profile tab branch with nested detail routes
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/profile',
-                pageBuilder: (context, state) => _noTransitionPage(
-                  state: state,
-                  child: const ProfileScreen(),
-                ),
-                routes: [
-                  _appDetailRoute(),
-                  _stackDetailRoute(),
-                  _allStacksRoute(),
-                  _userRoute(),
-                ],
-              ),
-            ],
-          ),
+      // ── Home (persists as the base route) ──────────────────────────────
+      GoRoute(
+        path: '/',
+        pageBuilder: (context, state) => _noTransitionPage(
+          state: state,
+          child: const HomeScreen(),
+        ),
+        routes: [
+          _appDetailRoute(),
+          _stackDetailRoute(),
+          _allStacksRoute(),
+          _userRoute(),
+        ],
+      ),
+
+      // ── Updates (slides in from right) ─────────────────────────────────
+      GoRoute(
+        path: '/updates',
+        pageBuilder: (context, state) => _slideTransitionPage(
+          state: state,
+          child: const UpdatesScreen(),
+        ),
+        routes: [
+          _appDetailRoute(),
+          _stackDetailRoute(),
+          _allStacksRoute(),
+          _userRoute(),
+        ],
+      ),
+
+      // ── Profile / Settings (slides in from right) ───────────────────────
+      GoRoute(
+        path: '/profile',
+        pageBuilder: (context, state) => _slideTransitionPage(
+          state: state,
+          child: const ProfileScreen(),
+        ),
+        routes: [
+          _appDetailRoute(),
+          _stackDetailRoute(),
+          _allStacksRoute(),
+          _userRoute(),
         ],
       ),
     ],
   );
 
-  // Listen for route changes to trigger actions
   void onRouteChange() {
     final currentPath = router.routerDelegate.currentConfiguration.uri.path;
     final isUpdatesRoute = currentPath.startsWith('/updates');
@@ -192,23 +192,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     previousPath = currentPath;
 
     Future.microtask(() {
-      // Sync installed packages on every navigation to catch sideloads,
-      // external installs/uninstalls, and self-updating apps.
-      // This is a local-only platform channel call (~100-500ms, no network).
       unawaited(
         ref.read(packageManagerProvider.notifier).syncInstalledPackages(),
       );
 
-      // Re-derive catalog from local DB when arriving at updates tab so
-      // data written by other screens or the background service is visible
-      // without waiting for the next poll cycle.
       if (isUpdatesRoute && !wasUpdatesRoute) {
         unawaited(
           ref.read(updatePollerProvider.notifier).refreshFromLocal(),
         );
       }
 
-      // Clear completed operations when navigating away from updates
       if (wasUpdatesRoute && !isUpdatesRoute) {
         ref.read(packageManagerProvider.notifier).clearCompletedOperations();
       }

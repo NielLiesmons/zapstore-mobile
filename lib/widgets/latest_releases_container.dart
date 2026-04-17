@@ -5,7 +5,8 @@ import 'package:models/models.dart';
 import 'package:zapstore/services/updates_service.dart';
 import 'package:zapstore/utils/app_query.dart';
 import 'package:zapstore/utils/extensions.dart';
-import 'app_card.dart';
+import 'app_small_card.dart';
+import 'common/shimmer.dart';
 
 const _kPageSize = 5;
 
@@ -226,6 +227,15 @@ final latestReleasesProvider =
 // Widget
 // ---------------------------------------------------------------------------
 
+/// Apps per column in the horizontal scroll (matching webapp's 4-per-column).
+const int _kAppsPerColumn = 4;
+
+/// Height of each app row inside a column: 56px icon + 16px vertical padding.
+const double _kAppRowHeight = 72;
+
+/// Total height of the horizontal scroll area.
+const double _kScrollHeight = _kAppRowHeight * _kAppsPerColumn;
+
 class LatestReleasesContainer extends HookConsumerWidget {
   const LatestReleasesContainer({
     super.key,
@@ -260,20 +270,22 @@ class LatestReleasesContainer extends HookConsumerWidget {
 
     final combinedApps = [...pinnedApps, ...dedupedApps];
 
+    // Infinite scroll: load more when the horizontal list nears the end
+    final hScrollController = useScrollController();
     useEffect(() {
       if (state == null) return null;
-      void onScroll() {
+      void onHScroll() {
         final s = ref.read(latestReleasesProvider);
         if (s.isLoadingMore || !s.hasMore) return;
-        if (scrollController.position.pixels >=
-            scrollController.position.maxScrollExtent - 300) {
+        if (hScrollController.position.pixels >=
+            hScrollController.position.maxScrollExtent - 400) {
           ref.read(latestReleasesProvider.notifier).loadMore();
         }
       }
 
       void checkInitialLoad() {
-        if (!scrollController.hasClients) return;
-        final position = scrollController.position;
+        if (!hScrollController.hasClients) return;
+        final position = hScrollController.position;
         final s = ref.read(latestReleasesProvider);
         if (s.isLoadingMore || !s.hasMore) return;
         if (position.maxScrollExtent <= position.viewportDimension) {
@@ -283,90 +295,128 @@ class LatestReleasesContainer extends HookConsumerWidget {
 
       WidgetsBinding.instance.addPostFrameCallback((_) => checkInitialLoad());
 
-      scrollController.addListener(onScroll);
-      return () => scrollController.removeListener(onScroll);
-    }, [scrollController, state]);
+      hScrollController.addListener(onHScroll);
+      return () => hScrollController.removeListener(onHScroll);
+    }, [hScrollController, state]);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildHeader(context),
-        const SizedBox(height: 8),
-        if (showSkeleton ||
-            state == null ||
-            (state.isLoading && combinedApps.isEmpty))
-          Column(
-            children: List.generate(3, (_) => const AppCard(isLoading: true)),
-          )
-        else if (state.error != null && combinedApps.isEmpty)
-          _buildError(context, state.error.toString())
-        else ...[
-          ...combinedApps.map(
-            (app) => AppCard(app: app, showUpdateArrow: app.hasUpdate),
-          ),
-          if (state.isLoadingMore)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
+    if (showSkeleton ||
+        state == null ||
+        (state.isLoading && combinedApps.isEmpty)) {
+      return _buildSkeleton(context);
+    }
+
+    if (state.error != null && combinedApps.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Split apps into columns of _kAppsPerColumn
+    final columns = <List<App>>[];
+    for (var i = 0; i < combinedApps.length; i += _kAppsPerColumn) {
+      columns.add(
+        combinedApps.sublist(
+          i,
+          (i + _kAppsPerColumn).clamp(0, combinedApps.length),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: _kScrollHeight,
+      child: ListView.builder(
+        controller: hScrollController,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(left: 14, right: 4),
+        itemCount: columns.length + (state.isLoadingMore ? 1 : 0),
+        itemBuilder: (ctx, i) {
+          if (i == columns.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
               child: Center(
                 child: SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 5),
+                  child: CircularProgressIndicator(strokeWidth: 3),
                 ),
               ),
-            ),
-        ],
-        const SizedBox(height: 24),
-      ],
+            );
+          }
+          return _AppColumn(apps: columns[i]);
+        },
+      ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    final divider = Expanded(
-      child: Container(
-        height: 1,
-        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
-      ),
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Row(
-        children: [
-          divider,
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Text(
-              'LATEST RELEASES',
-              style: context.textTheme.labelLarge?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.85),
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.bold,
-              ),
+  Widget _buildSkeleton(BuildContext context) {
+    return SizedBox(
+      height: _kScrollHeight,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(left: 14, right: 4),
+        itemCount: 3,
+        itemBuilder: (ctx, colIdx) => SizedBox(
+          width: 290,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 24),
+            child: Column(
+              children: List.generate(_kAppsPerColumn, (i) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Shimmer(width: 56, height: 56, radius: 14),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Shimmer(width: 120, height: 16, radius: 4),
+                            const SizedBox(height: 6),
+                            Shimmer(width: 80, height: 12, radius: 4),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )),
             ),
           ),
-          divider,
-        ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildError(BuildContext context, String error) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Center(
+/// A single column of up to [_kAppsPerColumn] AppSmallCards in the horizontal scroll.
+class _AppColumn extends StatelessWidget {
+  const _AppColumn({required this.apps});
+
+  final List<App> apps;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 290,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 24),
         child: Column(
           children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
-            const SizedBox(height: 16),
-            Text('Error loading apps', style: context.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              style: context.textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
+            for (final app in apps)
+              Expanded(
+                child: Padding(
+                  // No top padding on first row → gap from SectionHeader = exactly
+                  // the SectionHeader's 16px bottom padding.  Bottom padding creates
+                  // uniform 8px breathing room between consecutive cards (same as
+                  // symmetric(vertical:4) produced between cards, but without the
+                  // extra 4px top that pushed the first card down).
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: AppSmallCard(app: app),
+                ),
+              ),
+            // Fill remaining slots to keep even column height
+            for (var i = apps.length; i < _kAppsPerColumn; i++)
+              const Expanded(child: SizedBox.shrink()),
           ],
         ),
       ),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:models/models.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'profile_avatar.dart';
+import 'profile_pic.dart';
 import 'profile_name_widget.dart';
 
 /// Horizontal profile identity row with avatar, name, npub, and nip05.
@@ -32,7 +32,7 @@ class ProfileIdentityRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ProfileAvatar(profile: profile, pubkey: pubkey, radius: avatarRadius),
+        ProfilePic(profile: profile, pubkey: pubkey, size: avatarRadius * 2),
         const SizedBox(width: 16),
         Expanded(
           child: Column(

@@ -5,7 +5,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/services/settings_service.dart';
 import 'package:zapstore/theme.dart';
+import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/utils/extensions.dart';
+import 'package:zapstore/widgets/common/base_dialog.dart';
 
 /// Card showing NWC connection status and management
 class NWCConnectionCard extends HookConsumerWidget {
@@ -154,9 +156,9 @@ class NWCConnectionCard extends HookConsumerWidget {
   }
 
   void _showNWCDialog(BuildContext context, WidgetRef ref) async {
-    final connected = await showDialog<bool>(
-      context: context,
-      builder: (context) => NWCConnectionDialog(ref: ref),
+    final connected = await showAppSheet<bool>(
+      context,
+      builder: (_) => NWCConnectionDialog(ref: ref),
     );
     if (connected == true) {
       ref.invalidate(localSettingsProvider);
@@ -164,33 +166,13 @@ class NWCConnectionCard extends HookConsumerWidget {
   }
 
   void _removeNWCConnection(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text('Remove Wallet Connection'),
-        ),
-        content: const Text(
-          'Are you sure you want to remove your Lightning wallet connection? You won\'t be able to send zaps until you reconnect.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Remove Wallet Connection',
+      message: "Are you sure you want to remove your Lightning wallet connection? "
+          "You won't be able to send zaps until you reconnect.",
+      confirmLabel: 'Remove',
+      isDestructive: true,
     );
 
     if (confirmed == true) {
