@@ -93,7 +93,11 @@ class RootComment extends ConsumerWidget {
             ))
         .toList();
 
-    final contentWidget = NoteParser.parse(context, comment.content);
+    final contentWidget = NoteParser.parse(
+      context,
+      comment.content,
+      emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
+    );
 
     return GestureDetector(
       onTap: () => _openThread(context),
@@ -108,13 +112,16 @@ class RootComment extends ConsumerWidget {
             timestamp: comment.createdAt,
           ),
 
-          // Reply indicator — connector line + ProfilePicStack (when replies exist)
+          // Reply indicator — pulled 2px up to sit closer to the bubble above.
           if (replies.isNotEmpty)
-            _ReplyIndicator(
-              replierItems: replierItemsWithProfiles,
-              replyCount: replies.length,
-              replyIndicatorText: replyIndicatorText,
-              onTap: () => _openThread(context),
+            Transform.translate(
+              offset: const Offset(0, -2),
+              child: _ReplyIndicator(
+                replierItems: replierItemsWithProfiles,
+                replyCount: replies.length,
+                replyIndicatorText: replyIndicatorText,
+                onTap: () => _openThread(context),
+              ),
             ),
         ],
       ),
@@ -180,7 +187,11 @@ class _ThreadBody extends ConsumerWidget {
         MessageBubble(
           profile: author,
           pubkey: comment.event.pubkey,
-          content: NoteParser.parse(context, comment.content),
+          content: NoteParser.parse(
+            context,
+            comment.content,
+            emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
+          ),
           timestamp: comment.createdAt,
           isLight: true,
         ),
@@ -288,7 +299,11 @@ class _ThreadReply extends ConsumerWidget {
     return MessageBubble(
       profile: profile,
       pubkey: reply.event.pubkey,
-      content: NoteParser.parse(context, reply.content),
+      content: NoteParser.parse(
+        context,
+        reply.content,
+        emojiTags: NoteParser.extractEmojiTags(reply.event.tags),
+      ),
       timestamp: reply.createdAt,
       isLight: true,
     );
@@ -323,19 +338,18 @@ class _ReplyIndicator extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Padding(
         // Aligns the connector with the avatar center of the MessageBubble above
-        // (avatar = 36px centered at 12 screen-pad + 18 = 30px from left edge)
-        padding: const EdgeInsets.only(left: 30, bottom: 4),
+        // (avatar = 36px centered at 14 screen-pad + 18 = 32px from left edge)
+        padding: const EdgeInsets.only(left: 32),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             // Connector: visual 28px + 13px bottom padding aligns L-shape
             // endpoint with the vertical center of the 28px avatars on the right.
-            // With CrossAxisAlignment.end:
-            //   L-shape y from bottom = bottomPad + 1 = 14 = avatarSize/2 ✓
+            // Width matches the decreased avatar→bubble gap in MessageBubble (−2px).
             Padding(
               padding: const EdgeInsets.only(bottom: 13),
               child: SizedBox(
-                width: 27,
+                width: 25,
                 height: 28,
                 child: CustomPaint(
                   painter: _ConnectorPainter(color: c.white16),
@@ -344,17 +358,13 @@ class _ReplyIndicator extends StatelessWidget {
             ),
             const SizedBox(width: 2),
 
-            // 4px top padding matches webapp's .repliers-row { padding-top: 4px }
             Flexible(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: ProfilePicStack(
-                  profiles: replierItems,
-                  text: replyIndicatorText,
-                  suffix: '$replyCount',
-                  avatarSize: 28,
-                  onTap: onTap,
-                ),
+              child: ProfilePicStack(
+                profiles: replierItems,
+                text: replyIndicatorText,
+                suffix: '$replyCount',
+                avatarSize: 28,
+                onTap: onTap,
               ),
             ),
           ],

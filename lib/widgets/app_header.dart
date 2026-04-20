@@ -75,7 +75,8 @@ class AppHeader extends ConsumerWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Small pill showing the target platform (e.g. "Android").
+/// Small pill showing the target platform — height 36px matches SplitInstallButton,
+/// fully rounded, white8 background, text only.
 class _PlatformPill extends StatelessWidget {
   const _PlatformPill({required this.platform, required this.colors});
 
@@ -85,14 +86,16 @@ class _PlatformPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: colors.white8,
-        borderRadius: BorderRadius.circular(AppRadius.r8),
+        borderRadius: BorderRadius.circular(999),
       ),
+      alignment: Alignment.center,
       child: Text(
         _label(platform),
-        style: AppTextStyles.med13.copyWith(color: colors.white66),
+        style: AppTextStyles.reg13.copyWith(color: colors.white66),
       ),
     );
   }
@@ -110,7 +113,9 @@ class _PlatformPill extends StatelessWidget {
       case 'windows':
         return 'Windows';
       default:
-        return platform;
+        return platform.isEmpty
+            ? platform
+            : platform[0].toUpperCase() + platform.substring(1);
     }
   }
 }

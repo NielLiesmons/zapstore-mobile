@@ -224,26 +224,26 @@ class SplitInstallButton extends ConsumerWidget {
                   ),
                 ),
 
-                // Full-height divider
+                // Full-height divider — 1.6px matches AppStroke.medium
                 Container(
-                  width: 1,
+                  width: AppStroke.medium,
                   color: c.white33,
                 ),
 
-                // Right: chevron tap area → options modal
+                // Right: chevron tap area → options modal (3px less left pad)
                 GestureDetector(
                   onTap: () => _openOptions(context, ref),
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: const EdgeInsets.only(left: 6, right: 9),
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: AppIcon(
                           AppIcons.chevronDown,
-                          size: 11,
+                          size: 9,
                           outlineColor: c.white66,
-                          outlineThickness: 1.4,
+                          outlineThickness: AppStroke.medium,
                         ),
                       ),
                     ),

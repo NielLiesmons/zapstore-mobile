@@ -78,7 +78,7 @@ class _SocialTabsState extends State<SocialTabs> {
         // ── Tab row (horizontally scrollable, gap 8px) ────────────────────
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: tabs.map((tab) {

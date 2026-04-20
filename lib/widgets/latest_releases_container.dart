@@ -357,15 +357,21 @@ class LatestReleasesContainer extends HookConsumerWidget {
           width: 290,
           child: Padding(
             padding: const EdgeInsets.only(right: 24),
-            child: Column(
-              children: List.generate(_kAppsPerColumn, (i) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Shimmer(width: 56, height: 56, radius: 14),
-                      const SizedBox(width: 16),
-                      Expanded(
+              child: Column(
+            children: List.generate(_kAppsPerColumn, (i) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  // Must match AppSmallCard's crossAxisAlignment so the icon
+                  // sits flush at y=0 — prevents extra visual gap at the top
+                  // of the skeleton compared to the Stacks row.
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Shimmer(width: 56, height: 56, radius: 14),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: SizedBox(
+                        height: 56,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -376,10 +382,11 @@ class LatestReleasesContainer extends HookConsumerWidget {
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              )),
+              ),
+            )),
             ),
           ),
         ),

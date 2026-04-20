@@ -123,13 +123,13 @@ class _CommentsSectionLayout extends StatelessWidget {
       children: [
         // Add Comment button
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
           child: addCommentButton,
         ),
 
         if (errorException != null)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: _buildCommentsError(context, errorException!),
           ),
 
@@ -147,9 +147,12 @@ class _CommentsSectionLayout extends StatelessWidget {
           )
         else
           Column(
-            children: rootComments
-                .map((comment) => RootComment(comment: comment))
-                .toList(),
+            children: [
+              for (int i = 0; i < rootComments.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                RootComment(comment: rootComments[i]),
+              ],
+            ],
           ),
 
         const SizedBox(height: 16),

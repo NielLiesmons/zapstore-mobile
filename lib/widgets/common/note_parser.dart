@@ -5,6 +5,7 @@ import 'package:models/models.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/theme.dart';
+
 class NoteParser {
   static final RegExp nip19Regex = RegExp(
     r'(?:nostr:)?(npub|nsec|note|nprofile|nevent|naddr|nrelay)1[02-9ac-hj-np-z]+',
@@ -21,9 +22,34 @@ class NoteParser {
     caseSensitive: false,
   );
 
+  /// Matches :shortcode: custom emoji markers (1–100 non-space chars between colons).
+  /// Mirrors the EMOJI_REGEX in webapp/src/lib/utils/short-text-parser.js.
+  static final RegExp _emojiPattern = RegExp(
+    r':([^:\s]{1,100}):',
+    caseSensitive: false,
+  );
+
+  /// Extracts a `{shortcode → url}` map from a Nostr event's raw tag list.
+  ///
+  /// Custom emoji tags have the form `["emoji", "shortcode", "https://..."]`.
+  /// Matches webapp's `emojiMap()` helper in short-text-parser.js.
+  static Map<String, String> extractEmojiTags(List<List<String>> eventTags) {
+    final map = <String, String>{};
+    for (final tag in eventTags) {
+      if (tag.length >= 3 && tag[0] == 'emoji') {
+        final key = tag[1].toLowerCase();
+        map.putIfAbsent(key, () => tag[2]);
+      }
+    }
+    return map;
+  }
+
   static Widget parse(
     BuildContext context,
     String content, {
+    /// Shortcode → URL map from the event's emoji tags (NIP-30).
+    /// Build with [extractEmojiTags] from the raw event tag list.
+    Map<String, String>? emojiTags,
     Widget? Function(String entity)? onNostrEntity,
     Widget? Function(String httpUrl)? onHttpUrl,
     Widget? Function(String hashtag)? onHashtag,
@@ -72,7 +98,27 @@ class NoteParser {
       ));
     }
 
+    // Custom emoji — only when the caller passed an emojiTags map.
+    if (emojiTags != null && emojiTags.isNotEmpty) {
+      for (final match in _emojiPattern.allMatches(content)) {
+        final shortcode = match.group(1)!.toLowerCase();
+        final url = emojiTags[shortcode];
+        // Only treat as emoji when there's actually a mapped URL.
+        if (url != null) {
+          matches.add(_EntityMatch(
+            start: match.start,
+            end: match.end,
+            text: match.group(0)!,
+            type: _EntityType.emoji,
+            cleanEntity: shortcode,
+            url: url,
+          ));
+        }
+      }
+    }
+
     matches.sort((a, b) => a.start.compareTo(b.start));
+    // Remove overlapping matches — first one wins.
     final filtered = <_EntityMatch>[];
     var lastEnd = -1;
     for (final m in matches) {
@@ -113,6 +159,26 @@ class NoteParser {
                     : null,
               );
           break;
+        case _EntityType.emoji:
+          // Render as inline image matching webapp's .short-text-emoji sizing:
+          // width/height = 1.25em. At our reg15 (15px) that's ~19px.
+          // PlaceholderAlignment.middle keeps it vertically centred with text.
+          spans.add(WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Image.network(
+                match.url!,
+                width: 19,
+                height: 19,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    Text(':${match.cleanEntity}:', style: textStyle),
+              ),
+            ),
+          ));
+          currentPos = match.end;
+          continue; // already added the span; skip the fallback block below
       }
 
       if (replacement != null) {
@@ -164,6 +230,8 @@ class _EntityMatch {
   final String text;
   final _EntityType type;
   final String cleanEntity;
+  /// URL for [_EntityType.emoji] matches.
+  final String? url;
 
   _EntityMatch({
     required this.start,
@@ -171,12 +239,15 @@ class _EntityMatch {
     required this.text,
     required this.type,
     required this.cleanEntity,
+    this.url,
   });
 }
 
-enum _EntityType { nip19, http, hashtag }
+enum _EntityType { nip19, http, hashtag, emoji }
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Widgets
+// ─────────────────────────────────────────────────────────────────────────────
 
 class NostrEntityWidget extends StatelessWidget {
   final String entity;
