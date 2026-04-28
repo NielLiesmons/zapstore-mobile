@@ -71,7 +71,7 @@ class StackLinkCard extends HookConsumerWidget {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
-            border: AppBorder.all(
+            border: LabBorder.all(
               color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),

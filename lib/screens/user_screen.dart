@@ -291,7 +291,7 @@ class _UserBio extends HookWidget {
       about,
       textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
         height: 1.5,
-        color: AppColors.darkOnSurfaceSecondary,
+        color: LabColors.darkOnSurfaceSecondary,
       ),
       linkStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
         height: 1.5,

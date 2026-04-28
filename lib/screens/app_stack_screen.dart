@@ -304,14 +304,14 @@ class _AppStackContent extends HookConsumerWidget {
                       children: [
                         Text(
                           'Apps in this stack',
-                          style: AppTextStyles.h2.copyWith(
-                            color: Theme.of(context).extension<AppColors>()!.white,
+                          style: LabTextStyles.h2.copyWith(
+                            color: Theme.of(context).extension<LabColors>()!.white,
                           ),
                         ),
                         const SizedBox(width: 8),
                         CountBadge(
                           count: totalApps,
-                          color: AppColors.darkPillBackground,
+                          color: LabColors.darkPillBackground,
                         ),
                       ],
                     ),
@@ -407,8 +407,8 @@ class _StackHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
-    final subtitleStyle = AppTextStyles.reg13.copyWith(color: c.white33);
+    final c = Theme.of(context).extension<LabColors>()!;
+    final subtitleStyle = LabTextStyles.reg13.copyWith(color: c.white33);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,7 +419,7 @@ class _StackHeader extends StatelessWidget {
             Flexible(
               child: Text(
                 stack.name ?? stack.identifier,
-                style: AppTextStyles.h1.copyWith(color: c.white),
+                style: LabTextStyles.h1.copyWith(color: c.white),
               ),
             ),
             if (_isEncrypted) ...[
@@ -462,7 +462,7 @@ class _StackHeader extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       'Private',
-                      style: AppTextStyles.bold13.copyWith(color: c.white33),
+                      style: LabTextStyles.bold13.copyWith(color: c.white33),
                     ),
                   ],
                 ),
@@ -474,7 +474,7 @@ class _StackHeader extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             description,
-            style: AppTextStyles.reg15.copyWith(color: c.white66),
+            style: LabTextStyles.reg15.copyWith(color: c.white66),
           ),
         ],
       ],
@@ -513,7 +513,7 @@ class _AppStackSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonizerConfig(
-      data: AppColors.getSkeletonizerConfig(Theme.of(context).brightness),
+      data: LabColors.getSkeletonizerConfig(Theme.of(context).brightness),
       child: Skeletonizer(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -523,7 +523,7 @@ class _AppStackSkeleton extends StatelessWidget {
               height: 28,
               width: 180,
               decoration: BoxDecoration(
-                color: AppColors.darkSkeletonBase,
+                color: LabColors.darkSkeletonBase,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -534,7 +534,7 @@ class _AppStackSkeleton extends StatelessWidget {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: AppColors.darkSkeletonBase,
+                    color: LabColors.darkSkeletonBase,
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
@@ -543,7 +543,7 @@ class _AppStackSkeleton extends StatelessWidget {
                   height: 16,
                   width: 100,
                   decoration: BoxDecoration(
-                    color: AppColors.darkSkeletonBase,
+                    color: LabColors.darkSkeletonBase,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -557,7 +557,7 @@ class _AppStackSkeleton extends StatelessWidget {
                   height: 20,
                   width: 140,
                   decoration: BoxDecoration(
-                    color: AppColors.darkSkeletonBase,
+                    color: LabColors.darkSkeletonBase,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -566,7 +566,7 @@ class _AppStackSkeleton extends StatelessWidget {
                   height: 20,
                   width: 24,
                   decoration: BoxDecoration(
-                    color: AppColors.darkSkeletonBase,
+                    color: LabColors.darkSkeletonBase,
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),

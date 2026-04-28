@@ -43,7 +43,7 @@ class _SelectorState extends State<Selector> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return Container(
       padding: const EdgeInsets.all(8),
@@ -101,7 +101,7 @@ class _SelectorButtonState extends State<SelectorButton> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final height = widget.small ? 28.0 : 38.0;
 
     return GestureDetector(
@@ -168,10 +168,10 @@ class _SelectorLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return Text(
       label,
-      style: AppTextStyles.med15.copyWith(
+      style: LabTextStyles.med15.copyWith(
         color: selected ? c.white : c.white66,
       ),
     );
@@ -185,11 +185,11 @@ class _SelectorCount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final display = count > 999 ? '999+' : count > 99 ? '99+' : '$count';
     return Text(
       display,
-      style: AppTextStyles.med13.copyWith(
+      style: LabTextStyles.med13.copyWith(
         color: selected ? c.white66 : c.white33,
       ),
     );
@@ -201,7 +201,7 @@ class _SelectorSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return SizedBox(
       width: 10,
       height: 10,

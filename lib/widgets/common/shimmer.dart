@@ -88,7 +88,7 @@ class Shimmer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeData = ShimmerTheme.of(context);
-    final c = Theme.of(context).extension<AppColors>();
+    final c = Theme.of(context).extension<LabColors>();
 
     final baseColor = c?.gray ?? const Color(0xFF232323);
     final highlightColor = c?.gray66 ?? const Color(0xA8333333);

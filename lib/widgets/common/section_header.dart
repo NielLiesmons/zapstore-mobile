@@ -13,12 +13,12 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return Padding(
       padding: const EdgeInsets.only(left: 12, bottom: 6),
       child: Text(
         text.toUpperCase(),
-        style: AppTextStyles.h3.copyWith(color: c.white33),
+        style: LabTextStyles.h3.copyWith(color: c.white33),
       ),
     );
   }
@@ -48,7 +48,7 @@ class _SectionHeaderState extends State<SectionHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final hasLink = widget.linkText != null && widget.onLinkTap != null;
 
     return Padding(
@@ -95,16 +95,15 @@ class _SectionHeaderState extends State<SectionHeader> {
                   children: [
                     Text(
                       widget.linkText!,
-                      style: AppTextStyles.reg13.copyWith(
+                      style: LabTextStyles.reg13.copyWith(
                         color: _pressed ? c.white66 : c.white33,
                       ),
                     ),
                     const SizedBox(width: 10),
-                    AppIcon(
-                      AppIcons.chevronRight,
+                    LabIcon(
+                      LabIcons.chevronRight,
                       size: 14,
-                      outlineColor: _pressed ? c.white66 : c.white33,
-                      outlineThickness: 1.4,
+                      color: _pressed ? c.white66 : c.white33,
                     ),
                   ],
                 ),

@@ -49,7 +49,7 @@ class AppCard extends HookConsumerWidget {
     final needsPublisher = showSignedBy || showZapEncouragement;
     final descriptionStyle = context.textTheme.bodyMedium?.copyWith(
       height: 1.5,
-      color: AppColors.darkOnSurfaceSecondary,
+      color: LabColors.darkOnSurfaceSecondary,
     );
     final descriptionText = app!.description.isNotEmpty
         ? _stripMarkdown(app!.description)
@@ -63,7 +63,7 @@ class AppCard extends HookConsumerWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-          border: AppBorder.all(
+          border: LabBorder.all(
             color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
             width: 1,
           ),
@@ -191,8 +191,8 @@ class AppCard extends HookConsumerWidget {
     bool isPublisherLoading,
   ) {
     final appName = app!.name ?? app!.identifier;
-    final titleStyle = AppTextStyles.bold17.copyWith(
-      color: Theme.of(context).extension<AppColors>()!.white,
+    final titleStyle = LabTextStyles.bold17.copyWith(
+      color: Theme.of(context).extension<LabColors>()!.white,
     );
 
     // If not showing signed by or relay-signed, just show name
@@ -207,7 +207,7 @@ class AppCard extends HookConsumerWidget {
 
     // Show "(app name) by (profile)" with wrapping
     final byStyle = context.textTheme.bodyMedium?.copyWith(
-      color: AppColors.darkOnSurfaceSecondary,
+      color: LabColors.darkOnSurfaceSecondary,
     );
     final publisherStyle = byStyle?.copyWith(fontWeight: FontWeight.w600);
     final avatarSize = context.textTheme.bodyMedium!.fontSize! * 1.4;
@@ -292,7 +292,7 @@ class AppCard extends HookConsumerWidget {
 
   Widget _buildSkeleton(BuildContext context) {
     return SkeletonizerConfig(
-      data: AppColors.getSkeletonizerConfig(Theme.of(context).brightness),
+      data: LabColors.getSkeletonizerConfig(Theme.of(context).brightness),
       child: Skeletonizer(
         enabled: true,
         child: Container(
@@ -302,7 +302,7 @@ class AppCard extends HookConsumerWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-            border: AppBorder.all(
+            border: LabBorder.all(
               color: Theme.of(
                 context,
               ).colorScheme.outline.withValues(alpha: 0.2),
@@ -324,7 +324,7 @@ class AppCard extends HookConsumerWidget {
                         width: iconSize,
                         height: iconSize,
                         decoration: BoxDecoration(
-                          color: AppColors.darkSkeletonBase,
+                          color: LabColors.darkSkeletonBase,
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
@@ -339,7 +339,7 @@ class AppCard extends HookConsumerWidget {
                               height: 20,
                               width: 180,
                               decoration: BoxDecoration(
-                                color: AppColors.darkSkeletonBase,
+                                color: LabColors.darkSkeletonBase,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -349,7 +349,7 @@ class AppCard extends HookConsumerWidget {
                               height: 20,
                               width: 60,
                               decoration: BoxDecoration(
-                                color: AppColors.darkSkeletonBase,
+                                color: LabColors.darkSkeletonBase,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
@@ -368,7 +368,7 @@ class AppCard extends HookConsumerWidget {
                           height: 16,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: AppColors.darkSkeletonBase,
+                            color: LabColors.darkSkeletonBase,
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
@@ -377,7 +377,7 @@ class AppCard extends HookConsumerWidget {
                           height: 16,
                           width: 200,
                           decoration: BoxDecoration(
-                            color: AppColors.darkSkeletonBase,
+                            color: LabColors.darkSkeletonBase,
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
@@ -477,7 +477,7 @@ class _ZapEncouragementInCard extends HookConsumerWidget {
         decoration: BoxDecoration(
           color: Colors.orange.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
-          border: AppBorder.all(
+          border: LabBorder.all(
             color: Colors.orange.withValues(alpha: 0.2),
             width: 1,
           ),

@@ -48,7 +48,7 @@ class DetailsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final bg = panelBackground == _PanelBg.black33 ? c.black33 : c.gray66;
     final codeBlockBg = panelBackground == _PanelBg.black33;
 
@@ -97,7 +97,7 @@ class DetailsTab extends StatelessWidget {
             padding: const EdgeInsets.only(left: 12, bottom: 8),
             child: Text(
               'IDENTIFIERS',
-              style: AppTextStyles.h3.copyWith(color: c.white33),
+              style: LabTextStyles.h3.copyWith(color: c.white33),
             ),
           ),
 
@@ -129,7 +129,7 @@ class DetailsTab extends StatelessWidget {
               padding: const EdgeInsets.only(left: 12, bottom: 8),
               child: Text(
                 'RAW DATA',
-                style: AppTextStyles.h3.copyWith(color: c.white33),
+                style: LabTextStyles.h3.copyWith(color: c.white33),
               ),
             ),
             CodeBlock(
@@ -160,7 +160,7 @@ class _RowData {
 class _IdentifierRow extends StatefulWidget {
   const _IdentifierRow({required this.row, required this.c});
   final _RowData row;
-  final AppColors c;
+  final LabColors c;
 
   @override
   State<_IdentifierRow> createState() => _IdentifierRowState();
@@ -190,7 +190,7 @@ class _IdentifierRowState extends State<_IdentifierRow> {
             width: 80,
             child: Text(
               widget.row.label,
-              style: AppTextStyles.reg15.copyWith(color: c.white),
+              style: LabTextStyles.reg15.copyWith(color: c.white),
             ),
           ),
 
@@ -198,7 +198,7 @@ class _IdentifierRowState extends State<_IdentifierRow> {
           Expanded(
             child: Text(
               widget.row.displayValue,
-              style: AppTextStyles.reg15.copyWith(color: c.white66),
+              style: LabTextStyles.reg15.copyWith(color: c.white66),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
@@ -224,10 +224,10 @@ class _IdentifierRowState extends State<_IdentifierRow> {
                 ),
                 child: Center(
                   child: _copied
-                      ? AppIcon(AppIcons.check, size: 14,
+                      ? LabIcon(LabIcons.check, size: 14,
                           color: c.blurpleLightColor)
-                      : AppIcon(AppIcons.copy, size: 16,
-                          outlineColor: c.white66, outlineThickness: 1.4),
+                      : LabIcon(LabIcons.copy, size: 16,
+                          color: c.white66),
                 ),
               ),
             ),

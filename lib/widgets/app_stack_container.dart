@@ -172,13 +172,13 @@ class AppStackContainer extends ConsumerWidget {
 class _SeeMoreCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return GestureDetector(
       onTap: () => pushStacks(context),
       child: Center(
         child: Text(
           'See more',
-          style: AppTextStyles.med15.copyWith(color: c.blurpleLightColor),
+          style: LabTextStyles.med15.copyWith(color: c.blurpleLightColor),
         ),
       ),
     );
@@ -201,7 +201,7 @@ class _StaticBone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return Container(
       width: width,
       height: height,
@@ -226,7 +226,7 @@ class StackCardSkeleton extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Shimmer(width: 95, height: 95, radius: AppRadius.r18),
+          Shimmer(width: 95, height: 95, radius: LabRadius.r18),
           const SizedBox(width: 16),
           SizedBox(
             height: 95,
@@ -236,7 +236,7 @@ class StackCardSkeleton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Title: shimmer (important content)
-                Shimmer(width: 100, height: 15, radius: AppRadius.r4),
+                Shimmer(width: 100, height: 15, radius: LabRadius.r4),
                 const SizedBox(height: 6),
                 // Description + author: static boxes (less important per design system)
                 _StaticBone(width: 140, height: 12),
@@ -275,7 +275,7 @@ class StackCard extends ConsumerWidget {
   final bool showAuthor;
 
   /// Renders one 32×32 icon in the grid, or an empty placeholder tile.
-  Widget _gridIcon(App? app, AppColors c) {
+  Widget _gridIcon(App? app, LabColors c) {
     if (app != null) {
       return AppPic(
         iconUrl: firstValidHttpUrl(app.icons),
@@ -289,14 +289,14 @@ class StackCard extends ConsumerWidget {
       height: 34,
       decoration: BoxDecoration(
         color: c.white8,
-        borderRadius: BorderRadius.circular(AppRadius.r8),
+        borderRadius: BorderRadius.circular(LabRadius.r8),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     final authorState = showAuthor
         ? ref.watch(
@@ -351,10 +351,10 @@ class StackCard extends ConsumerWidget {
               height: 95,
               decoration: BoxDecoration(
                 color: c.white8,
-                borderRadius: BorderRadius.circular(AppRadius.r18),
-                border: AppBorder.all(
+                borderRadius: BorderRadius.circular(LabRadius.r18),
+                border: LabBorder.all(
                   color: c.white16,
-                  width: AppStroke.medium,
+                  width: LabStroke.medium,
                 ),
               ),
               padding: const EdgeInsets.all(8),
@@ -395,7 +395,7 @@ class StackCard extends ConsumerWidget {
                 children: [
                   Text(
                     stack.name ?? stack.identifier,
-                    style: AppTextStyles.bold17.copyWith(color: c.white),
+                    style: LabTextStyles.bold17.copyWith(color: c.white),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -403,7 +403,7 @@ class StackCard extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Text(
                       description,
-                      style: AppTextStyles.reg13.copyWith(color: c.white66),
+                      style: LabTextStyles.reg13.copyWith(color: c.white66),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -419,7 +419,7 @@ class StackCard extends ConsumerWidget {
                             pubkey: stack.event.pubkey,
                             profile: author,
                             isLoading: isAuthorLoading,
-                            style: AppTextStyles.reg13.copyWith(color: c.white33),
+                            style: LabTextStyles.reg13.copyWith(color: c.white33),
                             skeletonWidth: 60,
                           ),
                         ),

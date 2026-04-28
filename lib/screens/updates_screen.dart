@@ -307,7 +307,7 @@ class _UpdatesList extends ConsumerWidget {
                 icon: Icons.help_outline,
                 title: 'Other installed',
                 count: uncatalogedApps.length,
-                iconColor: AppColors.darkOnSurfaceSecondary,
+                iconColor: LabColors.darkOnSurfaceSecondary,
               ),
             ),
             SliverList(
@@ -398,11 +398,11 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: iconColor ?? AppColors.darkActionPrimary),
+          Icon(icon, size: 20, color: iconColor ?? LabColors.darkActionPrimary),
           const SizedBox(width: 8),
           Text(title, style: context.textTheme.titleMedium),
           const SizedBox(width: 8),
-          CountBadge(count: count, color: AppColors.darkPillBackground),
+          CountBadge(count: count, color: LabColors.darkPillBackground),
           if (trailing != null) ...[
             const SizedBox(width: 4),
             trailing!,
@@ -447,7 +447,7 @@ class _UncatalogedAppCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-        border: AppBorder.all(
+        border: LabBorder.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),
@@ -462,7 +462,7 @@ class _UncatalogedAppCard extends StatelessWidget {
             ),
             child: Icon(
               Icons.android,
-              color: AppColors.darkOnSurfaceSecondary,
+              color: LabColors.darkOnSurfaceSecondary,
               size: 28,
             ),
           ),
@@ -482,7 +482,7 @@ class _UncatalogedAppCard extends StatelessWidget {
                 Text(
                   packageInfo.appId,
                   style: context.textTheme.bodySmall?.copyWith(
-                    color: AppColors.darkOnSurfaceSecondary,
+                    color: LabColors.darkOnSurfaceSecondary,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -493,7 +493,7 @@ class _UncatalogedAppCard extends StatelessWidget {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.darkPillBackground,
+                    color: LabColors.darkPillBackground,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(

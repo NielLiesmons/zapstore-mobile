@@ -23,7 +23,7 @@ class AppHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final platform = ref.read(packageManagerProvider.notifier).platform;
 
     return Column(
@@ -46,12 +46,18 @@ class AppHeader extends ConsumerWidget {
                 children: [
                   AutoSizeText(
                     app.name ?? app.identifier,
-                    style: AppTextStyles.h1.copyWith(color: c.white),
+                    // h1 size (24px) + semibold weight via fontVariations so the
+                    // Inter variable font actually renders at 600 (not w800/black).
+                    style: LabTextStyles.h1.copyWith(
+                      color: c.white,
+                      fontWeight: FontWeight.w600,
+                      fontVariations: const [FontVariation('wght', 600)],
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     minFontSize: 16,
                   ),
-                  Gap(12),
+                  Gap(8),
                   // Platform pill (left) + install button (right)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -81,12 +87,12 @@ class _PlatformPill extends StatelessWidget {
   const _PlatformPill({required this.platform, required this.colors});
 
   final String platform;
-  final AppColors colors;
+  final LabColors colors;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: colors.white8,
@@ -95,27 +101,23 @@ class _PlatformPill extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         _label(platform),
-        style: AppTextStyles.reg13.copyWith(color: colors.white66),
+        style: LabTextStyles.reg13.copyWith(color: colors.white66),
       ),
     );
   }
 
   String _label(String platform) {
-    switch (platform.toLowerCase()) {
-      case 'android':
-        return 'Android';
-      case 'ios':
-        return 'iOS';
-      case 'linux':
-        return 'Linux';
-      case 'macos':
-        return 'macOS';
-      case 'windows':
-        return 'Windows';
-      default:
-        return platform.isEmpty
-            ? platform
-            : platform[0].toUpperCase() + platform.substring(1);
+    final p = platform.toLowerCase();
+    // Match by prefix so "android-arm64-v8a", "ios-simulator", etc. all normalize
+    if (p == 'android' || p.startsWith('android-') || p.startsWith('android_')) {
+      return 'Android';
     }
+    if (p == 'ios' || p.startsWith('ios-') || p.startsWith('ios_')) return 'iOS';
+    if (p == 'linux' || p.startsWith('linux-') || p.startsWith('linux_')) return 'Linux';
+    if (p == 'macos' || p.startsWith('macos-') || p.startsWith('darwin')) return 'macOS';
+    if (p == 'windows' || p.startsWith('windows-') || p.startsWith('win')) return 'Windows';
+    // Fallback: capitalize the first dash-segment
+    final base = p.split(RegExp(r'[-_]')).first;
+    return base.isEmpty ? platform : base[0].toUpperCase() + base.substring(1);
   }
 }

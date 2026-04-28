@@ -163,7 +163,7 @@ class _ThreadBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final replies = comment.replies.toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
@@ -206,7 +206,7 @@ class _ThreadBody extends ConsumerWidget {
             child: Center(
               child: Text(
                 'No comments yet',
-                style: AppTextStyles.reg15.copyWith(color: c.white33),
+                style: LabTextStyles.reg15.copyWith(color: c.white33),
               ),
             ),
           )
@@ -228,7 +228,7 @@ class _ThreadFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return ModalFooterBar(
       child: GestureDetector(
@@ -251,21 +251,19 @@ class _ThreadFooter extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.black33,
             borderRadius: BorderRadius.circular(16),
-            border: AppBorder.all(color: c.white33, width: 0.33),
+            border: LabBorder.all(color: c.white33, width: 0.33),
           ),
           child: Row(
             children: [
-              AppIcon(
-                AppIcons.reply,
+              LabIcon(
+                LabIcons.reply,
                 size: 18,
                 color: c.white33,
-                outlineColor: c.white33,
-                outlineThickness: 1.4,
               ),
               const SizedBox(width: 8),
               Text(
                 'Reply',
-                style: AppTextStyles.med17.copyWith(color: c.white33),
+                style: LabTextStyles.med17.copyWith(color: c.white33),
               ),
             ],
           ),
@@ -331,7 +329,7 @@ class _ReplyIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return GestureDetector(
       onTap: onTap,

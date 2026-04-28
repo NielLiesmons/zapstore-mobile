@@ -23,7 +23,7 @@ class ExpandableMarkdown extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final expanded = useState(false);
 
     bool isLikelyLong(String text) {
@@ -114,7 +114,7 @@ class _ReadMorePill extends StatelessWidget {
   const _ReadMorePill({required this.label, required this.colors});
 
   final String label;
-  final AppColors colors;
+  final LabColors colors;
 
   @override
   Widget build(BuildContext context) {
@@ -132,7 +132,7 @@ class _ReadMorePill extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             label,
-            style: AppTextStyles.med13.copyWith(color: colors.white66),
+            style: LabTextStyles.med13.copyWith(color: colors.white66),
           ),
         ),
       ),

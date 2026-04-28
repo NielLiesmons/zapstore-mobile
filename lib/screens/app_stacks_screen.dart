@@ -227,7 +227,7 @@ class AppStacksScreen extends HookConsumerWidget {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => SkeletonizerConfig(
-                    data: AppColors.getSkeletonizerConfig(
+                    data: LabColors.getSkeletonizerConfig(
                       Theme.of(context).brightness,
                     ),
                     child: const Skeletonizer(child: StackCardSkeleton()),
@@ -342,7 +342,7 @@ class _MigrationBanner extends HookConsumerWidget {
           context,
         ).colorScheme.primaryContainer.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(12),
-        border: AppBorder.all(
+        border: LabBorder.all(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
         ),
       ),

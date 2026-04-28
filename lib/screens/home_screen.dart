@@ -18,6 +18,7 @@ import '../utils/extensions.dart';
 import '../main.dart';
 import '../services/package_manager/package_manager.dart';
 import '../services/updates_service.dart';
+import '../widgets/common/top_scroll_fader.dart';
 
 /// Home screen: search/discovery + fixed top bar.
 class HomeScreen extends HookConsumerWidget {
@@ -85,40 +86,9 @@ class HomeScreen extends HookConsumerWidget {
             ),
 
             // ── Content: switches between home feed and search UI ─────────────
-            // IMPORTANT: the builder ALWAYS returns ShaderMask so the widget
-            // type at this tree position never changes.  Previously the builder
-            // returned `child!` at t=0 and `ShaderMask(child)` at t>0 — on the
-            // very first scroll pixel Flutter destroyed + recreated the
-            // AnimatedSwitcher subtree (type mismatch), which detached the
-            // ScrollPosition from scrollController, reset the offset to 0 and
-            // cancelled the in-progress gesture (the "first scroll blocked" bug).
-            // By always returning ShaderMask we only vary gradient colours, not
-            // the widget structure, keeping the scroll gesture uninterrupted.
-            //
-            // Fade: t=0 at scroll=0 (top color = opaque black = no fade),
-            //       t=1 at scroll=16px (top color = transparent = full fade).
             Expanded(
-              child: ListenableBuilder(
-                listenable: scrollController,
-                builder: (context, child) {
-                  final t = scrollController.hasClients
-                      ? (scrollController.offset / 16.0).clamp(0.0, 1.0)
-                      : 0.0;
-                  return ShaderMask(
-                    shaderCallback: (bounds) => LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        // alpha=1 → no fade; alpha=0 → full fade
-                        Colors.black.withValues(alpha: 1.0 - t),
-                        Colors.black,
-                      ],
-                    ).createShader(
-                        Rect.fromLTWH(0, 0, bounds.width, 28)),
-                    blendMode: BlendMode.dstIn,
-                    child: child,
-                  );
-                },
+              child: TopScrollFader(
+                scrollController: scrollController,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
                   layoutBuilder: (currentChild, previousChildren) => Stack(
@@ -221,12 +191,12 @@ class _HomeContent extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 32),
             child: Builder(builder: (context) {
-              final c = Theme.of(context).extension<AppColors>()!;
+              final c = Theme.of(context).extension<LabColors>()!;
               return Container(
                 height: 800,
                 decoration: BoxDecoration(
                   color: c.white8,
-                  borderRadius: BorderRadius.circular(AppRadius.r16),
+                  borderRadius: BorderRadius.circular(LabRadius.r16),
                 ),
               );
             }),
@@ -333,7 +303,7 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final topPad = MediaQuery.paddingOf(context).top;
     final searching = widget.isSearching;
 
@@ -391,9 +361,9 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: c.gray33,
-                              border: AppBorder.all(
+                              border: LabBorder.all(
                                 color: c.white16,
-                                width: AppStroke.thin,
+                                width: LabStroke.thin,
                               ),
                             ),
                             child: Icon(
@@ -432,7 +402,7 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
   }
 
   Widget _buildPill(
-    AppColors c,
+    LabColors c,
     bool searching,
     bool isFirstSync,
     int updateCount,
@@ -444,18 +414,17 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
         borderRadius: BorderRadius.circular(_barRadius),
         // Solid border when searching; gradient painter used when idle.
         border: searching
-            ? AppBorder.all(color: c.white16, width: AppStroke.medium)
+            ? LabBorder.all(color: c.white16, width: LabStroke.medium)
             : null,
       ),
       child: Row(
         children: [
           // ── Search icon ────────────────────────────────────────────────
           const SizedBox(width: 14),
-          AppIcon(
-            AppIcons.search,
+          LabIcon(
+            LabIcons.search,
             size: 16,
-            outlineColor: c.white33,
-            outlineThickness: 1.5,
+            color: c.white33,
           ),
           const SizedBox(width: 8),
 
@@ -481,7 +450,7 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                       controller: widget.searchController,
                       focusNode: widget.searchFocusNode,
                       onSubmitted: widget.onSearch,
-                      style: AppTextStyles.med15.copyWith(color: c.white),
+                      style: LabTextStyles.med15.copyWith(color: c.white),
                       cursorColor: c.white,
                       decoration: InputDecoration(
                         border: InputBorder.none,
@@ -490,13 +459,13 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
                         hintText: 'Search',
-                        hintStyle: AppTextStyles.med15.copyWith(color: c.white33),
+                        hintStyle: LabTextStyles.med15.copyWith(color: c.white33),
                       ),
                     ),
                   )
                 : Text(
                     'Search',
-                    style: AppTextStyles.med15.copyWith(color: c.white33),
+                    style: LabTextStyles.med15.copyWith(color: c.white33),
                   ),
           ),
 
@@ -519,11 +488,10 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                     shape: BoxShape.circle,
                   ),
                   child: Center(
-                    child: AppIcon(
-                      AppIcons.cross,
+                    child: LabIcon(
+                      LabIcons.cross,
                       size: 12,
-                      outlineColor: c.white66,
-                      outlineThickness: 1.6,
+                      color: c.white66,
                     ),
                   ),
                 ),
@@ -542,7 +510,7 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: AppStroke.thin,
+                        width: LabStroke.thin,
                         height: 22,
                         color: c.white16,
                       ),
@@ -580,7 +548,7 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                                     children: [
                                       Text(
                                         'Updates',
-                                        style: AppTextStyles.med13.copyWith(
+                                        style: LabTextStyles.med13.copyWith(
                                           color: c.whiteEnforced,
                                         ),
                                       ),
@@ -624,7 +592,7 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
         leftColor: c.white16,
         rightColor: c.blurpleColor.withValues(alpha: 0.04),
         radius: _barRadius,
-        strokeWidth: AppStroke.medium,
+        strokeWidth: LabStroke.medium,
       ),
       child: pillContent,
     );
@@ -646,7 +614,7 @@ class _RougeCountBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final display = count > 99 ? '99+' : count.toString();
     const double h = 18;
 
@@ -657,7 +625,7 @@ class _RougeCountBadge extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: c.rouge,
         borderRadius: BorderRadius.circular(h / 2),
-        border: AppBorder.all(
+        border: LabBorder.all(
           color: Colors.black.withValues(alpha: 0.25),
           width: 0.5,
         ),
@@ -665,7 +633,7 @@ class _RougeCountBadge extends StatelessWidget {
       child: Center(
         child: Text(
           display,
-          style: AppTextStyles.med11.copyWith(
+          style: LabTextStyles.med11.copyWith(
             color: c.whiteEnforced,
             height: 1.0,
           ),

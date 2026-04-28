@@ -12,16 +12,17 @@ import 'package:flutter/material.dart';
 ///   reg      → FontWeight.w400
 ///
 /// Color is intentionally omitted — apply via `.copyWith(color: …)`.
-abstract final class AppTextStyles {
+abstract final class LabTextStyles {
   static const String _font = 'Inter';
   static const String _codeFont = 'JetBrains Mono';
   static const _leading = TextLeadingDistribution.even;
 
-  // ── Headings ───────────────────────────────────────────────────────────────
+  // ── Headings — literal tokens (weight 700 throughout) ────────────────────
 
-  static const TextStyle h1 = TextStyle(
+  /// Large display — app name hero, major screen headings. Replaces [h1].
+  static const TextStyle semibold24 = TextStyle(
     fontFamily: _font,
-    fontWeight: FontWeight.w800,
+    fontVariations: [FontVariation('wght', 700)],
     fontSize: 24,
     height: 1.5,
     letterSpacing: 0.7,
@@ -29,9 +30,10 @@ abstract final class AppTextStyles {
     decoration: TextDecoration.none,
   );
 
-  static const TextStyle h2 = TextStyle(
+  /// Section header — screen titles, modal headings. Replaces [h2].
+  static const TextStyle semibold22 = TextStyle(
     fontFamily: _font,
-    fontWeight: FontWeight.w600,
+    fontVariations: [FontVariation('wght', 700)],
     fontSize: 22,
     height: 1.5,
     letterSpacing: 0.7,
@@ -39,10 +41,10 @@ abstract final class AppTextStyles {
     decoration: TextDecoration.none,
   );
 
-  /// ALL-CAPS eyebrow / section label (letterSpacing: 2.2).
-  static const TextStyle h3 = TextStyle(
+  /// ALL-CAPS eyebrow label — 13px, wide tracking. Replaces [h3] / [eyebrow].
+  static const TextStyle eyebrow13 = TextStyle(
     fontFamily: _font,
-    fontWeight: FontWeight.w600,
+    fontVariations: [FontVariation('wght', 700)],
     fontSize: 13,
     height: 1.5,
     letterSpacing: 2.2,
@@ -50,8 +52,17 @@ abstract final class AppTextStyles {
     decoration: TextDecoration.none,
   );
 
-  /// Webapp-aligned alias for [h3].
-  static const TextStyle eyebrow = h3;
+  /// ALL-CAPS eyebrow label — compact 11px variant.
+  static const TextStyle eyebrow11 = TextStyle(
+    fontFamily: _font,
+    fontVariations: [FontVariation('wght', 700)],
+    fontSize: 11,
+    height: 1.5,
+    letterSpacing: 2.2,
+    leadingDistribution: _leading,
+    decoration: TextDecoration.none,
+  );
+
 
   // ── 17 px ─────────────────────────────────────────────────────────────────
 

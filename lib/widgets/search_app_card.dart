@@ -43,7 +43,7 @@ class SearchAppCard extends ConsumerWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-          border: AppBorder.all(
+          border: LabBorder.all(
             color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
             width: 1,
           ),
@@ -130,7 +130,7 @@ class SearchAppCard extends ConsumerWidget {
                       _stripMarkdown(app!.description),
                       style: context.textTheme.bodyMedium?.copyWith(
                         height: 1.4,
-                        color: AppColors.darkOnSurfaceSecondary,
+                        color: LabColors.darkOnSurfaceSecondary,
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
@@ -185,7 +185,7 @@ class SearchAppCard extends ConsumerWidget {
 
   Widget _buildSkeleton(BuildContext context) {
     return SkeletonizerConfig(
-      data: AppColors.getSkeletonizerConfig(Theme.of(context).brightness),
+      data: LabColors.getSkeletonizerConfig(Theme.of(context).brightness),
       child: Skeletonizer(
         enabled: true,
         child: Container(
@@ -194,7 +194,7 @@ class SearchAppCard extends ConsumerWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
-            border: AppBorder.all(
+            border: LabBorder.all(
               color: Theme.of(
                 context,
               ).colorScheme.outline.withValues(alpha: 0.2),
@@ -208,7 +208,7 @@ class SearchAppCard extends ConsumerWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.darkSkeletonBase,
+                  color: LabColors.darkSkeletonBase,
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
@@ -221,7 +221,7 @@ class SearchAppCard extends ConsumerWidget {
                       height: 20,
                       width: 160,
                       decoration: BoxDecoration(
-                        color: AppColors.darkSkeletonBase,
+                        color: LabColors.darkSkeletonBase,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -230,7 +230,7 @@ class SearchAppCard extends ConsumerWidget {
                       height: 14,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: AppColors.darkSkeletonBase,
+                        color: LabColors.darkSkeletonBase,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -239,7 +239,7 @@ class SearchAppCard extends ConsumerWidget {
                       height: 14,
                       width: 200,
                       decoration: BoxDecoration(
-                        color: AppColors.darkSkeletonBase,
+                        color: LabColors.darkSkeletonBase,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),

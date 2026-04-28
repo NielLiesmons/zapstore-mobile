@@ -32,7 +32,7 @@ class ZapBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -80,7 +80,7 @@ class ZapBubble extends StatelessWidget {
                                 shaderCallback: (bounds) => c.gold.createShader(bounds),
                                 child: Text(
                                   name,
-                                  style: AppTextStyles.bold15.copyWith(
+                                  style: LabTextStyles.bold15.copyWith(
                                     color: Colors.white,
                                   ),
                                   maxLines: 1,
@@ -101,7 +101,7 @@ class ZapBubble extends StatelessWidget {
                             else if (timestamp != null)
                               Text(
                                 _formatTime(timestamp!),
-                                style: AppTextStyles.reg13.copyWith(
+                                style: LabTextStyles.reg13.copyWith(
                                   color: c.white33,
                                 ),
                               ),
@@ -112,15 +112,15 @@ class ZapBubble extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          AppIcon(
-                            AppIcons.zap,
+                          LabIcon(
+                            LabIcons.zap,
                             size: 14,
                             gradient: c.gold,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             _formatAmount(amount),
-                            style: AppTextStyles.med17.copyWith(color: c.white),
+                            style: LabTextStyles.med17.copyWith(color: c.white),
                           ),
                         ],
                       ),
@@ -131,7 +131,7 @@ class ZapBubble extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       message!,
-                      style: AppTextStyles.reg15.copyWith(
+                      style: LabTextStyles.reg15.copyWith(
                         color: c.white.withAlpha(217),
                       ),
                     ),

@@ -20,13 +20,13 @@ class AppInfoTable extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: c.gray33,
         borderRadius: BorderRadius.circular(16),
-        border: AppBorder.all(color: c.white8, width: 0.33),
+        border: LabBorder.all(color: c.white8, width: 0.33),
       ),
       child: Column(children: _buildInfoRows(context, ref)),
     );
@@ -165,7 +165,7 @@ class AppInfoTable extends HookConsumerWidget {
         child: _buildVersionCodePill(
           context,
           availableVersionCode.toString(),
-          AppColors.darkPillBackground,
+          LabColors.darkPillBackground,
           Colors.white,
         ),
       );
@@ -200,7 +200,7 @@ class AppInfoTable extends HookConsumerWidget {
             availableVersionCode.toString(),
             isDowngrade
                 ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
-                : AppColors.darkPillBackground,
+                : LabColors.darkPillBackground,
             isDowngrade
                 ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
                 : Colors.white,
@@ -240,7 +240,7 @@ class _InfoRowSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -248,7 +248,7 @@ class _InfoRowSkeleton extends StatelessWidget {
         children: [
           Text(
             label,
-            style: AppTextStyles.med15.copyWith(color: c.white33),
+            style: LabTextStyles.med15.copyWith(color: c.white33),
             maxLines: 1,
           ),
           const SizedBox(width: 16),
@@ -317,7 +317,7 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -325,7 +325,7 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: AppTextStyles.med15.copyWith(color: c.white33),
+            style: LabTextStyles.med15.copyWith(color: c.white33),
             maxLines: 1,
           ),
           const SizedBox(width: 16),
@@ -339,7 +339,7 @@ class _InfoRow extends StatelessWidget {
                     : Flexible(
                         child: AutoSizeText(
                           value,
-                          style: AppTextStyles.reg15.copyWith(color: c.white),
+                          style: LabTextStyles.reg15.copyWith(color: c.white),
                           maxLines: 1,
                           textAlign: TextAlign.right,
                           minFontSize: 12,
@@ -352,8 +352,7 @@ class _InfoRow extends StatelessWidget {
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: copyValue!));
                     },
-                    child: AppIcon(AppIcons.copy, size: 16,
-    outlineColor: c.white33, outlineThickness: 1.4),
+                    child: LabIcon(LabIcons.copy, size: 16, color: c.white33),
                   ),
                 ],
               ],

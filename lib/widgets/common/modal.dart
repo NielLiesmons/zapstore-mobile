@@ -47,7 +47,7 @@ Future<T?> showModal<T>(
   bool fillHeight = false,
   double maxHeightFactor = 0.92,
 }) {
-  final c = Theme.of(context).extension<AppColors>()!;
+  final c = Theme.of(context).extension<LabColors>()!;
 
   return showModalBottomSheet<T>(
     context: context,
@@ -125,7 +125,7 @@ class _AppModalSurface extends StatefulWidget {
   });
 
   final Widget child;
-  final AppColors colors;
+  final LabColors colors;
   final String? title;
   final String? description;
   final WidgetBuilder? footer;
@@ -299,7 +299,7 @@ class _TitleBlock extends StatelessWidget {
 
   final String title;
   final String? description;
-  final AppColors c;
+  final LabColors c;
 
   @override
   Widget build(BuildContext context) {
@@ -310,13 +310,13 @@ class _TitleBlock extends StatelessWidget {
         children: [
           Text(
             title,
-            style: AppTextStyles.h2.copyWith(color: c.white),
+            style: LabTextStyles.h2.copyWith(color: c.white),
           ),
           if (description != null) ...[
             const SizedBox(height: 10),
             Text(
               description!,
-              style: AppTextStyles.reg15.copyWith(color: c.white66),
+              style: LabTextStyles.reg15.copyWith(color: c.white66),
               textAlign: TextAlign.start,
             ),
           ],
@@ -346,7 +346,7 @@ class ModalFooterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -409,7 +409,7 @@ class _ConfirmContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
@@ -427,17 +427,17 @@ class _ConfirmContent extends StatelessWidget {
                     child: icon!,
                   ),
                   const SizedBox(width: 8),
-                  Text(title, style: AppTextStyles.h2.copyWith(color: c.white)),
+                  Text(title, style: LabTextStyles.h2.copyWith(color: c.white)),
                 ],
               ),
             )
           else
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Text(title, style: AppTextStyles.h2.copyWith(color: c.white)),
+              child: Text(title, style: LabTextStyles.h2.copyWith(color: c.white)),
             ),
 
-          Text(message, style: AppTextStyles.reg15.copyWith(color: c.white66)),
+          Text(message, style: LabTextStyles.reg15.copyWith(color: c.white66)),
 
           const SizedBox(height: 28),
 
@@ -453,7 +453,7 @@ class _ConfirmContent extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: Text(cancelLabel,
-                      style: AppTextStyles.semibold15.copyWith(color: c.white66)),
+                      style: LabTextStyles.semibold15.copyWith(color: c.white66)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -467,7 +467,7 @@ class _ConfirmContent extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: Text(confirmLabel,
-                      style: AppTextStyles.semibold15.copyWith(color: c.whiteEnforced)),
+                      style: LabTextStyles.semibold15.copyWith(color: c.whiteEnforced)),
                 ),
               ),
             ],
@@ -553,7 +553,7 @@ class BaseDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     Widget body = Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
@@ -562,7 +562,7 @@ class BaseDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DefaultTextStyle(
-            style: AppTextStyles.h2.copyWith(color: c.white),
+            style: LabTextStyles.h2.copyWith(color: c.white),
             child: titleIcon != null
                 ? Row(children: [
                     DefaultTextStyle.merge(
@@ -575,7 +575,7 @@ class BaseDialog extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           DefaultTextStyle(
-            style: AppTextStyles.reg15.copyWith(color: c.white66),
+            style: LabTextStyles.reg15.copyWith(color: c.white66),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth),
               child: SingleChildScrollView(child: content),
@@ -616,11 +616,11 @@ class BaseDialogTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
-      child: Text(text, style: style ?? AppTextStyles.h2.copyWith(color: c.white)),
+      child: Text(text, style: style ?? LabTextStyles.h2.copyWith(color: c.white)),
     );
   }
 }

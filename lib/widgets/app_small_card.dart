@@ -17,7 +17,7 @@ class AppSmallCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final description = app.description.isNotEmpty
         ? _stripMarkdown(app.description)
         : '';
@@ -54,7 +54,7 @@ class AppSmallCard extends StatelessWidget {
               children: [
                 Text(
                   app.name ?? app.identifier,
-                  style: AppTextStyles.semibold17.copyWith(color: c.white),
+                  style: LabTextStyles.semibold17.copyWith(color: c.white),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -62,7 +62,7 @@ class AppSmallCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     description,
-                    style: AppTextStyles.reg13.copyWith(color: c.white66),
+                    style: LabTextStyles.reg13.copyWith(color: c.white66),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

@@ -281,7 +281,7 @@ class _StackMigrationWarning extends ConsumerWidget {
               context,
             ).colorScheme.errorContainer.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(8),
-            border: AppBorder.all(
+            border: LabBorder.all(
               color: Theme.of(context).colorScheme.error.withValues(alpha: 0.4),
             ),
           ),
@@ -600,7 +600,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
           color: Theme.of(context).colorScheme.surfaceContainerHighest
               .withValues(alpha: isHistorical ? 0.15 : 0.3),
           borderRadius: BorderRadius.circular(8),
-          border: AppBorder.all(
+          border: LabBorder.all(
             color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
           ),
         ),
@@ -675,7 +675,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
                     context,
                   ).colorScheme.surface.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
-                  border: AppBorder.all(
+                  border: LabBorder.all(
                     color: Theme.of(
                       context,
                     ).colorScheme.outline.withValues(alpha: 0.15),
@@ -852,7 +852,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
               context,
             ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
-            border: AppBorder.all(
+            border: LabBorder.all(
               color: Theme.of(
                 context,
               ).colorScheme.outline.withValues(alpha: 0.2),
@@ -1106,7 +1106,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
-        border: AppBorder.all(
+        border: LabBorder.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),
@@ -1187,7 +1187,7 @@ class _DebugMessagesSection extends HookConsumerWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
-        border: AppBorder.all(
+        border: LabBorder.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),

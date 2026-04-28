@@ -34,7 +34,7 @@ class ProfilePic extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final pictureUrl = sanitizeHttpUrl(profile?.pictureUrl);
     final name = profile?.name;
     final resolvedPubkey = pubkey ?? profile?.pubkey;
@@ -45,7 +45,7 @@ class ProfilePic extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: AppBorder.all(color: c.white16, width: 0.33),
+          border: LabBorder.all(color: c.white16, width: 0.33),
         ),
         child: ClipOval(
           child: pictureUrl != null
@@ -72,7 +72,7 @@ class ProfilePic extends StatelessWidget {
 
   Widget _buildFallback(
     BuildContext context,
-    AppColors c,
+    LabColors c,
     String? name,
     String? pubkey,
   ) {
@@ -115,8 +115,8 @@ class ProfilePic extends StatelessWidget {
       child: ColoredBox(
         color: c.white8,
         child: Center(
-          child: AppIcon(
-            AppIcons.profile,
+          child: LabIcon(
+            LabIcons.profile,
             size: size * 0.56,
             color: c.white33,
           ),

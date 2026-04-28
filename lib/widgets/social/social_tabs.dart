@@ -7,7 +7,7 @@ import 'package:zapstore/widgets/common/button.dart';
 /// Tabbed feed interface matching webapp's SocialTabs.svelte exactly.
 ///
 /// Tabs: Comments · Zaps · Labels · Details (each a pill button).
-/// Tab row is a horizontally scrollable [Row] of [AppButton.tab] widgets —
+/// Tab row is a horizontally scrollable [Row] of [LabButton.tab] widgets —
 /// selected tab uses blurple66 gradient, unselected uses gray66.
 ///
 /// Content is driven by [contentBuilder] which receives the active [SocialTab]
@@ -78,14 +78,14 @@ class _SocialTabsState extends State<SocialTabs> {
         // ── Tab row (horizontally scrollable, gap 8px) ────────────────────
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: tabs.map((tab) {
               final isSelected = tab == _active;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: AppButton.tab(
+                child: LabButton.tab(
                   onTap: () => setState(() => _active = tab),
                   isSelected: isSelected,
                   child: _TabLabel(
@@ -141,10 +141,10 @@ class _TabLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final fgColor = isSelected ? c.whiteEnforced : c.white;
     final statColor = isSelected ? c.white66 : c.white33;
-    final textStyle = AppTextStyles.med15.copyWith(color: fgColor);
+    final textStyle = LabTextStyles.med15.copyWith(color: fgColor);
 
     switch (tab) {
       case SocialTab.comments:
@@ -165,7 +165,7 @@ class _TabLabel extends StatelessWidget {
             ] else if (commentCount != null) ...[
               const SizedBox(width: 6),
               Text(_formatCount(commentCount!),
-                  style: AppTextStyles.med13.copyWith(color: statColor)),
+                  style: LabTextStyles.med13.copyWith(color: statColor)),
             ],
           ],
         );
@@ -187,14 +187,14 @@ class _TabLabel extends StatelessWidget {
               ),
             ] else if (zapAmount != null && zapAmount! > 0) ...[
               const SizedBox(width: 4),
-              AppIcon(AppIcons.zap, size: 12, color: statColor),
+              LabIcon(LabIcons.zap, size: 12, color: statColor),
               const SizedBox(width: 2),
               Text(_formatSats(zapAmount!),
-                  style: AppTextStyles.med13.copyWith(color: statColor)),
+                  style: LabTextStyles.med13.copyWith(color: statColor)),
             ] else ...[
               const SizedBox(width: 6),
               Text('0',
-                  style: AppTextStyles.med13.copyWith(color: statColor)),
+                  style: LabTextStyles.med13.copyWith(color: statColor)),
             ],
           ],
         );
@@ -217,7 +217,7 @@ class _TabLabel extends StatelessWidget {
             ] else if (labelCount != null) ...[
               const SizedBox(width: 6),
               Text(_formatCount(labelCount!),
-                  style: AppTextStyles.med13.copyWith(color: statColor)),
+                  style: LabTextStyles.med13.copyWith(color: statColor)),
             ],
           ],
         );

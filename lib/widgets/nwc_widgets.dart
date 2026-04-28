@@ -122,7 +122,7 @@ class NWCConnectionCard extends HookConsumerWidget {
                       connected ? 'Update Connection' : 'Connect Wallet',
                     ),
                     style: TextButton.styleFrom(
-                      backgroundColor: AppColors.darkPillBackground,
+                      backgroundColor: LabColors.darkPillBackground,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,

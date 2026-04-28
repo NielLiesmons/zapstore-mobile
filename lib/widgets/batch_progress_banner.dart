@@ -61,7 +61,7 @@ class UpdateAllRow extends ConsumerWidget {
           ),
         ),
         style: TextButton.styleFrom(
-          backgroundColor: AppColors.darkPillBackground,
+          backgroundColor: LabColors.darkPillBackground,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),

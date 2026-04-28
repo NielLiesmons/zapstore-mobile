@@ -48,7 +48,7 @@ class ProfileHeader extends StatelessWidget {
           if (isLoading && showBio) ...[
             const SizedBox(height: 8),
             SkeletonizerConfig(
-              data: AppColors.getSkeletonizerConfig(Theme.of(context).brightness),
+              data: LabColors.getSkeletonizerConfig(Theme.of(context).brightness),
               child: Skeletonizer(
                 enabled: true,
                 child: Column(
@@ -60,7 +60,7 @@ class ProfileHeader extends StatelessWidget {
                         height: 16,
                         width: index == 1 ? 150 : double.infinity,
                         decoration: BoxDecoration(
-                          color: AppColors.darkSkeletonBase,
+                          color: LabColors.darkSkeletonBase,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),

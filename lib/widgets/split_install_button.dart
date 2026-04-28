@@ -33,7 +33,7 @@ class SplitInstallButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final operation = ref.watch(installOperationProvider(app.identifier));
     final installedPkg = ref.watch(installedPackageProvider(app.identifier));
 
@@ -178,15 +178,15 @@ class SplitInstallButton extends ConsumerWidget {
     // ── Build pill ───────────────────────────────────────────────────────
 
     return SizedBox(
-      height: 36,
+      height: 34,
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: gradient,
           color: gradient == null ? bgColor : null,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(17),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(17),
           child: IntrinsicHeight(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -204,7 +204,7 @@ class SplitInstallButton extends ConsumerWidget {
                       children: [
                         Text(
                           label,
-                          style: AppTextStyles.med15.copyWith(
+                          style: LabTextStyles.med15.copyWith(
                             color: isDisabled ? c.white33 : c.white,
                           ),
                         ),
@@ -224,26 +224,25 @@ class SplitInstallButton extends ConsumerWidget {
                   ),
                 ),
 
-                // Full-height divider — 1.6px matches AppStroke.medium
+                // Full-height divider
                 Container(
-                  width: AppStroke.medium,
-                  color: c.white33,
+                  width: LabStroke.medium,
+                  color: c.whiteEnforced.withValues(alpha: 0.18),
                 ),
 
-                // Right: chevron tap area → options modal (3px less left pad)
+                // Right: chevron tap area → options modal
                 GestureDetector(
                   onTap: () => _openOptions(context, ref),
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 6, right: 9),
+                    padding: const EdgeInsets.only(left: 8, right: 9),
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: AppIcon(
-                          AppIcons.chevronDown,
-                          size: 9,
-                          outlineColor: c.white66,
-                          outlineThickness: AppStroke.medium,
+                        child: LabIcon(
+                          LabIcons.chevronDown,
+                          size: 8,
+                          color: c.white66,
                         ),
                       ),
                     ),
@@ -407,7 +406,7 @@ class _AppOptionsContent extends HookConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _OptionTile(
-          icon: AppIcons.share,
+          icon: LabIcons.share,
           label: 'Share',
           onTap: () {
             Navigator.of(context).pop();
@@ -415,7 +414,7 @@ class _AppOptionsContent extends HookConsumerWidget {
           },
         ),
         _OptionTile(
-          icon: AppIcons.copy,
+          icon: LabIcons.copy,
           label: 'Copy link',
           onTap: () {
             Navigator.of(context).pop();
@@ -424,7 +423,7 @@ class _AppOptionsContent extends HookConsumerWidget {
         ),
         if (isSignedIn)
           _OptionTile(
-            icon: AppIcons.star,
+            icon: LabIcons.star,
             label: isSaved ? 'Remove from saved' : 'Save app',
             onTap: () {
               Navigator.of(context).pop();
@@ -432,7 +431,7 @@ class _AppOptionsContent extends HookConsumerWidget {
             },
           ),
         _OptionTile(
-          icon: AppIcons.profile,
+          icon: LabIcons.profile,
           label: 'View publisher',
           onTap: () {
             Navigator.of(context).pop();
@@ -440,7 +439,7 @@ class _AppOptionsContent extends HookConsumerWidget {
           },
         ),
         _OptionTile(
-          icon: AppIcons.openWith,
+          icon: LabIcons.openWith,
           label: 'Open in browser',
           onTap: () {
             Navigator.of(context).pop();
@@ -449,7 +448,7 @@ class _AppOptionsContent extends HookConsumerWidget {
         ),
         if (isInstalled) ...[
           _OptionTile(
-            icon: AppIcons.openWith,
+            icon: LabIcons.openWith,
             label: 'Open',
             onTap: () {
               Navigator.of(context).pop();
@@ -457,7 +456,7 @@ class _AppOptionsContent extends HookConsumerWidget {
             },
           ),
           _OptionTile(
-            icon: AppIcons.cross,
+            icon: LabIcons.cross,
             label: 'Delete app',
             isDestructive: true,
             onTap: () {
@@ -593,7 +592,7 @@ class _OptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final color = isDestructive ? const Color(0xFFFF453A) : c.white;
 
     return GestureDetector(
@@ -603,11 +602,11 @@ class _OptionTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(
           children: [
-            AppIcon(icon, size: 18, outlineColor: color),
+            LabIcon(icon, size: 18, color: color),
             const SizedBox(width: 14),
             Text(
               label,
-              style: AppTextStyles.reg17.copyWith(color: color),
+              style: LabTextStyles.reg17.copyWith(color: color),
             ),
           ],
         ),

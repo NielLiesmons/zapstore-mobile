@@ -29,29 +29,35 @@ import 'package:zapstore/widgets/breathing_logo.dart';
 late final ProviderContainer _providerContainer;
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  // Edge-to-edge: let content draw behind system bars.
-  // The barrier overlay and modal backdrop will now cover the full screen.
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-  ));
-
-  // Create provider container with overrides
-  _providerContainer = ProviderContainer(
-    overrides: [
-      storageNotifierProvider.overrideWith(PurplebaseStorageNotifier.new),
-      packageManagerProvider.overrideWith(
-        (ref) => Platform.isAndroid
-            ? AndroidPackageManager(ref)
-            : DummyPackageManager(ref),
-      ),
-    ],
-  );
-
   runZonedGuarded(() {
+    WidgetsFlutterBinding.ensureInitialized();
+    // Edge-to-edge: let content draw behind system bars.
+    // The barrier overlay and modal backdrop will now cover the full screen.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
+
+    // Create provider container with overrides
+    _providerContainer = ProviderContainer(
+      overrides: [
+        storageNotifierProvider.overrideWith(PurplebaseStorageNotifier.new),
+        packageManagerProvider.overrideWith(
+          (ref) => Platform.isAndroid
+              ? AndroidPackageManager(ref)
+              : DummyPackageManager(ref),
+        ),
+      ],
+    );
+
+    FlutterError.onError = (details) {
+      // Prevents debugger stopping multiple times
+      FlutterError.dumpErrorToConsole(details);
+      _errorHandler(details.exception, details.stack);
+    };
+
     runApp(
       UncontrolledProviderScope(
         container: _providerContainer,
@@ -59,12 +65,6 @@ void main() {
       ),
     );
   }, _errorHandler);
-
-  FlutterError.onError = (details) {
-    // Prevents debugger stopping multiple times
-    FlutterError.dumpErrorToConsole(details);
-    _errorHandler(details.exception, details.stack);
-  };
 }
 
 /// Global error handler that reports errors via NIP-44 encrypted DMs

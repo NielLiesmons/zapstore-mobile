@@ -127,7 +127,7 @@ class _OverlappingAvatars extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: AppBorder.all(
+                    border: LabBorder.all(
                       color: Theme.of(context).scaffoldBackgroundColor,
                       width: 1.5,
                     ),

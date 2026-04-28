@@ -372,7 +372,7 @@ class EventEntityWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12.0),
-        border: AppBorder.all(
+        border: LabBorder.all(
           color: colorPair[0].withValues(alpha: 0.2),
           width: 1.0,
         ),

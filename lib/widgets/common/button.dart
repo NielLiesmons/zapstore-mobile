@@ -6,15 +6,15 @@ import 'package:zapstore/utils/text_styles.dart';
 /// zaplab_design's LabButton / LabSmallButton / LabTabButton patterns.
 ///
 /// Named constructors map 1:1 to the webapp's `.btn-*` classes:
-///   [AppButton.primary]       → .btn-primary        (38px, blurple gradient, rad16)
-///   [AppButton.primarySmall]  → .btn-primary-small   (32px, blurple gradient, pill)
-///   [AppButton.primaryXs]     → .btn-primary-xs      (24px, blurple gradient, pill)
-///   [AppButton.secondary]     → .btn-secondary       (38px, gray66, rad16)
-///   [AppButton.secondarySmall]→ .btn-secondary-small  (32px, gray66, pill)
-///   [AppButton.secondaryXs]   → .btn-secondary-xs     (24px, gray66, pill)
-///   [AppButton.tab]           → SocialTabs tab button  (32px, pill, blurple66 when selected)
-class AppButton extends StatefulWidget {
-  const AppButton({
+///   [LabButton.primary]       → .btn-primary        (40px, blurple gradient, rad10)
+///   [LabButton.primarySmall]  → .btn-primary-small   (34px, blurple gradient, pill)
+///   [LabButton.primaryXs]     → .btn-primary-xs      (26px, blurple gradient, pill)
+///   [LabButton.secondary]     → .btn-secondary       (40px, gray66, rad10)
+///   [LabButton.secondarySmall]→ .btn-secondary-small  (34px, gray66, pill)
+///   [LabButton.secondaryXs]   → .btn-secondary-xs     (26px, gray66, pill)
+///   [LabButton.tab]           → SocialTabs tab button  (32px, pill, blurple66 when selected)
+class LabButton extends StatefulWidget {
+  const LabButton({
     super.key,
     this.onTap,
     this.child,
@@ -50,56 +50,56 @@ class AppButton extends StatefulWidget {
 
   // ── Primary (blurple gradient) ──────────────────────────────────────────
 
-  factory AppButton.primary({
+  factory LabButton.primary({
     Key? key,
     required VoidCallback? onTap,
     Widget? child,
     String? text,
   }) {
-    return AppButton(
+    return LabButton(
       key: key,
       onTap: onTap,
       child: child,
       text: text,
-      textStyle: AppTextStyles.med15,
-      height: 42,
+      textStyle: LabTextStyles.med15,
+      height: 40,
       horizontalPadding: 18,
       pill: false,
       isPrimary: true,
     );
   }
 
-  factory AppButton.primarySmall({
+  factory LabButton.primarySmall({
     Key? key,
     required VoidCallback? onTap,
     Widget? child,
     String? text,
   }) {
-    return AppButton(
+    return LabButton(
       key: key,
       onTap: onTap,
       child: child,
       text: text,
-      textStyle: AppTextStyles.med15,
-      height: 36,
-      horizontalPadding: 16,
+      textStyle: LabTextStyles.med15,
+      height: 34,
+      horizontalPadding: 15,
       pill: true,
       isPrimary: true,
     );
   }
 
-  factory AppButton.primaryXs({
+  factory LabButton.primaryXs({
     Key? key,
     required VoidCallback? onTap,
     Widget? child,
     String? text,
   }) {
-    return AppButton(
+    return LabButton(
       key: key,
       onTap: onTap,
       child: child,
       text: text,
-      textStyle: AppTextStyles.med13,
+      textStyle: LabTextStyles.med13,
       height: 26,
       horizontalPadding: 12,
       pill: true,
@@ -109,61 +109,61 @@ class AppButton extends StatefulWidget {
 
   // ── Secondary (gray66) ─────────────────────────────────────────────────
 
-  factory AppButton.secondary({
+  factory LabButton.secondary({
     Key? key,
     required VoidCallback? onTap,
     Widget? child,
     String? text,
     Color? color,
   }) {
-    return AppButton(
+    return LabButton(
       key: key,
       onTap: onTap,
       child: child,
       text: text,
-      textStyle: AppTextStyles.med15,
+      textStyle: LabTextStyles.med15,
       gradient: null,
       color: color,
-      height: 42,
+      height: 40,
       horizontalPadding: 18,
       pill: false,
     );
   }
 
-  factory AppButton.secondarySmall({
+  factory LabButton.secondarySmall({
     Key? key,
     required VoidCallback? onTap,
     Widget? child,
     String? text,
     Color? color,
   }) {
-    return AppButton(
+    return LabButton(
       key: key,
       onTap: onTap,
       child: child,
       text: text,
-      textStyle: AppTextStyles.med15,
+      textStyle: LabTextStyles.med15,
       gradient: null,
       color: color,
-      height: 36,
-      horizontalPadding: 16,
+      height: 34,
+      horizontalPadding: 15,
       pill: true,
     );
   }
 
-  factory AppButton.secondaryXs({
+  factory LabButton.secondaryXs({
     Key? key,
     required VoidCallback? onTap,
     Widget? child,
     String? text,
     Color? color,
   }) {
-    return AppButton(
+    return LabButton(
       key: key,
       onTap: onTap,
       child: child,
       text: text,
-      textStyle: AppTextStyles.med13,
+      textStyle: LabTextStyles.med13,
       gradient: null,
       color: color,
       height: 26,
@@ -174,7 +174,7 @@ class AppButton extends StatefulWidget {
 
   // ── Tab button (SocialTabs-style) ──────────────────────────────────────
 
-  factory AppButton.tab({
+  factory LabButton.tab({
     Key? key,
     required VoidCallback? onTap,
     required bool isSelected,
@@ -191,15 +191,15 @@ class AppButton extends StatefulWidget {
   }
 
   @override
-  State<AppButton> createState() => _AppButtonState();
+  State<LabButton> createState() => _LabButtonState();
 }
 
-class _AppButtonState extends State<AppButton> {
+class _LabButtonState extends State<LabButton> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     // An explicit gradient prop always wins; the _isPrimary flag means "use
     // the theme blurple gradient"; everything else falls back to c.gray66.
@@ -213,7 +213,7 @@ class _AppButtonState extends State<AppButton> {
 
     final radius = widget.pill
         ? BorderRadius.circular(widget.height / 2)
-        : (widget.borderRadius ?? BorderRadius.circular(18));
+        : (widget.borderRadius ?? BorderRadius.circular(10));
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -241,7 +241,7 @@ class _AppButtonState extends State<AppButton> {
               else
                 Text(
                   widget.text!,
-                  style: (widget.textStyle ?? AppTextStyles.med17).copyWith(
+                  style: (widget.textStyle ?? LabTextStyles.med17).copyWith(
                     color: fgColor,
                   ),
                 ),
@@ -254,7 +254,7 @@ class _AppButtonState extends State<AppButton> {
 }
 
 /// Internal tab-button variant with blurple66 selected state.
-class _AppTabButton extends AppButton {
+class _AppTabButton extends LabButton {
   final bool isSelected;
 
   _AppTabButton({
@@ -264,14 +264,14 @@ class _AppTabButton extends AppButton {
     super.child,
     super.text,
   }) : super(
-         textStyle: AppTextStyles.med15,
-         height: 32,
-         horizontalPadding: 14,
+         textStyle: LabTextStyles.med15,
+         height: 34,
+         horizontalPadding: 15,
          pill: true,
        );
 
   @override
-  State<AppButton> createState() => _AppTabButtonState();
+  State<LabButton> createState() => _AppTabButtonState();
 }
 
 class _AppTabButtonState extends State<_AppTabButton> {
@@ -279,7 +279,7 @@ class _AppTabButtonState extends State<_AppTabButton> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     final Gradient? bg = widget.isSelected ? c.blurple66 : null;
     final Color? bgColor = widget.isSelected ? null : c.gray66;
@@ -294,23 +294,24 @@ class _AppTabButtonState extends State<_AppTabButton> {
         scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 120),
         child: Container(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
           decoration: BoxDecoration(
             gradient: bg,
             color: bgColor,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(17),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (widget.child != null)
                 widget.child!
               else
                 Text(
                   widget.text!,
-                  style: AppTextStyles.med15.copyWith(color: fgColor),
+                  style: LabTextStyles.med15.copyWith(color: fgColor),
                 ),
             ],
           ),

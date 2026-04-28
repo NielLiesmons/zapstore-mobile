@@ -57,6 +57,7 @@ dependencies:
   flutter_local_notifications: ^19.5.0
   device_info_plus: ^12.0.0
   shared_preferences: ^2.3.0
+  flutter_svg: ^2.2.3
 
 dependency_overrides:
   models:
@@ -104,6 +105,8 @@ flutter:
   assets:
     - assets/images/
     - assets/seed.db
+    - assets/icons/
+    - assets/icons/thick/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

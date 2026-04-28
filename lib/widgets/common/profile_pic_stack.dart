@@ -33,7 +33,7 @@ class ProfilePicStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayed = profiles.take(maxDisplay).toList();
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     Widget stack = SizedBox(
       width: displayed.isEmpty
@@ -87,7 +87,11 @@ class ProfilePicStack extends StatelessWidget {
               offset: Offset(-overlap, 0),
               child: Container(
                 height: avatarSize,
-                padding: const EdgeInsets.only(left: 16, right: 12),
+                // Count-only (no text): tighter symmetric padding so the number
+                // isn't pushed right by the extra avatar-overlap indent.
+                padding: text.isNotEmpty
+                    ? const EdgeInsets.only(left: 16, right: 12)
+                    : const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
                   color: c.white8,
                   borderRadius: BorderRadius.circular(999),
@@ -98,7 +102,7 @@ class ProfilePicStack extends StatelessWidget {
                     if (text.isNotEmpty)
                       Text(
                         text,
-                        style: AppTextStyles.med13.copyWith(color: c.white66),
+                        style: LabTextStyles.med13.copyWith(color: c.white66),
                         overflow: TextOverflow.ellipsis,
                       ),
                     if (text.isNotEmpty && suffix.isNotEmpty)
@@ -106,7 +110,7 @@ class ProfilePicStack extends StatelessWidget {
                     if (suffix.isNotEmpty)
                       Text(
                         suffix,
-                        style: AppTextStyles.bold13.copyWith(color: c.white33),
+                        style: LabTextStyles.bold13.copyWith(color: c.white33),
                       ),
                   ],
                 ),

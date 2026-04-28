@@ -367,7 +367,7 @@ class AppDetailSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonizerConfig(
-      data: AppColors.getSkeletonizerConfig(Theme.of(context).brightness),
+      data: LabColors.getSkeletonizerConfig(Theme.of(context).brightness),
       child: Skeletonizer(
         enabled: true,
         child: Column(
@@ -715,7 +715,7 @@ class AuthorSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonizerConfig(
-      data: AppColors.getSkeletonizerConfig(Theme.of(context).brightness),
+      data: LabColors.getSkeletonizerConfig(Theme.of(context).brightness),
       child: Skeletonizer(
         enabled: true,
         child: Row(

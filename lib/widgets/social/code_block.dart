@@ -37,7 +37,7 @@ class _CodeBlockState extends State<CodeBlock> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final bgColor = widget.useBlackBackground ? c.black33 : c.gray33;
 
     return Container(
@@ -45,7 +45,7 @@ class _CodeBlockState extends State<CodeBlock> {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(16),
-        border: AppBorder.all(color: c.white16, width: 0.33),
+        border: LabBorder.all(color: c.white16, width: 0.33),
       ),
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Stack(
@@ -60,7 +60,7 @@ class _CodeBlockState extends State<CodeBlock> {
                     padding: const EdgeInsets.only(bottom: 2),
                     child: Text(
                       widget.language!,
-                      style: AppTextStyles.reg13.copyWith(color: c.white33),
+                      style: LabTextStyles.reg13.copyWith(color: c.white33),
                     ),
                   ),
                 SingleChildScrollView(
@@ -94,9 +94,8 @@ class _CodeBlockState extends State<CodeBlock> {
                 ),
                 child: Center(
                   child: _copied
-                      ? AppIcon(AppIcons.check, size: 14, color: c.blurpleColor)
-                      : AppIcon(AppIcons.copy, size: 16,
-                          outlineColor: c.white66, outlineThickness: 1.4),
+                      ? LabIcon(LabIcons.check, size: 14, color: c.blurpleColor)
+                      : LabIcon(LabIcons.copy, size: 16, color: c.white66),
                 ),
               ),
             ),

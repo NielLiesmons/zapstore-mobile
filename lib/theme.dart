@@ -8,8 +8,8 @@ const kHeadlineFontFamily = 'Inter Display';
 
 /// Stroke widths — mirrors LabLineThicknessData.normal() exactly.
 /// Use these everywhere a border width is needed.
-class AppStroke {
-  AppStroke._();
+class LabStroke {
+  LabStroke._();
   static const double thin = 0.33;   // panel/card borders, icon borders
   static const double medium = 1.6;  // interactive borders, icon grid containers
   static const double thick = 3.2;   // emphasis borders
@@ -23,18 +23,18 @@ class AppStroke {
 /// size-constrained widgets (exactly like CSS `box-sizing: content-box` +
 /// an inward-only stroke).
 ///
-/// [AppBorder.all] uses [BorderSide.strokeAlignCenter] instead:
+/// [LabBorder.all] uses [BorderSide.strokeAlignCenter] instead:
 ///   • stroke sits on the element edge (half in, half out) → CSS/web default
 ///   • Flutter only inflates effective padding by `width / 2`, not `width`
 ///   • No surprise overflow; math stays simple: inner = size − 2 × padding
 ///
 /// Use this everywhere instead of [Border.all].
-class AppBorder {
-  AppBorder._();
+class LabBorder {
+  LabBorder._();
 
   static Border all({
     required Color color,
-    double width = AppStroke.medium,
+    double width = LabStroke.medium,
   }) {
     final side = BorderSide(
       color: color,
@@ -47,20 +47,25 @@ class AppBorder {
 
 /// Border radii — mirrors LabRadiusData.normal() exactly.
 /// Use these everywhere a BorderRadius is needed.
-class AppRadius {
-  AppRadius._();
-  static const double r4 = 4;
-  static const double r8 = 8;
+class LabRadius {
+  LabRadius._();
+  static const double r4  = 4;   // micro — incoming bubble corner
+  static const double r8  = 8;   // small pill, xs icon
+  static const double r11 = 11;  // standard — input fields, small containers
+  static const double r14 = 14;  // medium containers
+  static const double r17 = 17;  // pill button (34px height / 2)
+  static const double r20 = 20;  // large containers
+  static const double r24 = 24;  // large icons, app pic lg
+  static const double r32 = 32;  // modals
+  static const double r40 = 40;  // extra-large pill shapes
+  // Kept for existing code; prefer the values above for new work.
   static const double r12 = 12;
   static const double r16 = 16;
   static const double r18 = 18;
-  static const double r24 = 24;
-  static const double r32 = 32;
-  static const double r40 = 40;
 }
 
-class AppColors extends ThemeExtension<AppColors> {
-  const AppColors({
+class LabColors extends ThemeExtension<LabColors> {
+  const LabColors({
     required this.white,
     required this.white66,
     required this.white33,
@@ -164,7 +169,7 @@ class AppColors extends ThemeExtension<AppColors> {
   final Gradient graydient33;
   final Gradient graydient16;
 
-  factory AppColors.gray() => AppColors(
+  factory LabColors.gray() => LabColors(
         // White opacity scale — exact webapp values
         white: const Color(0xFFFFFFFF),
         white66: const Color(0xA8FFFFFF),
@@ -302,7 +307,7 @@ class AppColors extends ThemeExtension<AppColors> {
         ),
       );
 
-  factory AppColors.dark() => AppColors(
+  factory LabColors.dark() => LabColors(
         white: const Color(0xFFFFFFFF),
         white66: const Color(0xA8FFFFFF),
         white33: const Color(0x54FFFFFF),
@@ -430,7 +435,7 @@ class AppColors extends ThemeExtension<AppColors> {
         ),
       );
 
-  factory AppColors.light() => AppColors(
+  factory LabColors.light() => LabColors(
         // Light mode — warm dark-on-light palette (webapp [data-theme="light"])
         white: const Color(0xFF241B0F),
         white66: const Color(0xA8241B0F),
@@ -560,7 +565,7 @@ class AppColors extends ThemeExtension<AppColors> {
       );
 
   @override
-  AppColors copyWith({
+  LabColors copyWith({
     Color? white,
     Color? white66,
     Color? white33,
@@ -610,7 +615,7 @@ class AppColors extends ThemeExtension<AppColors> {
     Gradient? graydient33,
     Gradient? graydient16,
   }) =>
-      AppColors(
+      LabColors(
         white: white ?? this.white,
         white66: white66 ?? this.white66,
         white33: white33 ?? this.white33,
@@ -662,9 +667,9 @@ class AppColors extends ThemeExtension<AppColors> {
       );
 
   @override
-  AppColors lerp(AppColors? other, double t) {
+  LabColors lerp(LabColors? other, double t) {
     if (other == null) return this;
-    return AppColors(
+    return LabColors(
       white: Color.lerp(white, other.white, t)!,
       white66: Color.lerp(white66, other.white66, t)!,
       white33: Color.lerp(white33, other.white33, t)!,
@@ -718,7 +723,7 @@ class AppColors extends ThemeExtension<AppColors> {
 
   // ── Backward-compat static aliases (gray mode values) ──────────────────
   // These let existing widgets compile unchanged until they migrate to
-  // Theme.of(context).extension<AppColors>()!
+  // Theme.of(context).extension<LabColors>()!
   static const Color darkPrimary = Color(0xFF5A58FE);
   static const Color darkSecondary = Color(0xFF8280FF);
   static const Color darkSurface = Color(0xFF242424);
@@ -746,32 +751,32 @@ class AppColors extends ThemeExtension<AppColors> {
   }
 }
 
-TextTheme _buildTextTheme(AppColors c) => TextTheme(
+TextTheme _buildTextTheme(LabColors c) => TextTheme(
       // Large display: app name hero text
-      displayLarge: AppTextStyles.h1.copyWith(fontSize: 56, color: c.white),
-      displayMedium: AppTextStyles.h1.copyWith(fontSize: 44, color: c.white),
-      displaySmall: AppTextStyles.h1.copyWith(fontSize: 36, color: c.white),
+      displayLarge: LabTextStyles.semibold24.copyWith(fontSize: 56, color: c.white),
+      displayMedium: LabTextStyles.semibold24.copyWith(fontSize: 44, color: c.white),
+      displaySmall: LabTextStyles.semibold24.copyWith(fontSize: 36, color: c.white),
       // Headlines: major screen sections
-      headlineLarge: AppTextStyles.h1.copyWith(fontSize: 32, color: c.white),
-      headlineMedium: AppTextStyles.h1.copyWith(fontSize: 28, color: c.white),
-      headlineSmall: AppTextStyles.h1.copyWith(fontSize: 24, color: c.white),
-      // Titles: modal headers, card titles (SemiBold, not ExtraBold)
-      titleLarge: AppTextStyles.h2.copyWith(color: c.white),   // 20px w600
-      titleMedium: AppTextStyles.bold17.copyWith(color: c.white), // 16px w600
-      titleSmall: AppTextStyles.bold15.copyWith(color: c.white),  // 14.5px w600
+      headlineLarge: LabTextStyles.semibold24.copyWith(fontSize: 32, color: c.white),
+      headlineMedium: LabTextStyles.semibold24.copyWith(fontSize: 28, color: c.white),
+      headlineSmall: LabTextStyles.semibold24.copyWith(fontSize: 24, color: c.white),
+      // Titles: modal headers, card titles
+      titleLarge: LabTextStyles.semibold22.copyWith(color: c.white),
+      titleMedium: LabTextStyles.bold17.copyWith(color: c.white), // 16px w600
+      titleSmall: LabTextStyles.bold15.copyWith(color: c.white),  // 14.5px w600
       // Body
-      bodyLarge: AppTextStyles.reg17.copyWith(color: c.white),
-      bodyMedium: AppTextStyles.reg15.copyWith(color: c.white66),
-      bodySmall: AppTextStyles.reg13.copyWith(color: c.white66),
+      bodyLarge: LabTextStyles.reg17.copyWith(color: c.white),
+      bodyMedium: LabTextStyles.reg15.copyWith(color: c.white66),
+      bodySmall: LabTextStyles.reg13.copyWith(color: c.white66),
       // Labels: chips, timestamps, metadata
-      labelLarge: AppTextStyles.med15.copyWith(color: c.white),
-      labelMedium: AppTextStyles.med13.copyWith(color: c.white),
-      labelSmall: AppTextStyles.med11.copyWith(color: c.white66),
+      labelLarge: LabTextStyles.med15.copyWith(color: c.white),
+      labelMedium: LabTextStyles.med13.copyWith(color: c.white),
+      labelSmall: LabTextStyles.med11.copyWith(color: c.white66),
     );
 
-ThemeData _buildMaterialTheme(AppColors c) => ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
+ThemeData _buildMaterialTheme(LabColors c) => ThemeData(
+  useMaterial3: true,
+  brightness: Brightness.dark,
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       scaffoldBackgroundColor: c.black,
@@ -788,107 +793,107 @@ ThemeData _buildMaterialTheme(AppColors c) => ThemeData(
         onError: c.whiteEnforced,
       ),
       textTheme: _buildTextTheme(c),
-      cardTheme: CardThemeData(
-        elevation: 0,
+  cardTheme: CardThemeData(
+    elevation: 0,
         color: c.gray33,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
+    surfaceTintColor: Colors.transparent,
+    shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(color: c.white8, width: 0.33),
         ),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       ),
-      chipTheme: ChipThemeData(
+  chipTheme: ChipThemeData(
         backgroundColor: c.gray33,
         selectedColor: c.blurpleColor33,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         labelStyle: TextStyle(
-          fontFamily: kFontFamily,
-          fontWeight: FontWeight.w500,
-          fontSize: 14,
-          letterSpacing: 0.15,
+      fontFamily: kFontFamily,
+      fontWeight: FontWeight.w500,
+      fontSize: 14,
+      letterSpacing: 0.15,
           color: c.white,
-        ),
-        elevation: 0,
-        pressElevation: 0,
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
+    ),
+    elevation: 0,
+    pressElevation: 0,
+  ),
+  elevatedButtonTheme: ElevatedButtonThemeData(
+    style: ElevatedButton.styleFrom(
           backgroundColor: c.blurpleColor,
           foregroundColor: c.whiteEnforced,
-          elevation: 0,
-          shadowColor: Colors.transparent,
+      elevation: 0,
+      shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          textStyle: AppTextStyles.med17,
+          textStyle: LabTextStyles.med17,
         ),
       ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
+  filledButtonTheme: FilledButtonThemeData(
+    style: FilledButton.styleFrom(
           backgroundColor: c.blurpleColor,
           foregroundColor: c.whiteEnforced,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          textStyle: AppTextStyles.med17,
+          textStyle: LabTextStyles.med17,
         ),
       ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
+  outlinedButtonTheme: OutlinedButtonThemeData(
+    style: OutlinedButton.styleFrom(
           foregroundColor: c.blurpleColor,
           side: BorderSide(color: c.blurpleColor, width: 1),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          textStyle: AppTextStyles.med17,
+          textStyle: LabTextStyles.med17,
         ),
       ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          splashFactory: NoSplash.splashFactory,
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+  textButtonTheme: TextButtonThemeData(
+    style: TextButton.styleFrom(
+      splashFactory: NoSplash.splashFactory,
+    ),
+  ),
+  inputDecorationTheme: InputDecorationTheme(
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: c.white16, width: 1),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: c.white16, width: 1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: c.blurpleColor, width: 2),
-        ),
-        filled: true,
+    ),
+    filled: true,
         fillColor: c.gray33,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         hintStyle: TextStyle(
-          fontFamily: kFontFamily,
+      fontFamily: kFontFamily,
           color: c.white33,
-          fontSize: 16,
-          fontWeight: FontWeight.w400,
-        ),
-      ),
+      fontSize: 16,
+      fontWeight: FontWeight.w400,
+    ),
+  ),
       appBarTheme: AppBarTheme(
-        elevation: 0,
-        scrolledUnderElevation: 0,
+    elevation: 0,
+    scrolledUnderElevation: 0,
         backgroundColor: c.black,
-        surfaceTintColor: Colors.transparent,
+    surfaceTintColor: Colors.transparent,
         foregroundColor: c.white,
-        titleTextStyle: TextStyle(
-          fontFamily: kHeadlineFontFamily,
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
+    titleTextStyle: TextStyle(
+      fontFamily: kHeadlineFontFamily,
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
           color: c.white,
-          letterSpacing: 0.1,
-        ),
+      letterSpacing: 0.1,
+    ),
         systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light,
-        ),
-      ),
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: c.gray66,
         surfaceTintColor: Colors.transparent,
@@ -901,9 +906,9 @@ ThemeData _buildMaterialTheme(AppColors c) => ThemeData(
         backgroundColor: c.gray,
         selectedItemColor: c.blurpleColor,
         unselectedItemColor: c.white66,
-        elevation: 0,
-        type: BottomNavigationBarType.fixed,
-      ),
+    elevation: 0,
+    type: BottomNavigationBarType.fixed,
+  ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: c.gray,
         selectedIconTheme: IconThemeData(color: c.blurpleColor),
@@ -918,6 +923,6 @@ ThemeData _buildMaterialTheme(AppColors c) => ThemeData(
       ),
     );
 
-final grayTheme = _buildMaterialTheme(AppColors.gray());
-final darkTheme = _buildMaterialTheme(AppColors.dark());
-final lightTheme = _buildMaterialTheme(AppColors.light());
+final grayTheme = _buildMaterialTheme(LabColors.gray());
+final darkTheme = _buildMaterialTheme(LabColors.dark());
+final lightTheme = _buildMaterialTheme(LabColors.light());

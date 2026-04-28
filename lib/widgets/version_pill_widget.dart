@@ -90,7 +90,7 @@ class VersionPillWidget extends HookConsumerWidget {
     return _buildVersionPill(
       context,
       version,
-      AppColors.darkPillBackground,
+      LabColors.darkPillBackground,
       Colors.white,
       isInstalled: isInstalled,
       updateAvailable: updateAvailable,
@@ -153,7 +153,7 @@ class VersionPillWidget extends HookConsumerWidget {
             availableVersion,
             isDowngrade
                 ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
-                : AppColors.darkPillBackground,
+                : LabColors.darkPillBackground,
             isDowngrade
                 ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
                 : Colors.white,

@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/constants/app_constants.dart';
@@ -21,7 +22,9 @@ import 'package:zapstore/widgets/common/profile_pic_stack.dart';
 import 'package:zapstore/widgets/expandable_markdown.dart';
 import 'package:zapstore/widgets/screenshots_gallery.dart';
 import 'package:zapstore/widgets/social/details_tab.dart';
+import 'package:zapstore/widgets/social/bottom_bar.dart';
 import 'package:zapstore/widgets/social/social_tabs.dart';
+import 'package:zapstore/widgets/common/top_scroll_fader.dart';
 
 class AppDetailScreen extends HookConsumerWidget {
   const AppDetailScreen({super.key, required this.appId, this.authorPubkey});
@@ -144,7 +147,7 @@ class _AppDetailContent extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
     final showDebugSections = isDebugMode(signedInPubkey);
 
@@ -182,25 +185,30 @@ class _AppDetailContent extends HookConsumerWidget {
     final publishedByDeveloper = !app.isRelaySigned;
     final hasRepository = app.repository?.isNotEmpty == true;
 
-    // Use a Stack so the scroll view sits *behind* the header. This lets the
-    // ShaderMask fade on the header's bottom actually reveal scrolling content
-    // rather than just the Scaffold background.
     final topPad = MediaQuery.paddingOf(context).top;
-    final scrollTopPad = topPad + 50.0; // safe-area + header row (≈38px) + fade zone (12px)
+    // safe-area + header row (≈38px) + 10px bottom padding under the row
+    final scrollTopPad = topPad + 48.0;
+
+    final scrollController = useScrollController();
+    final isSignedIn = signedInPubkey != null;
 
     return Scaffold(
       body: Stack(
         children: [
           // ── Full-body scrollable content (behind the floating header) ────
           Positioned.fill(
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.only(
-                top: scrollTopPad,
-                bottom: MediaQuery.paddingOf(context).bottom + 40,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            child: TopScrollFader(
+              scrollController: scrollController,
+              offsetBias: scrollTopPad,
+              child: SingleChildScrollView(
+                controller: scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(
+                  top: scrollTopPad,
+                  bottom: MediaQuery.paddingOf(context).bottom + 80,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // App header (pic + name + platform pill + install button)
                   Padding(
@@ -225,7 +233,7 @@ class _AppDetailContent extends HookConsumerWidget {
                         styleSheet: MarkdownStyleSheet.fromTheme(
                           Theme.of(context),
                         ).copyWith(
-                          p: AppTextStyles.reg15.copyWith(
+                          p: LabTextStyles.reg15.copyWith(
                             color: c.white.withValues(alpha: 0.85),
                             height: 1.5,
                           ),
@@ -239,7 +247,7 @@ class _AppDetailContent extends HookConsumerWidget {
 
                   // Info panels: Security (golden-ratio wider) + Releases
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                     child: _InfoPanels(
                       publishedByDeveloper: publishedByDeveloper,
                       hasRepository: hasRepository,
@@ -287,6 +295,7 @@ class _AppDetailContent extends HookConsumerWidget {
                       child: DebugVersionsSection(app: app),
                     ),
                 ],
+                ),
               ),
             ),
           ),
@@ -301,6 +310,20 @@ class _AppDetailContent extends HookConsumerWidget {
               author: author,
               catalogProfile: catalogProfile,
               latestMetadata: latestMetadata,
+            ),
+          ),
+
+          // ── Bottom bar (floats over content at the bottom) ───────────────
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: BottomBar(
+              isSignedIn: isSignedIn,
+              onZap: () {},
+              onComment: () {},
+              onOptions: () {},
+              onGetStarted: () {},
             ),
           ),
         ],
@@ -328,7 +351,7 @@ class _DetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final topPad = MediaQuery.paddingOf(context).top;
 
     final publisherName = author?.name ?? _shortenPubkey(app.pubkey);
@@ -339,29 +362,16 @@ class _DetailHeader extends StatelessWidget {
         ProfilePicItem(profile: catalogProfile),
     ];
 
-    // Wrap the blurred header in a ShaderMask that fades the bottom 12 px to
-    // transparent, creating a gradient transition into the scrollable content.
-    return ShaderMask(
-      shaderCallback: (rect) {
-        final fadeStart = (rect.height - 12) / rect.height;
-        return LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: const [Colors.white, Colors.white, Colors.transparent],
-          stops: [0.0, fadeStart.clamp(0.0, 1.0), 1.0],
-        ).createShader(rect);
-      },
-      blendMode: BlendMode.dstIn,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Container(
-            color: c.black.withValues(alpha: 0.7),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Safe-area inset + reduced top padding (max 8px above content).
-                SizedBox(height: topPad + 8),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          color: c.black,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Safe-area inset + padding above content row.
+              SizedBox(height: topPad + 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Row(
@@ -381,11 +391,10 @@ class _DetailHeader extends StatelessWidget {
                           child: Center(
                             child: Padding(
                               padding: const EdgeInsets.only(right: 2),
-                              child: AppIcon(
-                                AppIcons.chevronLeft,
+                              child: LabIcon(
+                                LabIcons.chevronLeft,
                                 size: 14,
-                                outlineColor: c.white33,
-                                outlineThickness: 1.4,
+                                color: c.white33,
                               ),
                             ),
                           ),
@@ -397,47 +406,58 @@ class _DetailHeader extends StatelessWidget {
                       // Author avatar
                       ProfilePic(profile: author, size: 28),
 
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
 
-                      // Publisher name
+                      // Publisher name + timestamp side-by-side (left-aligned)
                       Expanded(
-                        child: Text(
-                          publisherName,
-                          style: AppTextStyles.med15.copyWith(color: c.white66),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                publisherName,
+                                style: LabTextStyles.med15.copyWith(
+                                  color: c.white66,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                            if (latestMetadata != null) ...[
+                              const SizedBox(width: 6),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  _formatTimestamp(latestMetadata!.createdAt),
+                                  style: LabTextStyles.reg13.copyWith(
+                                    color: c.white33,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
 
-                      // Release timestamp — webapp Timestamp.svelte format
-                      if (latestMetadata != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          _formatTimestamp(latestMetadata!.createdAt),
-                          style: AppTextStyles.reg13.copyWith(color: c.white33),
-                        ),
-                      ],
-
-                      // Community stack: overlapping avatars + count pill
-                      // (same pill style as ProfilePicStack in root_comment.dart)
+                      // Community stack: avatarSize 28 matches the ProfilePic in
+                      // this row; same pill style as _ReplyIndicator in root_comment.
                       if (communityItems.isNotEmpty) ...[
                         const SizedBox(width: 10),
                         ProfilePicStack(
                           profiles: communityItems,
-                          avatarSize: 22,
+                          avatarSize: 28,
                           suffix: '${communityItems.length}',
                         ),
                       ],
                     ],
                   ),
                 ),
-                // 12 px space that the ShaderMask fades out — zero explicit padding.
-                const SizedBox(height: 12),
+                // Bottom spacing below the header row (matches home_screen top bar).
+                const SizedBox(height: 10),
               ],
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -534,7 +554,7 @@ class _SecurityPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     final items = [
       _PanelCheckData(
@@ -563,14 +583,14 @@ class _SecurityPanel extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
         decoration: BoxDecoration(
           color: c.white8,
-          borderRadius: BorderRadius.circular(AppRadius.r16),
+          borderRadius: BorderRadius.circular(LabRadius.r16),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Security',
-              style: AppTextStyles.semibold15.copyWith(color: c.white),
+              style: LabTextStyles.semibold15.copyWith(color: c.white),
             ),
             const SizedBox(height: 4),
             for (final item in items)
@@ -586,11 +606,11 @@ class _SecurityPanel extends StatelessWidget {
                         SizedBox(
                           width: 20,
                           child: item.isCheck
-                              ? AppIcon(
-                                  AppIcons.check,
+                              ? LabIcon(
+                                  LabIcons.check,
                                   size: 13,
-                                  outlineColor: c.blurpleColor,
-                                  outlineThickness: 2.8,
+                                  color: c.blurpleColor,
+                                  thick: true,
                                 )
                               : Center(
                                   child: Container(
@@ -607,7 +627,7 @@ class _SecurityPanel extends StatelessWidget {
                         Expanded(
                           child: Text(
                             item.label,
-                            style: AppTextStyles.reg13.copyWith(
+                            style: LabTextStyles.reg13.copyWith(
                               color: c.white66,
                             ),
                           ),
@@ -670,7 +690,7 @@ class _ReleasesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     // Build rows from whatever release data we have (just the latest for now)
     final rows = <_ReleaseRow>[];
@@ -691,20 +711,20 @@ class _ReleasesPanel extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
         decoration: BoxDecoration(
           color: c.white8,
-          borderRadius: BorderRadius.circular(AppRadius.r16),
+          borderRadius: BorderRadius.circular(LabRadius.r16),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Releases',
-              style: AppTextStyles.semibold15.copyWith(color: c.white),
+              style: LabTextStyles.semibold15.copyWith(color: c.white),
             ),
             const SizedBox(height: 4),
             if (rows.isEmpty)
               Text(
                 'No releases found.',
-                style: AppTextStyles.reg13.copyWith(color: c.white33),
+                style: LabTextStyles.reg13.copyWith(color: c.white33),
               )
             else
               for (var i = 0; i < rows.length && i < _maxItems; i++)
@@ -719,7 +739,7 @@ class _ReleasesPanel extends StatelessWidget {
                         children: [
                           Text(
                             rows[i].version,
-                            style: AppTextStyles.med13.copyWith(
+                            style: LabTextStyles.med13.copyWith(
                               color: c.white33,
                             ),
                           ),
@@ -727,7 +747,7 @@ class _ReleasesPanel extends StatelessWidget {
                           Expanded(
                             child: Text(
                               rows[i].preview.isEmpty ? 'No notes' : rows[i].preview,
-                              style: AppTextStyles.reg13.copyWith(
+                              style: LabTextStyles.reg13.copyWith(
                                 color: c.white66,
                               ),
                               overflow: TextOverflow.ellipsis,

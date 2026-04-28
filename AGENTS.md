@@ -8,6 +8,7 @@ All behavioral authority lives in `spec/guidelines/`. If this file conflicts, gu
 
 | What | Where |
 |------|-------|
+| Design system (tokens, buttons, icons, components) | `spec/guidelines/DESIGN_SYSTEM.md` |
 | Architecture & patterns | `spec/guidelines/ARCHITECTURE.md` |
 | Non-negotiable rules | `spec/guidelines/INVARIANTS.md` |
 | Quality standards | `spec/guidelines/QUALITY_BAR.md` |

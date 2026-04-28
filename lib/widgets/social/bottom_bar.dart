@@ -37,7 +37,7 @@ class BottomBar extends StatefulWidget {
 class _BottomBarState extends State<BottomBar> {
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return AnimatedSlide(
       offset: widget.modalOpen ? const Offset(0, 1) : Offset.zero,
@@ -82,22 +82,22 @@ class _BottomBarState extends State<BottomBar> {
     );
   }
 
-  Widget _buildSignedInBar(AppColors c) {
+  Widget _buildSignedInBar(LabColors c) {
     return Row(
       children: [
-        // Zap button
-        AppButton.primary(
+        // Zap button — 34×34 rounded square, icon only
+        GestureDetector(
           onTap: widget.onZap,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppIcon(AppIcons.zap, size: 18, color: c.whiteEnforced),
-              const SizedBox(width: 8),
-              Text(
-                'Zap',
-                style: AppTextStyles.med17.copyWith(color: c.whiteEnforced),
-              ),
-            ],
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              gradient: c.blurple,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+              child: LabIcon(LabIcons.zap, size: 18, color: c.whiteEnforced),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -106,40 +106,35 @@ class _BottomBarState extends State<BottomBar> {
           child: GestureDetector(
             onTap: widget.onComment,
             child: Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: c.black33,
-                borderRadius: BorderRadius.circular(16),
-                border: AppBorder.all(color: c.white33, width: 0.33),
+                borderRadius: BorderRadius.circular(17),
+                border: LabBorder.all(color: c.white33, width: 0.33),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  AppIcon(
-                    AppIcons.reply,
-                    size: 18,
-                    color: c.white33,
-                    outlineColor: c.white33,
-                    outlineThickness: 1.4,
-                  ),
+                  LabIcon(LabIcons.reply, size: 16, color: c.white33),
                   const SizedBox(width: 8),
                   Text(
                     widget.commentPlaceholder,
-                    style: AppTextStyles.med17.copyWith(color: c.white33),
+                    style: LabTextStyles.med15.copyWith(color: c.white33),
                   ),
                 ],
               ),
             ),
           ),
         ),
-        // Options button
+        // Options button — uses options.svg (filled circles)
         GestureDetector(
           onTap: widget.onOptions,
           child: SizedBox(
-            width: 42,
-            height: 42,
+            width: 38,
+            height: 38,
             child: Center(
-              child: AppIcon(AppIcons.details, size: 20, color: c.white33),
+              child: LabIcon(LabIcons.options, size: 18, color: c.white33),
             ),
           ),
         ),
@@ -147,10 +142,10 @@ class _BottomBarState extends State<BottomBar> {
     );
   }
 
-  Widget _buildGuestBar(AppColors c) {
+  Widget _buildGuestBar(LabColors c) {
     return Row(
       children: [
-        AppButton.primarySmall(
+        LabButton.primarySmall(
           onTap: widget.onGetStarted,
           text: 'Sign in',
         ),
@@ -158,7 +153,7 @@ class _BottomBarState extends State<BottomBar> {
         Expanded(
           child: Text(
             'Join the conversation',
-            style: AppTextStyles.med17.copyWith(color: c.white66),
+            style: LabTextStyles.med15.copyWith(color: c.white66),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -193,7 +188,7 @@ class CommunityBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return AnimatedSlide(
       offset: modalOpen ? const Offset(0, 1) : Offset.zero,
@@ -238,7 +233,7 @@ class CommunityBottomBar extends StatelessWidget {
     );
   }
 
-  Widget _buildFeedBar(AppColors c) {
+  Widget _buildFeedBar(LabColors c) {
     return Row(
       children: [
         // + Post button
@@ -254,17 +249,16 @@ class CommunityBottomBar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppIcon(
-                  AppIcons.plus,
+                LabIcon(
+                  LabIcons.plus,
                   size: 16,
                   color: c.whiteEnforced,
-                  outlineColor: c.whiteEnforced,
-                  outlineThickness: 2.8,
+                  thick: true,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   ctaLabel,
-                  style: AppTextStyles.med17.copyWith(color: c.whiteEnforced),
+                  style: LabTextStyles.med17.copyWith(color: c.whiteEnforced),
                 ),
               ],
             ),
@@ -281,21 +275,19 @@ class CommunityBottomBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: c.black33,
                 borderRadius: BorderRadius.circular(16),
-                border: AppBorder.all(color: c.white33, width: 0.33),
+                border: LabBorder.all(color: c.white33, width: 0.33),
               ),
               child: Row(
                 children: [
-                  AppIcon(
-                    AppIcons.search,
+                  LabIcon(
+                    LabIcons.search,
                     size: 18,
                     color: c.white33,
-                    outlineColor: c.white33,
-                    outlineThickness: 1.4,
                   ),
                   const SizedBox(width: 8),
                   Text(
                     searchLabel,
-                    style: AppTextStyles.med17.copyWith(color: c.white33),
+                    style: LabTextStyles.med17.copyWith(color: c.white33),
                   ),
                 ],
               ),
@@ -306,10 +298,10 @@ class CommunityBottomBar extends StatelessWidget {
     );
   }
 
-  Widget _buildGuestBar(AppColors c) {
+  Widget _buildGuestBar(LabColors c) {
     return Row(
       children: [
-        AppButton.primarySmall(
+        LabButton.primarySmall(
           onTap: onGetStarted,
           text: 'Sign in',
         ),
@@ -317,7 +309,7 @@ class CommunityBottomBar extends StatelessWidget {
         Expanded(
           child: Text(
             'Join the conversation',
-            style: AppTextStyles.med17.copyWith(color: c.white66),
+            style: LabTextStyles.med17.copyWith(color: c.white66),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

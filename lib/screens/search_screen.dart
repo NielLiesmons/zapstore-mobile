@@ -65,19 +65,19 @@ class SearchScreen extends HookConsumerWidget {
                   hintText: 'Search apps',
                   leading: Padding(
                     padding: const EdgeInsets.only(left: 4),
-                    child: AppIcon(
-                      AppIcons.search,
+                    child: LabIcon(
+                      LabIcons.search,
                       size: 20,
-                      color: Theme.of(context).extension<AppColors>()!.white33,
+                      color: Theme.of(context).extension<LabColors>()!.white33,
                     ),
                   ),
                   trailing: [
                     if (hasText)
                       IconButton(
-                        icon: AppIcon(
-                          AppIcons.cross,
+                        icon: LabIcon(
+                          LabIcons.cross,
                           size: 16,
-                          color: Theme.of(context).extension<AppColors>()!.white33,
+                          color: Theme.of(context).extension<LabColors>()!.white33,
                         ),
                         onPressed: () {
                           searchController.clear();
@@ -90,13 +90,13 @@ class SearchScreen extends HookConsumerWidget {
                   onSubmitted: performSearch,
                   elevation: WidgetStateProperty.all(0),
                   backgroundColor: WidgetStateProperty.all(
-                    Theme.of(context).extension<AppColors>()!.gray33,
+                    Theme.of(context).extension<LabColors>()!.gray33,
                   ),
                   shape: WidgetStateProperty.all(
                     RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(
-                        color: Theme.of(context).extension<AppColors>()!.white16,
+                        color: Theme.of(context).extension<LabColors>()!.white16,
                         width: 0.33,
                       ),
                     ),

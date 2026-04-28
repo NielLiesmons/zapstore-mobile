@@ -260,7 +260,7 @@ class RelayManagementCard extends HookConsumerWidget {
                             .surfaceContainerHighest
                             .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(8),
-                        border: AppBorder.all(
+                        border: LabBorder.all(
                           color: Theme.of(
                             context,
                           ).colorScheme.outline.withValues(alpha: 0.2),

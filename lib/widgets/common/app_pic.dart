@@ -67,7 +67,7 @@ class _AppPicState extends State<AppPic> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
+    final c = Theme.of(context).extension<LabColors>()!;
     final resolvedUrl = _sanitize(widget.iconUrl);
     final borderRadius = BorderRadius.circular(_radius);
 
@@ -85,7 +85,7 @@ class _AppPicState extends State<AppPic> {
       decoration: BoxDecoration(
         borderRadius: borderRadius,
         // thin stroke matches LabProfilePicSquare — LabLineThicknessData.normal().thin
-        border: AppBorder.all(color: c.white16, width: AppStroke.thin),
+        border: LabBorder.all(color: c.white16, width: LabStroke.thin),
         color: c.gray66,
       ),
       child: ClipRRect(
@@ -102,7 +102,7 @@ class _AppPicState extends State<AppPic> {
 
   Widget _buildImageContent(
     BuildContext context,
-    AppColors c,
+    LabColors c,
     String url,
     BorderRadius borderRadius,
   ) {
@@ -161,7 +161,7 @@ class _AppPicState extends State<AppPic> {
     );
   }
 
-  Widget _buildFallback(BuildContext context, AppColors c) {
+  Widget _buildFallback(BuildContext context, LabColors c) {
     final seed = widget.identifier ?? widget.name;
 
     if (seed != null && seed.trim().isNotEmpty) {
@@ -216,8 +216,8 @@ class _AppPicState extends State<AppPic> {
       child: ColoredBox(
         color: c.white8,
         child: Center(
-          child: AppIcon(
-            AppIcons.details,
+          child: LabIcon(
+            LabIcons.details,
             size: widget.size * 0.50,
             color: c.white33,
           ),

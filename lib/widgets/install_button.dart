@@ -367,7 +367,7 @@ class InstallButton extends ConsumerWidget {
     required double fontSize,
     VoidCallback? onTap,
   }) {
-    const actionColor = AppColors.darkActionPrimary;
+    const actionColor = LabColors.darkActionPrimary;
     final darkerAction = Color.alphaBlend(
       Colors.black.withValues(alpha: 0.22),
       actionColor,
@@ -476,7 +476,7 @@ class InstallButton extends ConsumerWidget {
       backgroundColor = theme.colorScheme.outline;
       foregroundColor = theme.colorScheme.onSurface.withValues(alpha: 0.5);
     } else {
-      backgroundColor = AppColors.darkActionPrimary;
+      backgroundColor = LabColors.darkActionPrimary;
     }
 
     return FilledButton(
@@ -524,7 +524,7 @@ class InstallButton extends ConsumerWidget {
   }
 
   Widget _buildOpenIconButton(BuildContext context, WidgetRef ref) {
-    const actionColor = AppColors.darkActionPrimary;
+    const actionColor = LabColors.darkActionPrimary;
     return IconButton.filled(
       onPressed: () => _openApp(context, ref),
       icon: const Icon(Icons.open_in_new),
