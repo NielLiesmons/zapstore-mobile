@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 /// Provider that updates current time every 10 seconds for reactive time displays
 final currentTimeProvider =
@@ -28,46 +27,44 @@ class CurrentTimeNotifier extends StateNotifier<DateTime> {
 }
 
 class TimeUtils {
-  static String _formatFullDate(DateTime timestamp) {
-    return DateFormat('MMM d, y').format(timestamp);
-  }
-
-  /// Formats a timestamp into a human-readable relative time string
+  /// Formats a timestamp to match webapp's Timestamp.svelte:
+  ///   < 60s        → "Just Now"
+  ///   same day     → "Today 14:23"
+  ///   yesterday    → "Yesterday"
+  ///   older        → "Jan 21"
   static String formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return _formatFullDate(timestamp);
-    }
+    return formatTimestampRelativeTo(timestamp, DateTime.now());
   }
 
-  /// Formats timestamp relative to a specific current time (useful for testing)
+  /// Same logic as [formatTimestamp] but against an explicit [currentTime]
+  /// (useful for tests and reactive displays driven by [currentTimeProvider]).
   static String formatTimestampRelativeTo(
     DateTime timestamp,
     DateTime currentTime,
   ) {
-    final difference = currentTime.difference(timestamp);
+    final diff = currentTime.difference(timestamp);
+    if (diff.inSeconds < 60) return 'Just Now';
 
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return _formatFullDate(timestamp);
+    final isToday = timestamp.year == currentTime.year &&
+        timestamp.month == currentTime.month &&
+        timestamp.day == currentTime.day;
+    if (isToday) {
+      final h = timestamp.hour.toString().padLeft(2, '0');
+      final m = timestamp.minute.toString().padLeft(2, '0');
+      return 'Today $h:$m';
     }
+
+    final yesterday = currentTime.subtract(const Duration(days: 1));
+    final isYesterday = timestamp.year == yesterday.year &&
+        timestamp.month == yesterday.month &&
+        timestamp.day == yesterday.day;
+    if (isYesterday) return 'Yesterday';
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[timestamp.month - 1]} ${timestamp.day}';
   }
 }
 

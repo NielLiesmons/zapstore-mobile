@@ -56,7 +56,7 @@ class LabRadius {
   static const double r17 = 17;  // pill button (34px height / 2)
   static const double r20 = 20;  // large containers
   static const double r24 = 24;  // large icons, app pic lg
-  static const double r32 = 32;  // modals
+  static const double r32 = 32;  // modals & bottom bars
   static const double r40 = 40;  // extra-large pill shapes
   // Kept for existing code; prefer the values above for new work.
   static const double r12 = 12;
@@ -753,13 +753,13 @@ class LabColors extends ThemeExtension<LabColors> {
 
 TextTheme _buildTextTheme(LabColors c) => TextTheme(
       // Large display: app name hero text
-      displayLarge: LabTextStyles.semibold24.copyWith(fontSize: 56, color: c.white),
-      displayMedium: LabTextStyles.semibold24.copyWith(fontSize: 44, color: c.white),
-      displaySmall: LabTextStyles.semibold24.copyWith(fontSize: 36, color: c.white),
+      displayLarge: LabTextStyles.semibold22.copyWith(fontSize: 56, color: c.white),
+      displayMedium: LabTextStyles.semibold22.copyWith(fontSize: 44, color: c.white),
+      displaySmall: LabTextStyles.semibold22.copyWith(fontSize: 36, color: c.white),
       // Headlines: major screen sections
-      headlineLarge: LabTextStyles.semibold24.copyWith(fontSize: 32, color: c.white),
-      headlineMedium: LabTextStyles.semibold24.copyWith(fontSize: 28, color: c.white),
-      headlineSmall: LabTextStyles.semibold24.copyWith(fontSize: 24, color: c.white),
+      headlineLarge: LabTextStyles.semibold22.copyWith(fontSize: 32, color: c.white),
+      headlineMedium: LabTextStyles.semibold22.copyWith(fontSize: 28, color: c.white),
+      headlineSmall: LabTextStyles.semibold22.copyWith(fontSize: 24, color: c.white),
       // Titles: modal headers, card titles
       titleLarge: LabTextStyles.semibold22.copyWith(color: c.white),
       titleMedium: LabTextStyles.bold17.copyWith(color: c.white), // 16px w600

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:models/models.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
@@ -13,7 +14,7 @@ class ZapBubble extends StatelessWidget {
     super.key,
     required this.name,
     required this.amount,
-    this.avatarUrl,
+    this.profile,
     this.pubkey,
     this.message,
     this.timestamp,
@@ -23,7 +24,8 @@ class ZapBubble extends StatelessWidget {
 
   final String name;
   final int amount;
-  final String? avatarUrl;
+  /// Optional loaded [Profile] — passed to [ProfilePic] for real avatars.
+  final Profile? profile;
   final String? pubkey;
   final String? message;
   final DateTime? timestamp;
@@ -35,107 +37,126 @@ class ZapBubble extends StatelessWidget {
     final c = Theme.of(context).extension<LabColors>()!;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.only(top: 4, left: 14, right: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          ProfilePic(
-            pubkey: pubkey,
-            size: avatarSize,
-          ),
-          const SizedBox(width: 8),
+          // Flexible+IntrinsicWidth mirrors MessageBubble's incoming layout:
+          // the inner Flexible gives the bubble body finite constraints so
+          // CrossAxisAlignment.stretch and spaceBetween work correctly, and
+          // the bubble shrinks to fit its content like a chat bubble.
           Flexible(
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 160),
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.topLeft,
-                  radius: 1.4,
-                  colors: [
-                    const Color(0xFFFFC736).withAlpha(26),
-                    const Color(0xFFFFA037).withAlpha(26),
-                  ],
-                ),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(4),
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+            child: IntrinsicWidth(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Header: name + time | zap amount
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: ShaderMask(
-                                shaderCallback: (bounds) => c.gold.createShader(bounds),
-                                child: Text(
-                                  name,
-                                  style: LabTextStyles.bold15.copyWith(
-                                    color: Colors.white,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (isPending)
-                              SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: c.blurpleColor,
-                                ),
-                              )
-                            else if (timestamp != null)
-                              Text(
-                                _formatTime(timestamp!),
-                                style: LabTextStyles.reg13.copyWith(
-                                  color: c.white33,
-                                ),
-                              ),
+                  ProfilePic(
+                    pubkey: pubkey,
+                    profile: profile,
+                    size: avatarSize,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 120),
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.topLeft,
+                          radius: 1.4,
+                          colors: [
+                            const Color(0xFFFFC736).withAlpha(26),
+                            const Color(0xFFFFA037).withAlpha(26),
                           ],
                         ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(4),
+                        ),
                       ),
-                      const SizedBox(width: 16),
-                      Row(
+                      padding: const EdgeInsets.fromLTRB(11, 6, 11, 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          LabIcon(
-                            LabIcons.zap,
-                            size: 14,
-                            gradient: c.gold,
+                          // Header: name + timestamp | zap amount
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 1),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: ShaderMask(
+                                          shaderCallback: (bounds) =>
+                                              c.gold.createShader(bounds),
+                                          child: Text(
+                                            name,
+                                            style: LabTextStyles.semibold13
+                                                .copyWith(color: Colors.white),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      if (isPending)
+                                        SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 1.5,
+                                            color: c.blurpleLightColor,
+                                          ),
+                                        )
+                                      else if (timestamp != null)
+                                        Text(
+                                          _formatTime(timestamp!),
+                                          style: LabTextStyles.reg11
+                                              .copyWith(color: c.white33),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    LabIcon(
+                                      LabIcons.zap,
+                                      size: 14,
+                                      gradient: c.gold,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _formatAmount(amount),
+                                      style: LabTextStyles.med17
+                                          .copyWith(color: c.white),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatAmount(amount),
-                            style: LabTextStyles.med17.copyWith(color: c.white),
-                          ),
+                          // Message body
+                          if (message != null && message!.isNotEmpty)
+                            DefaultTextStyle.merge(
+                              style: LabTextStyles.reg15.copyWith(
+                                color: c.white.withValues(alpha: 0.85),
+                                height: 1.5,
+                              ),
+                              child: Text(message!),
+                            ),
                         ],
                       ),
-                    ],
-                  ),
-                  // Message body
-                  if (message != null && message!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      message!,
-                      style: LabTextStyles.reg15.copyWith(
-                        color: c.white.withAlpha(217),
-                      ),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),

@@ -1,12 +1,27 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:easy_image_viewer/easy_image_viewer.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:models/models.dart';
+import 'package:zapstore/theme.dart';
+import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/url_utils.dart';
-// Local shimmer duplicated to avoid private import
+import 'package:zapstore/widgets/common/media_lightbox.dart';
+import 'package:zapstore/widgets/common/shimmer.dart';
 
-class ScreenshotsGallery extends HookWidget {
+// Dimensions mirror webapp's chateau-web AppDetail.svelte:
+//   height: 20rem (320 dp at 16 dp base)
+//   width:  matches AppPic size used in AppHeader (80 dp)
+//   border-radius: 0.75rem → 12 dp
+//   gap: 12 dp
+//   horizontal padding: 16 dp
+const _kImgHeight = 320.0;
+const _kImgWidth = 80.0;
+const _kRadius = 12.0;
+const _kGap = 12.0;
+const _kHPad = 16.0;
+
+/// Horizontal screenshots carousel — portrait frames (80 × 320 dp).
+/// Tapping opens the full-screen [MediaLightbox] with prev/next + dots.
+class ScreenshotsGallery extends StatelessWidget {
   const ScreenshotsGallery({super.key, required this.app});
 
   final App app;
@@ -16,39 +31,36 @@ class ScreenshotsGallery extends HookWidget {
     final imageUrls = filterValidHttpUrls(app.images);
     if (imageUrls.isEmpty) return const SizedBox.shrink();
 
-    final scrollController = useScrollController();
-    useListenable(scrollController);
-
     return SizedBox(
-      height: 200,
-      child: ListView.builder(
-        controller: scrollController,
-        padding: EdgeInsets.zero,
+      height: _kImgHeight,
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: _kHPad),
         itemCount: imageUrls.length,
+        separatorBuilder: (_, __) => const SizedBox(width: _kGap),
         itemBuilder: (context, index) {
-          final imageUrl = imageUrls[index];
+          final url = imageUrls[index];
           return GestureDetector(
-            onTap: () => _showImageViewer(context, imageUrls, index),
-            child: Container(
-              width: 120,
-              margin: EdgeInsets.only(left: index == 0 ? 16 : 0, right: 6),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+            onTap: () => showMediaLightbox(
+              context,
+              urls: imageUrls,
+              initialIndex: index,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(_kRadius),
+              child: SizedBox(
+                width: _kImgWidth,
+                height: _kImgHeight,
                 child: CachedNetworkImage(
-                  imageUrl: imageUrl,
+                  imageUrl: url,
                   fit: BoxFit.cover,
-                  fadeInDuration: const Duration(milliseconds: 300),
+                  fadeInDuration: const Duration(milliseconds: 250),
                   fadeOutDuration: const Duration(milliseconds: 150),
-                  errorWidget: (context, url, error) => Center(
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      size: 24,
-                      color: Colors.grey[400],
-                    ),
+                  placeholder: (_, __) => const Shimmer(
+                    width: _kImgWidth,
+                    height: _kImgHeight,
                   ),
-                  placeholder: (context, url) => _buildGradientLoader(context),
+                  errorWidget: (_, __, ___) => _ErrorFrame(),
                 ),
               ),
             ),
@@ -57,84 +69,17 @@ class ScreenshotsGallery extends HookWidget {
       ),
     );
   }
-
-  Widget _buildGradientLoader(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2A2A2A), Color(0xFF3A3A3A), Color(0xFF2A2A2A)],
-          stops: [0.0, 0.5, 1.0],
-        ),
-      ),
-      child: _LocalShimmerEffect(context: context),
-    );
-  }
-
-  void _showImageViewer(
-    BuildContext context,
-    List<String> imageUrls,
-    int initialIndex,
-  ) {
-    final imageProviders = imageUrls
-        .map((url) => CachedNetworkImageProvider(url) as ImageProvider)
-        .toList();
-
-    showImageViewerPager(
-      context,
-      MultiImageProvider(imageProviders, initialIndex: initialIndex),
-      onPageChanged: (page) {},
-      onViewerDismissed: (page) {},
-      swipeDismissible: false,
-      doubleTapZoomable: true,
-      immersive: false,
-      useSafeArea: true,
-    );
-  }
 }
 
-class _LocalShimmerEffect extends HookWidget {
-  final BuildContext context;
-  const _LocalShimmerEffect({required this.context});
-
+class _ErrorFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final controller = useAnimationController(
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-    final animation = useMemoized(
-      () => Tween<double>(
-        begin: -1.0,
-        end: 2.0,
-      ).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut)),
-      [controller],
-    );
-
-    const shimmerColors = [
-      Color(0xFF2A2A2A),
-      Color(0xFF3A3A3A),
-      Color(0xFF2A2A2A),
-    ];
-
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: shimmerColors,
-              stops: [
-                (animation.value - 0.3).clamp(0.0, 1.0),
-                animation.value.clamp(0.0, 1.0),
-                (animation.value + 0.3).clamp(0.0, 1.0),
-              ],
-            ),
-          ),
-        );
-      },
+    final c = Theme.of(context).extension<LabColors>()!;
+    return ColoredBox(
+      color: c.white8,
+      child: Center(
+        child: LabIcon(LabIcons.camera, size: 20, color: c.white33),
+      ),
     );
   }
 }

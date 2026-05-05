@@ -68,7 +68,7 @@ class _BottomBarState extends State<BottomBar> {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
               child: SafeArea(
                 top: false,
                 child: widget.isSignedIn
@@ -85,15 +85,15 @@ class _BottomBarState extends State<BottomBar> {
   Widget _buildSignedInBar(LabColors c) {
     return Row(
       children: [
-        // Zap button — 34×34 rounded square, icon only
+        // Zap button — 40×40 rounded square, icon only
         GestureDetector(
           onTap: widget.onZap,
           child: Container(
-            width: 34,
-            height: 34,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               gradient: c.blurple,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(17),
             ),
             child: Center(
               child: LabIcon(LabIcons.zap, size: 18, color: c.whiteEnforced),
@@ -106,7 +106,7 @@ class _BottomBarState extends State<BottomBar> {
           child: GestureDetector(
             onTap: widget.onComment,
             child: Container(
-              height: 34,
+              height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: c.black33,
@@ -127,12 +127,12 @@ class _BottomBarState extends State<BottomBar> {
             ),
           ),
         ),
-        // Options button — uses options.svg (filled circles)
+        // Options button — tap target matches bar height
         GestureDetector(
           onTap: widget.onOptions,
           child: SizedBox(
-            width: 38,
-            height: 38,
+            width: 40,
+            height: 40,
             child: Center(
               child: LabIcon(LabIcons.options, size: 18, color: c.white33),
             ),

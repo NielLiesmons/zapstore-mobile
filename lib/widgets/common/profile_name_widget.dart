@@ -57,7 +57,7 @@ class ProfileNameWidget extends StatelessWidget {
 
     // Loading: use our design-system Shimmer (gray palette, no blurple tint).
     if (isLoading) {
-      return Shimmer(width: skeletonWidth, height: textHeight, radius: 4);
+      return Shimmer(width: skeletonWidth, height: textHeight);
     }
 
     // Data state: show profile name or abbreviated npub if not found

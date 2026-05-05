@@ -4,9 +4,13 @@ import 'package:zapstore/utils/text_styles.dart';
 
 /// Tab selector matching webapp's Selector.svelte / zaplab_design's LabSelector.
 ///
-/// Renders a pill-shaped container (gray66 bg) with a row of [SelectorButton]s.
+/// Renders a rounded container with a row of [SelectorButton]s.
 /// The selected button gets a white16 fill (default) or blurple gradient
 /// when [emphasized] is true.
+///
+/// Set [dark] to true when placing the selector inside a gray-backgrounded
+/// surface (e.g. modals) — the container background becomes [black33] and
+/// the selection fill becomes [white8] for better contrast.
 class Selector extends StatefulWidget {
   const Selector({
     super.key,
@@ -14,6 +18,7 @@ class Selector extends StatefulWidget {
     this.initialIndex = 0,
     this.emphasized = false,
     this.small = false,
+    this.dark = false,
     this.onChanged,
   });
 
@@ -23,8 +28,12 @@ class Selector extends StatefulWidget {
   /// When true the selected tab gets the blurple gradient instead of white16.
   final bool emphasized;
 
-  /// Smaller height (28px instead of 38px).
+  /// Smaller height (26px instead of 30px).
   final bool small;
+
+  /// Dark variant — black33 container bg + white8 selection fill.
+  /// Use this inside gray-backgrounded surfaces like modals.
+  final bool dark;
 
   final ValueChanged<int>? onChanged;
 
@@ -46,10 +55,10 @@ class _SelectorState extends State<Selector> {
     final c = Theme.of(context).extension<LabColors>()!;
 
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: c.gray66,
-        borderRadius: BorderRadius.circular(16),
+        color: widget.dark ? c.black33 : c.gray66,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
@@ -61,6 +70,7 @@ class _SelectorState extends State<Selector> {
                 isSelected: i == _selectedIndex,
                 emphasized: widget.emphasized,
                 small: widget.small,
+                dark: widget.dark,
                 onTap: () {
                   setState(() => _selectedIndex = i);
                   widget.onChanged?.call(i);
@@ -82,6 +92,7 @@ class SelectorButton extends StatefulWidget {
     required this.isSelected,
     this.emphasized = false,
     this.small = false,
+    this.dark = false,
     this.onTap,
   });
 
@@ -89,7 +100,13 @@ class SelectorButton extends StatefulWidget {
   final List<Widget> unselected;
   final bool isSelected;
   final bool emphasized;
+
+  /// Smaller height (26px instead of 30px).
   final bool small;
+
+  /// Matches [Selector.dark] — uses white8 fill instead of white16.
+  final bool dark;
+
   final VoidCallback? onTap;
 
   @override
@@ -102,7 +119,8 @@ class _SelectorButtonState extends State<SelectorButton> {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final height = widget.small ? 28.0 : 38.0;
+    final height = widget.small ? 26.0 : 30.0;
+    final fillColor = widget.dark ? c.white8 : c.white16;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -118,8 +136,8 @@ class _SelectorButtonState extends State<SelectorButton> {
           height: height,
           decoration: BoxDecoration(
             gradient: widget.isSelected && widget.emphasized ? c.blurple : null,
-            color: widget.isSelected && !widget.emphasized ? c.white16 : null,
-            borderRadius: BorderRadius.circular(widget.emphasized ? 16 : 8),
+            color: widget.isSelected && !widget.emphasized ? fillColor : null,
+            borderRadius: BorderRadius.circular(widget.emphasized ? 14 : 8),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,

@@ -376,9 +376,9 @@ class LatestReleasesContainer extends HookConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Shimmer(width: 120, height: 16, radius: 4),
+                            const Shimmer(width: 120, height: 16),
                             const SizedBox(height: 6),
-                            Shimmer(width: 80, height: 12, radius: 4),
+                            const Shimmer(width: 80, height: 12),
                           ],
                         ),
                       ),

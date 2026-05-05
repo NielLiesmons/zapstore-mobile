@@ -18,7 +18,7 @@ class SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(left: 12, bottom: 6),
       child: Text(
         text.toUpperCase(),
-        style: LabTextStyles.h3.copyWith(color: c.white33),
+        style: LabTextStyles.eyebrow13.copyWith(color: c.white33),
       ),
     );
   }

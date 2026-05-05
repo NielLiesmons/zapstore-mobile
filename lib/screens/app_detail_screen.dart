@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
-import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/debug_utils.dart';
 import 'package:zapstore/utils/extensions.dart';
@@ -20,11 +19,16 @@ import 'package:zapstore/widgets/comments_section.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
 import 'package:zapstore/widgets/expandable_markdown.dart';
+import 'package:zapstore/widgets/common/modal.dart';
+import 'package:zapstore/widgets/modals/comment_modal.dart';
+import 'package:zapstore/widgets/modals/zap_slider_modal.dart';
 import 'package:zapstore/widgets/screenshots_gallery.dart';
 import 'package:zapstore/widgets/social/details_tab.dart';
 import 'package:zapstore/widgets/social/bottom_bar.dart';
 import 'package:zapstore/widgets/social/social_tabs.dart';
+import 'package:zapstore/widgets/social/zaps_section.dart';
 import 'package:zapstore/widgets/common/top_scroll_fader.dart';
+import 'package:zapstore/widgets/split_install_button.dart';
 
 class AppDetailScreen extends HookConsumerWidget {
   const AppDetailScreen({super.key, required this.appId, this.authorPubkey});
@@ -199,12 +203,12 @@ class _AppDetailContent extends HookConsumerWidget {
           Positioned.fill(
             child: TopScrollFader(
               scrollController: scrollController,
-              offsetBias: scrollTopPad,
+              fadeStart: scrollTopPad,
               child: SingleChildScrollView(
                 controller: scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(
-                  top: scrollTopPad,
+                  top: scrollTopPad + 10,
                   bottom: MediaQuery.paddingOf(context).bottom + 80,
                 ),
                 child: Column(
@@ -269,9 +273,9 @@ class _AppDetailContent extends HookConsumerWidget {
                           }
                           return const SizedBox.shrink();
                         case SocialTab.zaps:
-                          return const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Center(child: Text('No zaps yet')),
+                          return ZapsSection(
+                            tags: app.event.addressableIdTagMap,
+                            subscriptionId: app.identifier,
                           );
                         case SocialTab.labels:
                           return const Padding(
@@ -320,9 +324,20 @@ class _AppDetailContent extends HookConsumerWidget {
             right: 0,
             child: BottomBar(
               isSignedIn: isSignedIn,
-              onZap: () {},
-              onComment: () {},
-              onOptions: () {},
+              onZap: () => ZapSliderModal.show(context, app: app, author: author),
+              onComment: () => showCommentModal(
+                context,
+                placeholder: 'Comment on ${app.name ?? 'this app'}…',
+                onSubmit: (result) async {
+                  // TODO: publish NIP-22 comment event referencing app.naddr
+                  debugPrint('[CommentModal] submit: ${result.text}');
+                },
+              ),
+              onOptions: () => showModal<void>(
+                context,
+                title: app.name ?? app.identifier,
+                builder: (_) => AppOptionsModalContent(app: app),
+              ),
               onGetStarted: () {},
             ),
           ),

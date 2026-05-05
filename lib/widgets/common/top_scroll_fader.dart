@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zapstore/widgets/common/scroll_to_top_button.dart';
 
 /// Wraps [child] in a scroll-driven top-edge fade.
 ///
@@ -7,16 +8,50 @@ import 'package:flutter/material.dart';
 /// over the first [triggerDistance] pixels of scroll — creating the illusion
 /// that content is sliding up under a fixed top bar.
 ///
-/// Used in both [HomeScreen] and [AppDetailScreen] so the behaviour is
-/// identical in both places.
+/// ### Floating-header screens (AppDetailScreen, ProfileScreen)
+///
+/// When the scroll content starts below a floating header (via top padding),
+/// the fader gradient must be positioned at the bottom of the header, not at
+/// y=0, otherwise it hides behind the header and is never visible.
+///
+/// Use [fadeStart] to shift the gradient down to the header bottom without
+/// delaying when the fader triggers:
+/// ```dart
+/// TopScrollFader(
+///   scrollController: scrollController,
+///   fadeStart: headerHeight,   // where the gradient is drawn
+///   // offsetBias defaults to 0 → triggers after just a few px of scroll
+///   child: myScrollable,
+/// )
+/// ```
+///
+/// ### Column-layout screens (HomeScreen)
+///
+/// When the scroll content is placed in an [Expanded] below the header (not
+/// inside a [Stack]), both [fadeStart] and [offsetBias] can be left at their
+/// default of 0 because y=0 of the fader widget is already below the header.
+///
+/// ### Scroll-to-top button (default: on)
+///
+/// When [showScrollToTop] is true (the default), a floating round button
+/// appears at the bottom-right once the user scrolls beyond [scrollToTopThreshold]
+/// px and taps to animate back to the top.  Position:
+///   • `right: 14`
+///   • `bottom: safeAreaBottom + 96`
+///
+/// Disable per-screen with `showScrollToTop: false` (e.g. screens with their
+/// own custom FABs at that position).
 class TopScrollFader extends StatelessWidget {
   const TopScrollFader({
     super.key,
     required this.scrollController,
     required this.child,
     this.fadeHeight = 28.0,
-    this.triggerDistance = 16.0,
+    this.triggerDistance = 4.0,
     this.offsetBias = 0.0,
+    this.fadeStart,
+    this.showScrollToTop = true,
+    this.scrollToTopThreshold = 1200.0,
   });
 
   final ScrollController scrollController;
@@ -26,27 +61,40 @@ class TopScrollFader extends StatelessWidget {
   final double fadeHeight;
 
   /// Scroll distance (px) over which the fade grows from 0 → full.
+  /// Default 4px so the fader reaches full intensity almost immediately.
   final double triggerDistance;
 
   /// Scroll offset at which the fader starts becoming visible.
-  /// Use this when the scrollable content begins below the top of the
-  /// viewport (e.g. because of a floating header with padding).
+  /// Leave at 0 for instant-on behaviour (triggers after first px of scroll).
   final double offsetBias;
+
+  /// Y-position (within the widget) where the gradient starts.
+  /// Defaults to [offsetBias] when null.
+  /// Set this to [headerHeight] on floating-header screens so the gradient
+  /// is drawn right at the header bottom edge rather than at the screen top.
+  final double? fadeStart;
+
+  /// When true (default), overlays a [ScrollToTopButton] at the bottom-right.
+  /// Set to false for screens that have their own FAB at that position.
+  final bool showScrollToTop;
+
+  /// Scroll offset (px) beyond which the scroll-to-top button begins to
+  /// appear.  The button scales in over the following 17 px.
+  final double scrollToTopThreshold;
 
   @override
   Widget build(BuildContext context) {
     // IMPORTANT: always return ShaderMask (never swap to a non-ShaderMask
     // widget) so the widget type at this position in the tree never changes —
     // changing type forces a rebuild that can detach the ScrollPosition.
-    // We just vary the gradient colours from opaque→opaque (no visual fade)
-    // at t=0 to transparent→opaque (full fade) at t=1.
-    return ListenableBuilder(
+    final shaderMask = ListenableBuilder(
       listenable: scrollController,
       builder: (context, child) {
         final t = scrollController.hasClients
             ? ((scrollController.offset - offsetBias) / triggerDistance)
                 .clamp(0.0, 1.0)
             : 0.0;
+        final gradStart = fadeStart ?? offsetBias;
         return ShaderMask(
           shaderCallback: (bounds) => LinearGradient(
             begin: Alignment.topCenter,
@@ -56,14 +104,33 @@ class TopScrollFader extends StatelessWidget {
               Colors.black.withValues(alpha: 1.0 - t),
               Colors.black,
             ],
-          // offsetBias shifts the gradient down so it starts just below the
-          // floating header rather than at the very top of the screen.
-          ).createShader(Rect.fromLTWH(0, offsetBias, bounds.width, fadeHeight)),
+          ).createShader(
+            Rect.fromLTWH(0, gradStart, bounds.width, fadeHeight),
+          ),
           blendMode: BlendMode.dstIn,
           child: child!,
         );
       },
       child: child,
+    );
+
+    if (!showScrollToTop) return shaderMask;
+
+    // Wrap in a Stack so the scroll-to-top button floats above the content.
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+
+    return Stack(
+      children: [
+        Positioned.fill(child: shaderMask),
+        Positioned(
+          bottom: bottomSafe + 96,
+          right: 14,
+          child: ScrollToTopButton(
+            scrollController: scrollController,
+            threshold: scrollToTopThreshold,
+          ),
+        ),
+      ],
     );
   }
 }

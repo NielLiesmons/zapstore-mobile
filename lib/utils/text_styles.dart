@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 /// App-wide typography.
 ///
-/// Names are literal — the number IS the font size used in the mobile app.
-/// These differ slightly from webapp CSS values (which are 1-2px smaller) so
-/// that the same design tokens produce visually equivalent results on-screen.
+/// Token names are design-level identifiers — the number in the name is the
+/// nominal design size, not necessarily the exact rendered pixel value.
+/// The "15" and "17" families render at 14.5 px and 16.5 px respectively so
+/// they produce visually equivalent results to the webapp CSS counterparts.
 ///
 /// Weight conventions (matching webapp naming):
-///   semibold → FontVariation('wght', 600)
+///   semibold → FontVariation('wght', 700)
 ///   med      → FontWeight.w500
 ///   reg      → FontWeight.w400
 ///
@@ -19,24 +20,13 @@ abstract final class LabTextStyles {
 
   // ── Headings — literal tokens (weight 700 throughout) ────────────────────
 
-  /// Large display — app name hero, major screen headings. Replaces [h1].
-  static const TextStyle semibold24 = TextStyle(
-    fontFamily: _font,
-    fontVariations: [FontVariation('wght', 700)],
-    fontSize: 24,
-    height: 1.5,
-    letterSpacing: 0.7,
-    leadingDistribution: _leading,
-    decoration: TextDecoration.none,
-  );
-
-  /// Section header — screen titles, modal headings. Replaces [h2].
+  /// Section/screen titles, modal headings, app name hero. Replaces [h1]/[h2].
   static const TextStyle semibold22 = TextStyle(
     fontFamily: _font,
     fontVariations: [FontVariation('wght', 700)],
     fontSize: 22,
     height: 1.5,
-    letterSpacing: 0.7,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -63,15 +53,14 @@ abstract final class LabTextStyles {
     decoration: TextDecoration.none,
   );
 
-
-  // ── 17 px ─────────────────────────────────────────────────────────────────
+  // ── 17 px (rendered at 16.5) ──────────────────────────────────────────────
 
   static const TextStyle semibold17 = TextStyle(
     fontFamily: _font,
-    fontVariations: [FontVariation('wght', 600)],
-    fontSize: 17,
+    fontVariations: [FontVariation('wght', 700)],
+    fontSize: 16.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -80,9 +69,9 @@ abstract final class LabTextStyles {
     fontFamily: _font,
     fontWeight: FontWeight.w500,
     fontVariations: [FontVariation('wght', 500)],
-    fontSize: 17,
+    fontSize: 16.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -90,21 +79,21 @@ abstract final class LabTextStyles {
   static const TextStyle reg17 = TextStyle(
     fontFamily: _font,
     fontWeight: FontWeight.w400,
-    fontSize: 17,
+    fontSize: 16.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
 
-  // ── 15 px ─────────────────────────────────────────────────────────────────
+  // ── 15 px (rendered at 14.5) ──────────────────────────────────────────────
 
   static const TextStyle semibold15 = TextStyle(
     fontFamily: _font,
-    fontVariations: [FontVariation('wght', 600)],
-    fontSize: 15,
+    fontVariations: [FontVariation('wght', 700)],
+    fontSize: 14.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -113,9 +102,9 @@ abstract final class LabTextStyles {
     fontFamily: _font,
     fontWeight: FontWeight.w500,
     fontVariations: [FontVariation('wght', 500)],
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -123,9 +112,9 @@ abstract final class LabTextStyles {
   static const TextStyle reg15 = TextStyle(
     fontFamily: _font,
     fontWeight: FontWeight.w400,
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -134,10 +123,10 @@ abstract final class LabTextStyles {
 
   static const TextStyle semibold13 = TextStyle(
     fontFamily: _font,
-    fontVariations: [FontVariation('wght', 600)],
+    fontVariations: [FontVariation('wght', 700)],
     fontSize: 13,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -148,7 +137,7 @@ abstract final class LabTextStyles {
     fontVariations: [FontVariation('wght', 500)],
     fontSize: 13,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -158,7 +147,7 @@ abstract final class LabTextStyles {
     fontWeight: FontWeight.w400,
     fontSize: 13,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -167,10 +156,10 @@ abstract final class LabTextStyles {
 
   static const TextStyle semibold11 = TextStyle(
     fontFamily: _font,
-    fontVariations: [FontVariation('wght', 600)],
+    fontVariations: [FontVariation('wght', 700)],
     fontSize: 11,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -181,7 +170,7 @@ abstract final class LabTextStyles {
     fontVariations: [FontVariation('wght', 500)],
     fontSize: 11,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -191,7 +180,7 @@ abstract final class LabTextStyles {
     fontWeight: FontWeight.w400,
     fontSize: 11,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -200,10 +189,10 @@ abstract final class LabTextStyles {
 
   static const TextStyle semibold8 = TextStyle(
     fontFamily: _font,
-    fontVariations: [FontVariation('wght', 600)],
+    fontVariations: [FontVariation('wght', 700)],
     fontSize: 8,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -214,7 +203,7 @@ abstract final class LabTextStyles {
     fontVariations: [FontVariation('wght', 500)],
     fontSize: 8,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -224,7 +213,7 @@ abstract final class LabTextStyles {
     fontWeight: FontWeight.w400,
     fontSize: 8,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -235,9 +224,9 @@ abstract final class LabTextStyles {
     fontFamily: _font,
     fontWeight: FontWeight.w500,
     fontVariations: [FontVariation('wght', 500)],
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -246,10 +235,10 @@ abstract final class LabTextStyles {
 
   static const TextStyle semibold18 = TextStyle(
     fontFamily: _font,
-    fontVariations: [FontVariation('wght', 600)],
+    fontVariations: [FontVariation('wght', 700)],
     fontSize: 18,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -259,9 +248,9 @@ abstract final class LabTextStyles {
   static const TextStyle code = TextStyle(
     fontFamily: _codeFont,
     fontWeight: FontWeight.w400,
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.5,
-    letterSpacing: 0.15,
+    letterSpacing: 0,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );
@@ -273,5 +262,5 @@ abstract final class LabTextStyles {
   static const TextStyle bold15 = semibold15;
   static const TextStyle bold13 = semibold13;
   static const TextStyle bold11 = semibold11;
-  static const TextStyle bold8  = semibold8;
+  static const TextStyle bold8 = semibold8;
 }

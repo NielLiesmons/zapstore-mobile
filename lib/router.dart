@@ -8,6 +8,7 @@ import 'package:zapstore/screens/home_screen.dart';
 import 'package:zapstore/screens/app_detail_screen.dart';
 import 'package:zapstore/screens/app_stacks_screen.dart';
 import 'package:zapstore/screens/app_stack_screen.dart';
+import 'package:zapstore/screens/forum_post_screen.dart';
 import 'package:zapstore/screens/user_screen.dart';
 import 'package:zapstore/screens/updates_screen.dart';
 import 'package:zapstore/screens/profile_screen.dart';
@@ -105,13 +106,25 @@ GoRoute _stackDetailRoute() {
   );
 }
 
+GoRoute _forumPostRoute() {
+  return GoRoute(
+    path: 'forum/:id',
+    pageBuilder: (context, state) {
+      final postId = state.pathParameters['id']!;
+      return _slideTransitionPage(
+        state: state,
+        child: ForumPostScreen(postId: postId),
+      );
+    },
+  );
+}
+
 GoRoute _allStacksRoute() {
   return GoRoute(
     path: 'stacks',
     pageBuilder: (context, state) => _slideTransitionPage(
       state: state,
-      child: const AppStacksScreen(),
-    ),
+      child: const AppStacksScreen(),    ),
   );
 }
 
@@ -150,6 +163,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           _stackDetailRoute(),
           _allStacksRoute(),
           _userRoute(),
+          _forumPostRoute(),
         ],
       ),
 

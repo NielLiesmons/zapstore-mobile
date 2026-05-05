@@ -400,8 +400,11 @@ class _IncomingBubbleSwiperState extends State<_IncomingBubbleSwiper>
       });
       Future.delayed(const Duration(milliseconds: 70), () {
         if (!mounted) return;
-        if (_liveX > 0) widget.bubble.onReply?.call();
-        else            widget.bubble.onActions?.call();
+        if (_liveX > 0) {
+          widget.bubble.onReply?.call();
+        } else {
+          widget.bubble.onActions?.call();
+        }
       });
     }
   }

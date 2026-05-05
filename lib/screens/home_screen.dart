@@ -10,8 +10,12 @@ import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 
 import '../widgets/app_stack_container.dart';
+import '../widgets/common/dropdown_menu.dart';
+import '../widgets/common/label.dart';
 import '../widgets/common/section_header.dart';
 import '../widgets/common/shimmer.dart';
+import '../widgets/forum/forum_feed_container.dart';
+import '../widgets/forum/forum_post_card.dart';
 import '../widgets/latest_releases_container.dart';
 import '../widgets/search_app_card.dart';
 import '../utils/extensions.dart';
@@ -148,7 +152,7 @@ class _HomeContent extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Space below the top bar
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
 
           // ── Apps ────────────────────────────────────────────────────────
           Padding(
@@ -180,30 +184,291 @@ class _HomeContent extends ConsumerWidget {
                   linkText: 'See more',
                   onLinkTap: () => pushStacks(context),
                 ),
-                AppStackContainer(
-                  showSkeleton: !(initState.hasValue || initState.hasError),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 6),
+                  child: AppStackContainer(
+                    showSkeleton: !(initState.hasValue || initState.hasError),
+                  ),
                 ),
               ],
             ),
           ),
 
-          // ── Scroll-test panel ────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 32),
-            child: Builder(builder: (context) {
-              final c = Theme.of(context).extension<LabColors>()!;
-              return Container(
-                height: 800,
-                decoration: BoxDecoration(
-                  color: c.white8,
-                  borderRadius: BorderRadius.circular(LabRadius.r16),
-                ),
-              );
-            }),
+          // ── Forum ────────────────────────────────────────────────────────
+          _ForumSection(
+            scrollController: scrollController,
+            initDone: initState.hasValue || initState.hasError,
           ),
+          const SizedBox(height: 32),
         ],
       ),
     ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Forum section — "Forum" header + labels filter row + sort dropdown
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum _SortOrder { latest, mostZapped }
+
+const _kForumCategories = [
+  'General',
+  'Dev Support',
+  'User Support',
+  'Feature Request',
+  'Ideas',
+  'Bugs',
+  'Announcements',
+  'News',
+  'Showcase',
+  'Off-Topic',
+];
+
+class _ForumSection extends HookConsumerWidget {
+  const _ForumSection({
+    required this.scrollController,
+    required this.initDone,
+  });
+
+  final ScrollController scrollController;
+  final bool initDone;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedCategory = useState<String?>(null);
+    final sortOrder = useState(_SortOrder.latest);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Forum',
+          linkText: 'Our Community',
+          onLinkTap: () => context.push('/community'),
+        ),
+
+        _ForumFilterRow(
+          selectedCategory: selectedCategory.value,
+          sortOrder: sortOrder.value,
+          onCategoryTap: (cat) {
+            selectedCategory.value =
+                selectedCategory.value == cat ? null : cat;
+          },
+          onSortOrderChange: (order) => sortOrder.value = order,
+        ),
+
+        if (initDone)
+          ForumFeedContainer(scrollController: scrollController)
+        else
+          ShimmerTheme(
+            child: Column(
+              children: List.generate(5, (_) => const ForumPostCardSkeleton()),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Filter row: scrollable labels + right-anchored sort dropdown ─────────────
+//
+// Manages its own overlay state so _ForumSection stays clean.
+
+class _ForumFilterRow extends HookWidget {
+  const _ForumFilterRow({
+    required this.selectedCategory,
+    required this.sortOrder,
+    required this.onCategoryTap,
+    required this.onSortOrderChange,
+  });
+
+  final String? selectedCategory;
+  final _SortOrder sortOrder;
+  final void Function(String) onCategoryTap;
+  final void Function(_SortOrder) onSortOrderChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final overlayController = useMemoized(() => OverlayPortalController());
+    final layerLink = useMemoized(() => LayerLink());
+    final isOpen = useState(false);
+
+    // Use our own isOpen state (not overlayController.isShowing) so the toggle
+    // is reliable even when onTapOutside fires just before the button onTap.
+    void toggle() {
+      if (isOpen.value) {
+        overlayController.hide();
+        isOpen.value = false;
+      } else {
+        overlayController.show();
+        isOpen.value = true;
+      }
+    }
+
+    void dismiss() {
+      overlayController.hide();
+      isOpen.value = false;
+    }
+
+    // groupId ensures the button's own tap is NOT treated as "outside" the
+    // dropdown region — prevents the dismiss→reopen race on button press.
+    const groupId = 'forum-sort-dropdown';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Horizontally scrollable label chips with a right-edge fade
+        Expanded(
+          child: ShaderMask(
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              stops: [
+                0.0,
+                bounds.width > 17 ? (bounds.width - 17) / bounds.width : 0.0,
+                1.0,
+              ],
+              colors: const [Colors.white, Colors.white, Colors.transparent],
+            ).createShader(bounds),
+            blendMode: BlendMode.dstIn,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(14, 0, 0, 0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: _kForumCategories.map((cat) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: LabLabel(
+                      cat,
+                      size: LabLabelSize.defaultSize,
+                      isSelected: selectedCategory == cat,
+                      onTap: () => onCategoryTap(cat),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+
+        // Sort button + dropdown — pinned to the right outside the scroll
+        Padding(
+          padding: const EdgeInsets.only(right: 14, bottom: 0),
+          child: OverlayPortal(
+            controller: overlayController,
+            overlayChildBuilder: (ctx) => CompositedTransformFollower(
+              link: layerLink,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.bottomRight,
+              followerAnchor: Alignment.topRight,
+              offset: const Offset(0, 4),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: TapRegion(
+                  groupId: groupId,
+                  onTapOutside: (_) => dismiss(),
+                  child: LabDropdownMenu(
+                    constraints: const BoxConstraints(minWidth: 160),
+                    children: [
+                      LabDropdownItem(
+                        isFirst: true,
+                        isActive: sortOrder == _SortOrder.latest,
+                        onTap: () {
+                          onSortOrderChange(_SortOrder.latest);
+                          dismiss();
+                        },
+                        child: const Text('Latest'),
+                      ),
+                      LabDropdownItem(
+                        isActive: sortOrder == _SortOrder.mostZapped,
+                        onTap: () {
+                          onSortOrderChange(_SortOrder.mostZapped);
+                          dismiss();
+                        },
+                        child: const Text('Most Zapped'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            child: TapRegion(
+              groupId: groupId,
+              child: CompositedTransformTarget(
+                link: layerLink,
+                child: _SortButton(
+                  label: sortOrder == _SortOrder.latest ? 'Latest' : 'Most Zapped',
+                  isOpen: isOpen.value,
+                  onTap: toggle,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Sort button: secondarySmall (34px pill) with label + rotating chevron ────
+
+class _SortButton extends StatefulWidget {
+  const _SortButton({
+    required this.label,
+    required this.isOpen,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isOpen;
+  final VoidCallback onTap;
+
+  @override
+  State<_SortButton> createState() => _SortButtonState();
+}
+
+class _SortButtonState extends State<_SortButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        // 34px matches LabButton.secondarySmall / tab standardized height
+        height: 34,
+        padding: const EdgeInsets.only(left: 16, right: 12),
+        decoration: BoxDecoration(
+          color: _pressed ? c.gray66.withValues(alpha: 0.75) : c.gray66,
+          borderRadius: BorderRadius.circular(17),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              widget.label,
+              style: LabTextStyles.med13.copyWith(color: c.white),
+            ),
+            const SizedBox(width: 6),
+            Transform.rotate(
+              angle: widget.isOpen ? 3.14159 : 0.0,
+              child: LabIcon(LabIcons.chevronDown, size: 6, color: c.white33),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

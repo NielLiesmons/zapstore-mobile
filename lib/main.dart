@@ -23,6 +23,8 @@ import 'package:zapstore/services/package_manager/dummy_package_manager.dart';
 import 'package:zapstore/services/deep_link_service.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/text_scale.dart';
+import 'package:zapstore/providers/theme_mode.dart';
+import 'models/forum_post.dart';
 import 'package:zapstore/widgets/breathing_logo.dart';
 
 /// Global provider container for error reporting (accessible outside widget tree)
@@ -31,6 +33,11 @@ late final ProviderContainer _providerContainer;
 void main() {
   runZonedGuarded(() {
     WidgetsFlutterBinding.ensureInitialized();
+
+    // Register app-specific Nostr model types before any widget builds.
+    // Model.register writes to a static map — no storage needed at this point.
+    ForumPost.register();
+
     // Edge-to-edge: let content draw behind system bars.
     // The barrier overlay and modal backdrop will now cover the full screen.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -140,10 +147,26 @@ class ZapstoreApp extends HookConsumerWidget {
       },
     );
 
+    final appThemeMode =
+        ref.watch(themeModeProvider).valueOrNull ?? AppThemeMode.dark;
+    final resolvedTheme = () {
+      if (appThemeMode == AppThemeMode.system) {
+        final brightness =
+            WidgetsBinding.instance.platformDispatcher.platformBrightness;
+        return brightness == Brightness.dark ? darkTheme : lightTheme;
+      }
+      return switch (appThemeMode) {
+        AppThemeMode.light => lightTheme,
+        AppThemeMode.gray => grayTheme,
+        AppThemeMode.dark => darkTheme,
+        AppThemeMode.system => darkTheme,
+      };
+    }();
+
     // Always show the main app UI, even during initialization
     return MaterialApp.router(
       title: title,
-      theme: grayTheme,
+      theme: resolvedTheme,
       routerConfig: ref.watch(routerProvider),
       debugShowCheckedModeBanner: false,
       builder: (context, child) {

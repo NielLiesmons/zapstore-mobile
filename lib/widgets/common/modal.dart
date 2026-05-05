@@ -30,6 +30,10 @@ import 'package:zapstore/utils/text_styles.dart';
 /// Barrier color used by every [showModal] call (65% black = webapp .bg-overlay).
 const _kBarrierColor = Color(0xA6000000); // ~65% black
 
+/// Pixels of tappable overlay left visible above the modal when the keyboard
+/// is open, so the user can still dismiss by tapping the barrier.
+const _kKeyboardTopZone = 70.0;
+
 /// Opens a bottom-sheet modal matching webapp's Modal.svelte.
 ///
 /// - No drag handle
@@ -45,7 +49,7 @@ Future<T?> showModal<T>(
   WidgetBuilder? footer,
   bool isDismissible = true,
   bool fillHeight = false,
-  double maxHeightFactor = 0.92,
+  double maxHeightFactor = 0.618,
 }) {
   final c = Theme.of(context).extension<LabColors>()!;
 
@@ -121,7 +125,7 @@ class _AppModalSurface extends StatefulWidget {
     this.description,
     this.footer,
     this.fillHeight = false,
-    this.maxHeightFactor = 0.92,
+    this.maxHeightFactor = 0.618,
   });
 
   final Widget child;
@@ -144,9 +148,14 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
   late final Animation<double> _translateAnim;
   late final Animation<double> _overlayAnim;
 
+  /// Tracks the primary scroll offset inside the modal's child, used to drive
+  /// the top-edge fade mask.
+  late final ValueNotifier<double> _scrollValue;
+
   @override
   void initState() {
     super.initState();
+    _scrollValue = ValueNotifier<double>(0.0);
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
@@ -167,6 +176,7 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
 
   @override
   void dispose() {
+    _scrollValue.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -189,8 +199,49 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
     // We subtract the status-bar height so the modal never covers the very top,
     // then apply the caller's maxHeightFactor against the remaining space.
     final topPad = MediaQuery.paddingOf(context).top;
-    final maxH = (screenH - topPad) * widget.maxHeightFactor;
     final keyboardH = MediaQuery.viewInsetsOf(context).bottom;
+
+    // When the keyboard is open we expand to almost full height, leaving only
+    // _kKeyboardTopZone px of visible barrier so the user can still tap to
+    // dismiss. Without the keyboard we cap at the caller's maxHeightFactor.
+    final maxH = keyboardH > 0
+        ? screenH - topPad - _kKeyboardTopZone
+        : (screenH - topPad) * widget.maxHeightFactor;
+
+    // ── Scroll-driven top-edge fade ────────────────────────────────────────
+    // NotificationListener catches scroll events from the primary scrollable
+    // inside widget.child (depth == 0 filters out nested scrollables).
+    // ValueListenableBuilder drives a ShaderMask without rebuilding the child.
+    // We always return ShaderMask (never swap widget types) to avoid detaching
+    // the ScrollPosition — same pattern as TopScrollFader.
+    final scrollableChild = NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.depth == 0) {
+          _scrollValue.value = notification.metrics.pixels;
+        }
+        return false;
+      },
+      child: ValueListenableBuilder<double>(
+        valueListenable: _scrollValue,
+        builder: (_, offset, inner) {
+          // Fade reaches full intensity over 4 px after the 4 px trigger.
+          final t = ((offset - 4.0) / 4.0).clamp(0.0, 1.0);
+          return ShaderMask(
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 1.0 - t),
+                Colors.black,
+              ],
+            ).createShader(Rect.fromLTWH(0, 0, bounds.width, 17.0)),
+            blendMode: BlendMode.dstIn,
+            child: inner!,
+          );
+        },
+        child: widget.child,
+      ),
+    );
 
     // The inner column: [optional title block] + [scrollable content] + [footer]
     Widget contentColumn = Column(
@@ -203,12 +254,19 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
 
         // ── Scrollable body ───────────────────────────────────────────────
         if (widget.fillHeight)
-          Expanded(child: widget.child)
+          Expanded(child: scrollableChild)
         else
-          Flexible(child: widget.child),
+          Flexible(child: scrollableChild),
 
         // ── Pinned footer ─────────────────────────────────────────────────
-        if (widget.footer != null) widget.footer!(context),
+        if (widget.footer != null)
+          widget.footer!(context)
+        else
+          // Automatic bottom safe-area pad when no custom footer is used.
+          // When the keyboard is up the outer Padding(bottom: keyboardH) has
+          // already raised the sheet clear of the home indicator, so we only
+          // need this space when the keyboard is absent.
+          SizedBox(height: keyboardH > 0 ? 0.0 : MediaQuery.paddingOf(context).bottom),
       ],
     );
 
@@ -310,7 +368,7 @@ class _TitleBlock extends StatelessWidget {
         children: [
           Text(
             title,
-            style: LabTextStyles.h2.copyWith(color: c.white),
+            style: LabTextStyles.semibold22.copyWith(color: c.white),
           ),
           if (description != null) ...[
             const SizedBox(height: 10),
@@ -352,7 +410,13 @@ class ModalFooterBar extends StatelessWidget {
       children: [
         Container(height: 0.33, color: c.white8),
         Padding(padding: padding, child: child),
-        SizedBox(height: MediaQuery.paddingOf(context).bottom),
+        // Safe area for home indicator — omitted when keyboard is up since
+        // the outer sheet is already raised by keyboardH at that point.
+        SizedBox(
+          height: MediaQuery.viewInsetsOf(context).bottom > 0
+              ? 0.0
+              : MediaQuery.paddingOf(context).bottom,
+        ),
       ],
     );
   }
@@ -427,14 +491,14 @@ class _ConfirmContent extends StatelessWidget {
                     child: icon!,
                   ),
                   const SizedBox(width: 8),
-                  Text(title, style: LabTextStyles.h2.copyWith(color: c.white)),
+                  Text(title, style: LabTextStyles.semibold22.copyWith(color: c.white)),
                 ],
               ),
             )
           else
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Text(title, style: LabTextStyles.h2.copyWith(color: c.white)),
+              child: Text(title, style: LabTextStyles.semibold22.copyWith(color: c.white)),
             ),
 
           Text(message, style: LabTextStyles.reg15.copyWith(color: c.white66)),
@@ -489,7 +553,7 @@ Future<T?> showAppSheet<T>(
   bool isDismissible = true,
   bool enableDrag = false,
   bool showDragHandle = false,
-  double maxHeightFactor = 0.92,
+  double maxHeightFactor = 0.618,
 }) =>
     showModal<T>(context,
         isDismissible: isDismissible,
@@ -562,7 +626,7 @@ class BaseDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DefaultTextStyle(
-            style: LabTextStyles.h2.copyWith(color: c.white),
+            style: LabTextStyles.semibold22.copyWith(color: c.white),
             child: titleIcon != null
                 ? Row(children: [
                     DefaultTextStyle.merge(
@@ -620,7 +684,7 @@ class BaseDialogTitle extends StatelessWidget {
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
-      child: Text(text, style: style ?? LabTextStyles.h2.copyWith(color: c.white)),
+      child: Text(text, style: style ?? LabTextStyles.semibold22.copyWith(color: c.white)),
     );
   }
 }

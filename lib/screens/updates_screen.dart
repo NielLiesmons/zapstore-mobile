@@ -1,47 +1,156 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/services/updates_service.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/extensions.dart';
+import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/batch_progress_banner.dart';
 import 'package:zapstore/widgets/common/badges.dart';
 import 'package:zapstore/widgets/common/base_dialog.dart';
+import 'package:zapstore/widgets/common/top_scroll_fader.dart';
 import 'package:zapstore/widgets/app_card.dart';
 
-class UpdatesScreen extends ConsumerWidget {
+class UpdatesScreen extends HookConsumerWidget {
   const UpdatesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categorized = ref.watch(categorizedUpdatesProvider);
+    final scrollController = useScrollController();
+    final topPad = MediaQuery.paddingOf(context).top;
+    // Safe-area + 8px gap + 30px row + 10px gap = 48px — same constant as all
+    // other detail screens so the header height and fader align identically.
+    final headerHeight = topPad + 48.0;
+    final contentTopPad = headerHeight + 10.0;
+    final bottomPad = MediaQuery.paddingOf(context).bottom + 24.0;
 
-    if (categorized.showSkeleton) {
-      return Scaffold(
-        body: Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: _LoadingSkeleton(),
-        ),
-      );
-    }
+    final inner = categorized.showSkeleton
+        ? _LoadingSkeleton(
+            controller: scrollController,
+            contentTopPad: contentTopPad,
+            bottomPad: bottomPad,
+          )
+        : _UpdatesList(
+            categorized: categorized,
+            controller: scrollController,
+            contentTopPad: contentTopPad,
+            bottomPad: bottomPad,
+          );
 
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: _UpdatesList(categorized: categorized),
+      body: Stack(
+        children: [
+          // ── Scrollable content behind the floating header ──────────────
+          Positioned.fill(
+            child: TopScrollFader(
+              scrollController: scrollController,
+              fadeStart: headerHeight,
+              child: inner,
+            ),
+          ),
+
+          // ── Fixed blurred header ───────────────────────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _UpdatesHeader(),
+          ),
+        ],
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Fixed blurred header — identical structure to AppDetailScreen / ProfileScreen
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _UpdatesHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    final topPad = MediaQuery.paddingOf(context).top;
+
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          color: c.black,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: topPad + 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: () => context.pop(),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: c.gray33,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 2),
+                            child: LabIcon(
+                              LabIcons.chevronLeft,
+                              size: 14,
+                              color: c.white33,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Updates',
+                      style: LabTextStyles.semibold22.copyWith(color: c.white),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _LoadingSkeleton extends StatelessWidget {
+  const _LoadingSkeleton({
+    required this.controller,
+    required this.contentTopPad,
+    required this.bottomPad,
+  });
+
+  final ScrollController controller;
+  final double contentTopPad;
+  final double bottomPad;
+
   @override
   Widget build(BuildContext context) {
     return ListView(
+      controller: controller,
+      padding: EdgeInsets.only(top: contentTopPad, bottom: bottomPad),
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -165,9 +274,17 @@ class _LastCheckedIndicator extends HookConsumerWidget {
 }
 
 class _UpdatesList extends ConsumerWidget {
-  const _UpdatesList({required this.categorized});
+  const _UpdatesList({
+    required this.categorized,
+    required this.controller,
+    required this.contentTopPad,
+    required this.bottomPad,
+  });
 
   final CategorizedUpdates categorized;
+  final ScrollController controller;
+  final double contentTopPad;
+  final double bottomPad;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -218,36 +335,44 @@ class _UpdatesList extends ConsumerWidget {
         upToDateApps.isEmpty &&
         uncatalogedApps.isEmpty) {
       final theme = Theme.of(context);
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ColorFiltered(
-              colorFilter: const ColorFilter.matrix(<double>[
-                0.2126, 0.7152, 0.0722, 0, 0,
-                0.2126, 0.7152, 0.0722, 0, 0,
-                0.2126, 0.7152, 0.0722, 0, 0,
-                0, 0, 0, 1, 0,
-              ]),
-              child: const Text('🎉', style: TextStyle(fontSize: 48)),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'No apps installed yet',
-              style: theme.textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Install some apps to get started!',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+      return CustomScrollView(
+        controller: controller,
+        slivers: [
+          SliverToBoxAdapter(child: SizedBox(height: contentTopPad)),
+          SliverFillRemaining(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: const Text('🎉', style: TextStyle(fontSize: 48)),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No apps installed yet',
+                    style: theme.textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Install some apps to get started!',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              textAlign: TextAlign.center,
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -260,7 +385,9 @@ class _UpdatesList extends ConsumerWidget {
       strokeWidth: 0,
       onRefresh: () => ref.read(updatePollerProvider.notifier).checkNow(),
       child: CustomScrollView(
+        controller: controller,
         slivers: [
+          SliverToBoxAdapter(child: SizedBox(height: contentTopPad)),
           if (allUpdates.length > 1)
             SliverToBoxAdapter(child: UpdateAllRow(allUpdates: allUpdates)),
           const SliverToBoxAdapter(child: _LastCheckedIndicator()),
@@ -320,6 +447,7 @@ class _UpdatesList extends ConsumerWidget {
               ),
             ),
           ],
+          SliverToBoxAdapter(child: SizedBox(height: bottomPad)),
         ],
       ),
     );

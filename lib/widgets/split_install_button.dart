@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/services/bookmarks_service.dart';
 import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
@@ -17,6 +17,7 @@ import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/base_dialog.dart';
+import 'package:zapstore/widgets/common/dropdown_menu.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/floating_overflow_menu.dart';
 import 'package:zapstore/widgets/install_alert_dialog.dart';
@@ -25,8 +26,8 @@ import 'package:zapstore/widgets/install_alert_dialog.dart';
 ///
 /// Left part: main action (Install / Update / Installed / progress / error).
 /// Divider: 1px white33 vertical line.
-/// Right part: chevronDown → opens options modal (Share, Copy, Save, Open, Delete…).
-class SplitInstallButton extends ConsumerWidget {
+/// Right part: chevronDown → opens install options dropdown.
+class SplitInstallButton extends HookConsumerWidget {
   const SplitInstallButton({super.key, required this.app});
 
   final App app;
@@ -36,6 +37,10 @@ class SplitInstallButton extends ConsumerWidget {
     final c = Theme.of(context).extension<LabColors>()!;
     final operation = ref.watch(installOperationProvider(app.identifier));
     final installedPkg = ref.watch(installedPackageProvider(app.identifier));
+
+    final overlayController = useMemoized(() => OverlayPortalController());
+    final layerLink = useMemoized(() => LayerLink());
+    final isDropdownOpen = useState(false);
 
     ref.listen(installOperationProvider(app.identifier), (prev, next) {
       if (next is OperationFailed && prev is! OperationFailed) {
@@ -177,92 +182,158 @@ class SplitInstallButton extends ConsumerWidget {
 
     // ── Build pill ───────────────────────────────────────────────────────
 
-    return SizedBox(
-      height: 34,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: gradient,
-          color: gradient == null ? bgColor : null,
-          borderRadius: BorderRadius.circular(17),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(17),
-          child: IntrinsicHeight(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    // Use our own isDropdownOpen state (not overlayController.isShowing) so
+    // the toggle is reliable even when onTapOutside fires just before onTap.
+    void toggleDropdown() {
+      if (isDropdownOpen.value) {
+        overlayController.hide();
+        isDropdownOpen.value = false;
+      } else {
+        overlayController.show();
+        isDropdownOpen.value = true;
+      }
+    }
+
+    void dismissDropdown() {
+      overlayController.hide();
+      isDropdownOpen.value = false;
+    }
+
+    // groupId prevents the chevron's own tap from firing onTapOutside first.
+    final groupId = 'install-dropdown-${app.identifier}';
+
+    return OverlayPortal(
+      controller: overlayController,
+      overlayChildBuilder: (ctx) => CompositedTransformFollower(
+        link: layerLink,
+        showWhenUnlinked: false,
+        targetAnchor: Alignment.bottomRight,
+        followerAnchor: Alignment.topRight,
+        offset: const Offset(0, 4),
+        child: Align(
+          alignment: Alignment.topRight,
+          child: TapRegion(
+            groupId: groupId,
+            onTapOutside: (_) => dismissDropdown(),
+            child: LabDropdownMenu(
+              constraints: const BoxConstraints(minWidth: 160),
               children: [
-                // Left: action tap area
-                GestureDetector(
-                  onTap: isDisabled ? null : leftAction,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          label,
-                          style: LabTextStyles.med15.copyWith(
-                            color: isDisabled ? c.white33 : c.white,
-                          ),
-                        ),
-                        if (showSpinner) ...[
-                          const SizedBox(width: 6),
-                          SizedBox(
-                            width: 13,
-                            height: 13,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: c.white66,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                LabDropdownItem(
+                  isFirst: true,
+                  child: const Text('Install'),
+                  onTap: () {
+                    dismissDropdown();
+                    if (fileMetadata != null) {
+                      _startDownload(context, ref, fileMetadata);
+                    }
+                  },
                 ),
-
-                // Full-height divider
-                Container(
-                  width: LabStroke.medium,
-                  color: c.whiteEnforced.withValues(alpha: 0.18),
+                LabDropdownItem(
+                  child: const Text('Reinstall'),
+                  onTap: () {
+                    dismissDropdown();
+                    // TODO: implement reinstall
+                  },
                 ),
-
-                // Right: chevron tap area → options modal
-                GestureDetector(
-                  onTap: () => _openOptions(context, ref),
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 9),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: LabIcon(
-                          LabIcons.chevronDown,
-                          size: 8,
-                          color: c.white66,
-                        ),
-                      ),
-                    ),
-                  ),
+                LabDropdownItem(
+                  isDanger: true,
+                  child: const Text('Report issue'),
+                  onTap: () {
+                    dismissDropdown();
+                    // TODO: implement report issue
+                  },
                 ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
+      child: CompositedTransformTarget(
+        link: layerLink,
+        child: SizedBox(
+          height: 34,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: gradient,
+              color: gradient == null ? bgColor : null,
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(17),
+              child: IntrinsicHeight(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Left: action tap area
+                    GestureDetector(
+                      onTap: isDisabled ? null : leftAction,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 16, right: 12),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              label,
+                              style: LabTextStyles.med15.copyWith(
+                                color: isDisabled ? c.white33 : c.white,
+                              ),
+                            ),
+                            if (showSpinner) ...[
+                              const SizedBox(width: 6),
+                              SizedBox(
+                                width: 13,
+                                height: 13,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: c.white66,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
 
-  // ── Options modal ────────────────────────────────────────────────────────
+                    // Full-height divider
+                    Container(
+                      width: LabStroke.medium,
+                      color: c.whiteEnforced.withValues(alpha: 0.18),
+                    ),
 
-  Future<void> _openOptions(BuildContext context, WidgetRef ref) async {
-    await showModal<void>(
-      context,
-      title: app.name ?? app.identifier,
-      builder: (_) => _AppOptionsContent(app: app),
+                    // Right: chevron tap area → install options dropdown
+                    TapRegion(
+                      groupId: groupId,
+                      child: GestureDetector(
+                        onTap: toggleDropdown,
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8, right: 11),
+                          child: Center(
+                            child: Transform.rotate(
+                              angle: isDropdownOpen.value ? 3.14159 : 0.0,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: LabIcon(
+                                  LabIcons.chevronDown,
+                                  size: 8,
+                                  color: c.white66,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -375,11 +446,11 @@ class SplitInstallButton extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Options modal content
+// App options modal content — shown from the bottom bar's Options button
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _AppOptionsContent extends HookConsumerWidget {
-  const _AppOptionsContent({required this.app});
+class AppOptionsModalContent extends HookConsumerWidget {
+  const AppOptionsModalContent({super.key, required this.app});
 
   final App app;
 

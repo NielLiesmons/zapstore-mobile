@@ -547,7 +547,7 @@ class ZapAmountDialog extends HookConsumerWidget {
 }
 
 /// Execute zap payment using NWC connection string from secure storage
-Future<PayInvoiceResult> _executeZapPayment(
+Future<PayInvoiceResult> executeZapPayment(
   ZapRequest signedZapRequest,
   String nwcString,
   Ref ref,
@@ -563,6 +563,14 @@ Future<PayInvoiceResult> _executeZapPayment(
 
   return result;
 }
+
+// Private alias kept for existing internal callers.
+Future<PayInvoiceResult> _executeZapPayment(
+  ZapRequest signedZapRequest,
+  String nwcString,
+  Ref ref,
+) =>
+    executeZapPayment(signedZapRequest, nwcString, ref);
 
 /// Dialog for entering a custom zap amount
 class CustomAmountDialog extends HookWidget {

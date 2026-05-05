@@ -51,17 +51,21 @@ enum SocialTab { comments, zaps, labels, details }
 
 class _SocialTabsState extends State<SocialTabs> {
   late SocialTab _active;
-  // Cache built tab widgets so switching tabs does not re-fetch data.
+
+  // Tabs are built lazily: first time a tab is selected, its widget is
+  // constructed and added to the IndexedStack where it stays for the lifetime
+  // of the screen — no re-fetch when switching back to a visited tab.
+  final Set<SocialTab> _visited = {};
   final Map<SocialTab, Widget> _cache = {};
 
   @override
   void initState() {
     super.initState();
     _active = widget.initialTab;
+    // Pre-build the initial tab so it is ready immediately.
+    _visited.add(_active);
+    _cache[_active] = widget.contentBuilder(_active);
   }
-
-  Widget _buildTab(SocialTab t) =>
-      _cache.putIfAbsent(t, () => widget.contentBuilder(t));
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +90,15 @@ class _SocialTabsState extends State<SocialTabs> {
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: LabButton.tab(
-                  onTap: () => setState(() => _active = tab),
+                  onTap: () {
+                    if (_active == tab) return;
+                    setState(() {
+                      _active = tab;
+                      // Build and cache the content only when first visited.
+                      _visited.add(tab);
+                      _cache.putIfAbsent(tab, () => widget.contentBuilder(tab));
+                    });
+                  },
                   isSelected: isSelected,
                   child: _TabLabel(
                     tab: tab,
@@ -104,10 +116,17 @@ class _SocialTabsState extends State<SocialTabs> {
           ),
         ),
 
-        // ── Tab content (IndexedStack keeps all tabs alive) ───────────────
+        // ── Tab content ───────────────────────────────────────────────────
+        // IndexedStack keeps visited tab subtrees alive in the widget tree so
+        // their Riverpod providers are not disposed on every switch.
+        // Unvisited tabs are SizedBox.shrink() placeholders — no queries are
+        // created until the user actually taps that tab.
         IndexedStack(
           index: tabs.indexOf(_active),
-          children: tabs.map(_buildTab).toList(),
+          children: tabs.map((tab) {
+            if (!_visited.contains(tab)) return const SizedBox.shrink();
+            return _cache[tab]!;
+          }).toList(),
         ),
       ],
     );
@@ -164,8 +183,10 @@ class _TabLabel extends StatelessWidget {
               ),
             ] else if (commentCount != null) ...[
               const SizedBox(width: 6),
-              Text(_formatCount(commentCount!),
-                  style: LabTextStyles.med13.copyWith(color: statColor)),
+              Text(
+                _formatCount(commentCount!),
+                style: LabTextStyles.med15.copyWith(color: statColor),
+              ),
             ],
           ],
         );
@@ -189,12 +210,13 @@ class _TabLabel extends StatelessWidget {
               const SizedBox(width: 4),
               LabIcon(LabIcons.zap, size: 12, color: statColor),
               const SizedBox(width: 2),
-              Text(_formatSats(zapAmount!),
-                  style: LabTextStyles.med13.copyWith(color: statColor)),
+              Text(
+                _formatSats(zapAmount!),
+                style: LabTextStyles.med13.copyWith(color: statColor),
+              ),
             ] else ...[
               const SizedBox(width: 6),
-              Text('0',
-                  style: LabTextStyles.med13.copyWith(color: statColor)),
+              Text('0', style: LabTextStyles.med13.copyWith(color: statColor)),
             ],
           ],
         );
@@ -216,8 +238,10 @@ class _TabLabel extends StatelessWidget {
               ),
             ] else if (labelCount != null) ...[
               const SizedBox(width: 6),
-              Text(_formatCount(labelCount!),
-                  style: LabTextStyles.med13.copyWith(color: statColor)),
+              Text(
+                _formatCount(labelCount!),
+                style: LabTextStyles.med13.copyWith(color: statColor),
+              ),
             ],
           ],
         );

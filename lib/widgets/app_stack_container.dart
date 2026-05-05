@@ -209,7 +209,7 @@ class _StaticBone extends StatelessWidget {
         color: c.white8,
         borderRadius: isCircle
             ? BorderRadius.circular(width / 2)
-            : BorderRadius.circular(4),
+                : BorderRadius.circular(LabRadius.r17),
       ),
     );
   }
@@ -236,7 +236,7 @@ class StackCardSkeleton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Title: shimmer (important content)
-                Shimmer(width: 100, height: 15, radius: LabRadius.r4),
+                const Shimmer(width: 100, height: 15),
                 const SizedBox(height: 6),
                 // Description + author: static boxes (less important per design system)
                 _StaticBone(width: 140, height: 12),

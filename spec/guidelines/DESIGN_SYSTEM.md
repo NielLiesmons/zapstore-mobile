@@ -74,8 +74,7 @@ Weight 700 throughout. Named for what they are, not where they sit.
 
 | Token | Size | Tracking | Use case |
 |-------|------|----------|----------|
-| `semibold24` | 24px | 0.7 | App name hero, major headings |
-| `semibold22` | 22px | 0.7 | Screen titles, modal headings |
+| `semibold22` | 22px | 0.7 | App name hero, screen titles, modal headings |
 | `eyebrow13` | 13px | 2.2 | ALL-CAPS section eyebrows |
 | `eyebrow11` | 11px | 2.2 | Compact ALL-CAPS labels |
 
@@ -118,7 +117,7 @@ Always use `LabBorder.all(color: …, width: …)` instead of `Border.all()` —
 | `LabRadius.r17` | 17px | Pill button (34px height ÷ 2) |
 | `LabRadius.r20` | 20px | Large containers |
 | `LabRadius.r24` | 24px | Large app icons |
-| `LabRadius.r32` | 32px | Modals |
+| `LabRadius.r32` | 32px | Modals & bottom bars |
 
 ## Panels
 

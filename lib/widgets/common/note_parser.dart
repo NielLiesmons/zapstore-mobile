@@ -4,7 +4,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
+import 'package:zapstore/utils/url_utils.dart';
 import 'package:zapstore/theme.dart';
+import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/widgets/common/app_pic.dart';
 
 class NoteParser {
   static final RegExp nip19Regex = RegExp(
@@ -44,6 +48,76 @@ class NoteParser {
     return map;
   }
 
+  /// Returns true for URLs that are likely direct image embeds.
+  /// Mirrors webapp's `isLikelyDirectMediaUrl` (image branch).
+  static bool _isImageUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final path = uri.path.toLowerCase();
+      if (RegExp(r'\.(jpg|jpeg|png|gif|webp|avif|bmp|ico)$').hasMatch(path)) {
+        return true;
+      }
+      final host = uri.host.toLowerCase();
+      return host == 'nostr.build' ||
+          host.endsWith('.nostr.build') ||
+          host == 'image.nostr.build' ||
+          host == 'void.cat';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Returns true for URLs that are likely direct video files.
+  static bool _isVideoUrl(String url) {
+    try {
+      return RegExp(r'\.(mp4|webm|ogg|mov)$')
+          .hasMatch(Uri.parse(url).path.toLowerCase());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Returns true when content contains only 1–2 known custom emoji and nothing else.
+  /// Mirrors webapp's `isShortTextOnlyOneOrTwoEmojis` (custom emoji path only).
+  static bool _isFewCustomEmojis(
+      String content, Map<String, String>? emojiTags) {
+    if (emojiTags == null || emojiTags.isEmpty) return false;
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return false;
+    int count = 0;
+    final remaining = trimmed.replaceAllMapped(_emojiPattern, (m) {
+      final sc = m.group(1)!.toLowerCase();
+      if (emojiTags.containsKey(sc)) {
+        count++;
+        return '';
+      }
+      return m.group(0)!;
+    });
+    return remaining.trim().isEmpty && count >= 1 && count <= 2;
+  }
+
+  /// Strips the protocol prefix (https://) and trailing slashes for display.
+  /// Mirrors webapp's `stripUrlForDisplay` in url.js.
+  static String _stripUrlForDisplay(String url) {
+    return url
+        .replaceFirst(RegExp(r'^https?://'), '')
+        .replaceAll(RegExp(r'/+$'), '');
+  }
+
+  /// Derives a legible mention color from a pubkey hex string.
+  /// Uses the first 3 bytes as an RGB seed, then clamps lightness to 65–85%
+  /// so the color reads clearly on dark backgrounds.
+  /// Mirrors webapp's `hexToColor` + `getProfileTextColor` pipeline.
+  static Color _pubkeyToMentionColor(String pubkey) {
+    if (pubkey.length < 6) return const Color(0xFF818CF8);
+    final r = int.parse(pubkey.substring(0, 2), radix: 16);
+    final g = int.parse(pubkey.substring(2, 4), radix: 16);
+    final b = int.parse(pubkey.substring(4, 6), radix: 16);
+    final base = Color.fromARGB(255, r, g, b);
+    final hsl = HSLColor.fromColor(base);
+    return hsl.withLightness(hsl.lightness.clamp(0.65, 0.85)).toColor();
+  }
+
   static Widget parse(
     BuildContext context,
     String content, {
@@ -61,7 +135,10 @@ class NoteParser {
       return Text('', style: textStyle);
     }
 
-    final List<InlineSpan> spans = [];
+    // Detect 1–2 custom emoji magnification (matches webapp's --few-emoji class).
+    final magnify = _isFewCustomEmojis(content, emojiTags);
+    final emojiSize = magnify ? 40.0 : 19.0;
+
     final List<_EntityMatch> matches = [];
 
     for (final match in nip19Regex.allMatches(content)) {
@@ -98,12 +175,10 @@ class NoteParser {
       ));
     }
 
-    // Custom emoji — only when the caller passed an emojiTags map.
     if (emojiTags != null && emojiTags.isNotEmpty) {
       for (final match in _emojiPattern.allMatches(content)) {
         final shortcode = match.group(1)!.toLowerCase();
         final url = emojiTags[shortcode];
-        // Only treat as emoji when there's actually a mapped URL.
         if (url != null) {
           matches.add(_EntityMatch(
             start: match.start,
@@ -118,7 +193,6 @@ class NoteParser {
     }
 
     matches.sort((a, b) => a.start.compareTo(b.start));
-    // Remove overlapping matches — first one wins.
     final filtered = <_EntityMatch>[];
     var lastEnd = -1;
     for (final m in matches) {
@@ -128,99 +202,174 @@ class NoteParser {
       }
     }
 
-    int currentPos = 0;
+    // ── Mixed layout ──────────────────────────────────────────────────────────
+    // nostr refs (nevent/naddr/note) render as full-width block cards (Column
+    // children), matching webapp's block-level <NostrRefCard> placement.
+    // Profile mentions and all other entities stay inline (WidgetSpan inside
+    // Text.rich). Consecutive inline spans are grouped into one Text.rich.
 
-    for (final match in filtered) {
-      if (match.start > currentPos) {
-        final textBefore = content.substring(currentPos, match.start);
-        spans.add(TextSpan(text: textBefore, style: textStyle));
+    final parts = <Widget>[];
+    var spans = <InlineSpan>[];
+    int pos = 0;
+
+    final blurpleLink = linkStyle ??
+        textStyle?.copyWith(
+          color: Theme.of(context).extension<LabColors>()!.blurpleLightColor,
+        );
+    final defaultColors = [
+      Theme.of(context).colorScheme.primary,
+      Theme.of(context).colorScheme.primaryContainer,
+    ];
+
+    void flushSpans() {
+      if (spans.isEmpty) return;
+      parts.add(Text.rich(TextSpan(children: List.from(spans))));
+      spans = [];
+    }
+
+    for (final m in filtered) {
+      if (m.start > pos) {
+        spans.add(TextSpan(
+          text: content.substring(pos, m.start),
+          style: textStyle,
+        ));
       }
 
-      Widget? replacement;
-
-      switch (match.type) {
+      switch (m.type) {
         case _EntityType.nip19:
-          replacement = onNostrEntity?.call(match.cleanEntity);
-          break;
+          final customWidget = onNostrEntity?.call(m.cleanEntity);
+          if (customWidget != null) {
+            spans.add(WidgetSpan(
+              child: customWidget,
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+            ));
+          } else {
+            try {
+              final decoded = Utils.decodeShareableIdentifier(m.cleanEntity);
+              if (decoded is ProfileData) {
+                // Inline @mention chip
+                spans.add(WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: ProfileEntityWidget(
+                    profileData: decoded,
+                    colorPair: defaultColors,
+                  ),
+                ));
+              } else if (decoded is EventData) {
+                // Block reference card
+                flushSpans();
+                parts.add(EventEntityWidget(
+                  eventData: decoded,
+                  colorPair: defaultColors,
+                ));
+              } else if (decoded is AddressData) {
+                // Block reference card (app / stack)
+                flushSpans();
+                parts.add(AddressEntityWidget(
+                  addressData: decoded,
+                  colorPair: defaultColors,
+                ));
+              }
+            } catch (_) {
+              spans.add(TextSpan(text: m.text, style: blurpleLink));
+            }
+          }
+
         case _EntityType.http:
-          replacement = onHttpUrl?.call(match.text);
-          break;
+          final customWidget = onHttpUrl?.call(m.text);
+          if (customWidget != null) {
+            spans.add(WidgetSpan(
+              child: customWidget,
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+            ));
+          } else if (_isImageUrl(m.text)) {
+            // Block image embed — matches webapp's MediaBlock / inline image display
+            flushSpans();
+            parts.add(_MediaImageBlock(url: m.text));
+          } else if (_isVideoUrl(m.text)) {
+            // Block video chip (no inline player; tap opens URL)
+            flushSpans();
+            parts.add(_VideoChip(url: m.text));
+          } else {
+            spans.add(TextSpan(
+              // Display without protocol prefix (matches webapp's stripUrlForDisplay)
+              text: _stripUrlForDisplay(m.text),
+              style: blurpleLink,
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => navigateToContent(context, m.text),
+            ));
+          }
+
         case _EntityType.hashtag:
-          replacement =
-              onHashtag?.call(match.cleanEntity) ??
-              HashtagWidget(
-                hashtag: match.cleanEntity,
-                colorPair: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primaryContainer,
-                ],
+          final customWidget = onHashtag?.call(m.cleanEntity);
+          if (customWidget != null) {
+            spans.add(WidgetSpan(
+              child: customWidget,
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+            ));
+          } else {
+            spans.add(WidgetSpan(
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+              child: HashtagWidget(
+                hashtag: m.cleanEntity,
                 onTap: onHashtagTap != null
-                    ? () => onHashtagTap(match.cleanEntity)
+                    ? () => onHashtagTap(m.cleanEntity)
                     : null,
-              );
-          break;
+              ),
+            ));
+          }
+
         case _EntityType.emoji:
-          // Render as inline image matching webapp's .short-text-emoji sizing:
-          // width/height = 1.25em. At our reg15 (15px) that's ~19px.
-          // PlaceholderAlignment.middle keeps it vertically centred with text.
           spans.add(WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: Image.network(
-                match.url!,
-                width: 19,
-                height: 19,
+                m.url!,
+                width: emojiSize,
+                height: emojiSize,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) =>
-                    Text(':${match.cleanEntity}:', style: textStyle),
+                    Text(':${m.cleanEntity}:', style: textStyle),
               ),
             ),
           ));
-          currentPos = match.end;
-          continue; // already added the span; skip the fallback block below
       }
 
-      if (replacement != null) {
-        spans.add(WidgetSpan(
-          child: replacement,
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-        ));
-      } else if (match.type == _EntityType.http) {
-        final style =
-            linkStyle ??
-            textStyle?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            );
-        spans.add(TextSpan(
-          text: match.text,
-          style: style,
-          recognizer: TapGestureRecognizer()
-            ..onTap = () => navigateToContent(context, match.text),
-        ));
-      } else {
-        final style =
-            linkStyle ??
-            textStyle?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            );
-        spans.add(TextSpan(text: match.text, style: style));
-      }
-
-      currentPos = match.end;
+      pos = m.end;
     }
 
-    if (currentPos < content.length) {
-      final remainingText = content.substring(currentPos);
-      spans.add(TextSpan(text: remainingText, style: textStyle));
+    if (pos < content.length) {
+      spans.add(TextSpan(text: content.substring(pos), style: textStyle));
+    }
+    flushSpans();
+
+    Widget result;
+    if (parts.isEmpty) {
+      result = Text(content, style: textStyle);
+    } else if (parts.length == 1) {
+      result = parts.first;
+    } else {
+      result = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: parts,
+      );
     }
 
-    if (spans.isEmpty) {
-      return Text(content, style: textStyle);
+    // Big emoji: wrap in 2.5× font size (matches webapp's --few-emoji modifier)
+    if (magnify) {
+      return DefaultTextStyle.merge(
+        style: const TextStyle(fontSize: 40, height: 1.2),
+        child: result,
+      );
     }
-
-    return Text.rich(TextSpan(children: spans));
+    return result;
   }
 }
 
@@ -230,6 +379,7 @@ class _EntityMatch {
   final String text;
   final _EntityType type;
   final String cleanEntity;
+
   /// URL for [_EntityType.emoji] matches.
   final String? url;
 
@@ -249,6 +399,8 @@ enum _EntityType { nip19, http, hashtag, emoji }
 // Widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Dispatches a raw nip19 entity string to the correct widget variant.
+/// Used by callers that pass a custom `onNostrEntity` handler (currently none).
 class NostrEntityWidget extends StatelessWidget {
   final String entity;
   final List<Color> colorPair;
@@ -266,17 +418,17 @@ class NostrEntityWidget extends StatelessWidget {
 
       return switch (decoded) {
         ProfileData() => ProfileEntityWidget(
-          profileData: decoded,
-          colorPair: colorPair,
-        ),
+            profileData: decoded,
+            colorPair: colorPair,
+          ),
         EventData() => EventEntityWidget(
-          eventData: decoded,
-          colorPair: colorPair,
-        ),
+            eventData: decoded,
+            colorPair: colorPair,
+          ),
         AddressData() => AddressEntityWidget(
-          addressData: decoded,
-          colorPair: colorPair,
-        ),
+            addressData: decoded,
+            colorPair: colorPair,
+          ),
       };
     } catch (e) {
       return GenericNip19Widget(entity: entity, colorPair: colorPair);
@@ -284,6 +436,10 @@ class NostrEntityWidget extends StatelessWidget {
   }
 }
 
+// ── Profile mention ───────────────────────────────────────────────────────────
+
+/// Inline @mention chip. Loads the author name and colors it from the pubkey.
+/// Matches webapp's colored mention style (hexToColor + getProfileTextColor).
 class ProfileEntityWidget extends ConsumerWidget {
   final ProfileData profileData;
   final List<Color> colorPair;
@@ -296,6 +452,9 @@ class ProfileEntityWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Color derived from pubkey — matches webapp's per-user tint.
+    final mentionColor = NoteParser._pubkeyToMentionColor(profileData.pubkey);
+
     final profileState = ref.watch(
       query<Profile>(
         authors: {profileData.pubkey},
@@ -309,48 +468,46 @@ class ProfileEntityWidget extends ConsumerWidget {
 
     void handleTap() => pushUser(context, profileData.pubkey);
 
-    return switch (profileState) {
-      StorageLoading() => GestureDetector(
-        onTap: handleTap,
-        child: _AnimatedLoadingChip(
-          text: 'npub1${profileData.pubkey.substring(0, 8)}...',
-          colorPair: colorPair,
-        ),
-      ),
-      StorageError() || StorageData(models: []) => GestureDetector(
-        onTap: handleTap,
-        child: _AnimatedLoadingChip(
-          text: 'npub1${profileData.pubkey.substring(0, 8)}...',
-          colorPair: colorPair,
-        ),
-      ),
-      StorageData(:final models) => _buildProfileWidget(context, models.first),
+    final displayText = switch (profileState) {
+      StorageData(:final models) when models.isNotEmpty =>
+        '@${models.first.nameOrNpub}',
+      _ => '@npub1${profileData.pubkey.substring(0, 8)}…',
     };
-  }
 
-  Widget _buildProfileWidget(BuildContext context, Profile profile) {
+    final isLoading = profileState is StorageLoading;
+
     return GestureDetector(
-      onTap: () => pushUser(context, profileData.pubkey),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colorPair[0].withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(4.0),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-          child: Text(
-            profile.nameOrNpub,
-            style: context.textTheme.bodyMedium!.copyWith(
-              fontWeight: FontWeight.w500,
-              color: colorPair[0],
+      onTap: handleTap,
+      child: isLoading
+          ? _AnimatedLoadingChip(
+              text: displayText,
+              color: mentionColor,
+            )
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: mentionColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4.0),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: Text(
+                  displayText,
+                  style: context.textTheme.bodyMedium!.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: mentionColor,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
 
+// ── Event reference card (nevent / note) ─────────────────────────────────────
+
+/// Block-level card for a referenced Nostr event (nevent/note).
+/// Matches webapp's NostrRefCard forum/comment card style:
+/// white8 background, 12px radius, author row + content preview.
 class EventEntityWidget extends StatelessWidget {
   final EventData eventData;
   final List<Color> colorPair;
@@ -363,64 +520,39 @@ class EventEntityWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shortId = eventData.eventId.length > 12
+    final c = Theme.of(context).extension<LabColors>()!;
+    final shortId = eventData.eventId.length >= 8
         ? '${eventData.eventId.substring(0, 8)}…'
         : eventData.eventId;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(12.0),
-        border: LabBorder.all(
-          color: colorPair[0].withValues(alpha: 0.2),
-          width: 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: colorPair[0].withValues(alpha: 0.05),
-            blurRadius: 4.0,
-            offset: const Offset(0, 2),
+        color: c.white8,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LabIcon(LabIcons.nostr, size: 13, color: c.white33),
+          const SizedBox(width: 6),
+          Text(
+            'Nostr note · $shortId',
+            style: LabTextStyles.reg13.copyWith(color: c.white33),
           ),
         ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Icon(Icons.event, color: colorPair[0]),
-            const SizedBox(width: 8.0),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Event',
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    shortId,
-                    style: context.textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.7),
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 }
 
-class AddressEntityWidget extends StatelessWidget {
+// ── Address reference card (naddr) ────────────────────────────────────────────
+
+/// Block-level card for a referenced Nostr address (naddr).
+/// For apps (kind 32267): fetches the App and shows icon + name.
+/// For stacks or others: tappable chip matching the existing style.
+class AddressEntityWidget extends ConsumerWidget {
   final AddressData addressData;
   final List<Color> colorPair;
 
@@ -431,7 +563,55 @@ class AddressEntityWidget extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    if (addressData.kind == 32267) {
+      final appState = ref.watch(
+        query<App>(
+          tags: {'#d': {addressData.identifier}},
+          authors: addressData.author != null ? {addressData.author!} : {},
+          source: const LocalAndRemoteSource(relays: 'AppCatalog'),
+          subscriptionPrefix: 'ref-app-${addressData.identifier}',
+        ),
+      );
+      final app = appState.models.firstOrNull;
+
+      return GestureDetector(
+        onTap: () => pushApp(context, addressData.identifier),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+          decoration: BoxDecoration(
+            color: c.white8,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppPic(
+                iconUrl:
+                    app != null ? firstValidHttpUrl(app.icons) : null,
+                name: app?.name,
+                identifier: app?.identifier ?? addressData.identifier,
+                size: 36,
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  app?.name ?? addressData.identifier,
+                  style: LabTextStyles.med15.copyWith(color: c.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Stack or other addressable kind — tappable text chip
     return GestureDetector(
       onTap: () {
         if (addressData.kind == 30267) {
@@ -459,6 +639,8 @@ class AddressEntityWidget extends StatelessWidget {
     );
   }
 }
+
+// ── Generic fallback ──────────────────────────────────────────────────────────
 
 class GenericNip19Widget extends StatelessWidget {
   final String entity;
@@ -491,32 +673,34 @@ class GenericNip19Widget extends StatelessWidget {
   }
 }
 
+// ── Hashtag ───────────────────────────────────────────────────────────────────
+
+/// Inline hashtag pill using blurple color — matches webapp's tag style.
 class HashtagWidget extends StatelessWidget {
   final String hashtag;
-  final List<Color> colorPair;
   final VoidCallback? onTap;
 
   const HashtagWidget({
     super.key,
     required this.hashtag,
-    required this.colorPair,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: colorPair[0].withValues(alpha: 0.1),
+          color: c.blurpleColor.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(4.0),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 1.0),
         child: Text(
           '#$hashtag',
           style: context.textTheme.bodyMedium!.copyWith(
-            color: colorPair[0],
+            color: c.blurpleLightColor,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -525,11 +709,13 @@ class HashtagWidget extends StatelessWidget {
   }
 }
 
+// ── Loading chip ──────────────────────────────────────────────────────────────
+
 class _AnimatedLoadingChip extends StatefulWidget {
   final String text;
-  final List<Color> colorPair;
+  final Color color;
 
-  const _AnimatedLoadingChip({required this.text, required this.colorPair});
+  const _AnimatedLoadingChip({required this.text, required this.color});
 
   @override
   State<_AnimatedLoadingChip> createState() => _AnimatedLoadingChipState();
@@ -547,10 +733,9 @@ class _AnimatedLoadingChipState extends State<_AnimatedLoadingChip>
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    _animation = Tween<double>(
-      begin: 0.1,
-      end: 0.3,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _animation = Tween<double>(begin: 0.08, end: 0.2).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
     _controller.repeat(reverse: true);
   }
 
@@ -564,10 +749,10 @@ class _AnimatedLoadingChipState extends State<_AnimatedLoadingChip>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _animation,
-      builder: (context, child) {
+      builder: (context, _) {
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: widget.colorPair[0].withValues(alpha: _animation.value),
+            color: widget.color.withValues(alpha: _animation.value),
             borderRadius: BorderRadius.circular(4.0),
           ),
           child: Padding(
@@ -576,12 +761,120 @@ class _AnimatedLoadingChipState extends State<_AnimatedLoadingChip>
               widget.text,
               style: context.textTheme.bodyMedium!.copyWith(
                 fontWeight: FontWeight.w500,
-                color: widget.colorPair[0],
+                color: widget.color,
               ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+// ── Media blocks ──────────────────────────────────────────────────────────────
+
+/// Full-width inline image block rendered when a URL points to a direct image.
+/// Matches webapp's MediaBlock / inline image embed behavior.
+class _MediaImageBlock extends StatelessWidget {
+  const _MediaImageBlock({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    return GestureDetector(
+      onTap: () => navigateToContent(context, url),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        // Fixed width so IntrinsicWidth in MessageBubble gets a finite value.
+        // BoxFit.cover crops the image to fill the 240×180 frame.
+        child: SizedBox(
+          width: 240,
+          height: 180,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (_, child, progress) {
+                if (progress == null) return child;
+                return ColoredBox(
+                  color: c.white8,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: progress.expectedTotalBytes != null
+                          ? progress.cumulativeBytesLoaded /
+                              progress.expectedTotalBytes!
+                          : null,
+                      color: c.white33,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (_, __, ___) => Container(
+                color: c.white8,
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LabIcon(LabIcons.camera, size: 14, color: c.white33),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          NoteParser._stripUrlForDisplay(url),
+                          style: LabTextStyles.reg13.copyWith(color: c.white33),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tappable chip for video URLs — no inline player, tap opens URL.
+class _VideoChip extends StatelessWidget {
+  const _VideoChip({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    return GestureDetector(
+      onTap: () => navigateToContent(context, url),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
+        decoration: BoxDecoration(
+          color: c.white8,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LabIcon(LabIcons.play, size: 15, color: c.white66),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                NoteParser._stripUrlForDisplay(url),
+                style: LabTextStyles.reg13.copyWith(color: c.white66),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

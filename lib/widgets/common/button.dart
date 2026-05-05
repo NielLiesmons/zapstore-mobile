@@ -59,13 +59,14 @@ class LabButton extends StatefulWidget {
     return LabButton(
       key: key,
       onTap: onTap,
-      child: child,
       text: text,
       textStyle: LabTextStyles.med15,
       height: 40,
       horizontalPadding: 18,
+      borderRadius: BorderRadius.circular(17),
       pill: false,
       isPrimary: true,
+      child: child,
     );
   }
 
@@ -78,13 +79,13 @@ class LabButton extends StatefulWidget {
     return LabButton(
       key: key,
       onTap: onTap,
-      child: child,
       text: text,
       textStyle: LabTextStyles.med15,
       height: 34,
       horizontalPadding: 15,
       pill: true,
       isPrimary: true,
+      child: child,
     );
   }
 
@@ -97,13 +98,13 @@ class LabButton extends StatefulWidget {
     return LabButton(
       key: key,
       onTap: onTap,
-      child: child,
       text: text,
       textStyle: LabTextStyles.med13,
       height: 26,
       horizontalPadding: 12,
       pill: true,
       isPrimary: true,
+      child: child,
     );
   }
 
@@ -119,14 +120,15 @@ class LabButton extends StatefulWidget {
     return LabButton(
       key: key,
       onTap: onTap,
-      child: child,
       text: text,
       textStyle: LabTextStyles.med15,
       gradient: null,
       color: color,
       height: 40,
       horizontalPadding: 18,
+      borderRadius: BorderRadius.circular(17),
       pill: false,
+      child: child,
     );
   }
 
@@ -140,7 +142,6 @@ class LabButton extends StatefulWidget {
     return LabButton(
       key: key,
       onTap: onTap,
-      child: child,
       text: text,
       textStyle: LabTextStyles.med15,
       gradient: null,
@@ -148,6 +149,7 @@ class LabButton extends StatefulWidget {
       height: 34,
       horizontalPadding: 15,
       pill: true,
+      child: child,
     );
   }
 
@@ -161,7 +163,6 @@ class LabButton extends StatefulWidget {
     return LabButton(
       key: key,
       onTap: onTap,
-      child: child,
       text: text,
       textStyle: LabTextStyles.med13,
       gradient: null,
@@ -169,6 +170,7 @@ class LabButton extends StatefulWidget {
       height: 26,
       horizontalPadding: 12,
       pill: true,
+      child: child,
     );
   }
 
@@ -185,8 +187,8 @@ class LabButton extends StatefulWidget {
       key: key,
       onTap: onTap,
       isSelected: isSelected,
-      child: child,
       text: text,
+      child: child,
     );
   }
 
@@ -223,8 +225,9 @@ class _LabButtonState extends State<LabButton> {
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 120),
-        child: Container(
+        child:         Container(
           height: widget.height,
+          alignment: Alignment.center,
           padding: EdgeInsets.symmetric(horizontal: widget.horizontalPadding),
           decoration: BoxDecoration(
             gradient: effectiveGradient,
@@ -257,7 +260,7 @@ class _LabButtonState extends State<LabButton> {
 class _AppTabButton extends LabButton {
   final bool isSelected;
 
-  _AppTabButton({
+  const _AppTabButton({
     super.key,
     required super.onTap,
     required this.isSelected,

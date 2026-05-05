@@ -20,7 +20,7 @@ class DetailsTab extends StatelessWidget {
     this.rawData,
     this.repository,
     this.shareLink,
-    this.panelBackground = _PanelBg.gray66,
+    this.panelBackground = PanelBg.gray66,
   });
 
   final String? shareableId;
@@ -30,7 +30,7 @@ class DetailsTab extends StatelessWidget {
   final String? rawData;
   final String? repository;
   final String? shareLink;
-  final _PanelBg panelBackground;
+  final PanelBg panelBackground;
 
   String _formatShareableId(String id) {
     if (id.length < 30) return id;
@@ -49,8 +49,8 @@ class DetailsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final bg = panelBackground == _PanelBg.black33 ? c.black33 : c.gray66;
-    final codeBlockBg = panelBackground == _PanelBg.black33;
+    final bg = panelBackground == PanelBg.black33 ? c.black33 : c.gray66;
+    final codeBlockBg = panelBackground == PanelBg.black33;
 
     // Build the list of identifier rows in order
     final rows = <_RowData>[];
@@ -97,7 +97,7 @@ class DetailsTab extends StatelessWidget {
             padding: const EdgeInsets.only(left: 12, bottom: 8),
             child: Text(
               'IDENTIFIERS',
-              style: LabTextStyles.h3.copyWith(color: c.white33),
+              style: LabTextStyles.eyebrow13.copyWith(color: c.white33),
             ),
           ),
 
@@ -129,7 +129,7 @@ class DetailsTab extends StatelessWidget {
               padding: const EdgeInsets.only(left: 12, bottom: 8),
               child: Text(
                 'RAW DATA',
-                style: LabTextStyles.h3.copyWith(color: c.white33),
+                style: LabTextStyles.eyebrow13.copyWith(color: c.white33),
               ),
             ),
             CodeBlock(
@@ -144,7 +144,7 @@ class DetailsTab extends StatelessWidget {
   }
 }
 
-enum _PanelBg { gray66, black33 }
+enum PanelBg { gray66, black33 }
 
 class _RowData {
   const _RowData({

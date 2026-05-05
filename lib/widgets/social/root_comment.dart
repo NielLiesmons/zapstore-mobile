@@ -4,6 +4,7 @@ import 'package:models/models.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/widgets/common/l_connector.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
@@ -349,9 +350,7 @@ class _ReplyIndicator extends StatelessWidget {
               child: SizedBox(
                 width: 25,
                 height: 28,
-                child: CustomPaint(
-                  painter: _ConnectorPainter(color: c.white16),
-                ),
+                child: LabLConnector(color: c.white16),
               ),
             ),
             const SizedBox(width: 2),
@@ -372,43 +371,4 @@ class _ReplyIndicator extends StatelessWidget {
   }
 }
 
-/// Draws the L-shaped connector matching webapp RootComment.svelte exactly.
-///
-/// The webapp uses two elements inside `.connector-column` (27px wide):
-///   1. `.connector-vertical` — 1.5px × 12px solid bar
-///   2. `.connector-corner`   — 27×16 SVG: `M1 0 L1 0 Q1 15 16 15 L27 15`
-///
-/// Combined into one CustomPaint (width=27, height=28):
-///   • Straight down from (0.75, 0) to (0.75, 12)      ← vertical bar
-///   • Quadratic bezier control(0.75, 27) end(16, 27)  ← corner curve
-///   • Straight line to (27, 27)                        ← horizontal bar
-class _ConnectorPainter extends CustomPainter {
-  const _ConnectorPainter({required this.color});
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    // height - 1 = 27 (the horizontal bar sits 1px from the bottom
-    // so the stroke doesn't clip at the widget boundary)
-    final hY = size.height - 1;
-
-    final path = Path()
-      ..moveTo(0.75, 0)
-      ..lineTo(0.75, 12)
-      ..quadraticBezierTo(0.75, hY, 16, hY)
-      ..lineTo(size.width, hY);
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_ConnectorPainter old) => old.color != color;
-}
 

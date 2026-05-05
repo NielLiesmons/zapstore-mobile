@@ -48,7 +48,7 @@ class AppHeader extends ConsumerWidget {
                     app.name ?? app.identifier,
                     // h1 size (24px) + semibold weight via fontVariations so the
                     // Inter variable font actually renders at 600 (not w800/black).
-                    style: LabTextStyles.h1.copyWith(
+                    style: LabTextStyles.semibold22.copyWith(
                       color: c.white,
                       fontWeight: FontWeight.w600,
                       fontVariations: const [FontVariation('wght', 600)],
@@ -92,7 +92,7 @@ class _PlatformPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 34,
+      height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: colors.white8,
