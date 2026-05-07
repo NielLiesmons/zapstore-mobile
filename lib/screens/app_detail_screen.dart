@@ -429,13 +429,13 @@ class _DetailHeader extends HookWidget {
                     if (app.isRelaySigned) ...[
                       LabIcon(
                         LabIcons.index,
-                        size: 22,
+                        size: 20,
                         color: c.white33,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Indexed',
+                          'Indexer',
                           style: LabTextStyles.med15.copyWith(color: c.white33),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
@@ -478,7 +478,7 @@ class _DetailHeader extends HookWidget {
                               onTapOutside: (_) => overlayController.hide(),
                               child: LabDropdownMenu(
                                 constraints:
-                                    const BoxConstraints(minWidth: 220),
+                                    const BoxConstraints(minWidth: 160, maxWidth: 160),
                                 children: [
                                   LabDropdownItem(
                                     isFirst: true,
