@@ -76,6 +76,9 @@ class ProfilePicStack extends StatelessWidget {
 
     final hasPill = text.isNotEmpty || suffix.isNotEmpty;
 
+    // Single-digit count-only: render as a perfect circle (width == height).
+    final isSingleDigit = text.isEmpty && suffix.length == 1;
+
     return GestureDetector(
       onTap: onTap,
       child: Row(
@@ -87,11 +90,16 @@ class ProfilePicStack extends StatelessWidget {
               offset: Offset(-overlap, 0),
               child: Container(
                 height: avatarSize,
+                width: isSingleDigit ? avatarSize : null,
+                alignment: isSingleDigit ? Alignment.center : null,
                 // Count-only (no text): tighter symmetric padding so the number
                 // isn't pushed right by the extra avatar-overlap indent.
-                padding: text.isNotEmpty
-                    ? const EdgeInsets.only(left: 16, right: 12)
-                    : const EdgeInsets.symmetric(horizontal: 10),
+                // Single-digit: no padding — container is a fixed square.
+                padding: isSingleDigit
+                    ? EdgeInsets.zero
+                    : text.isNotEmpty
+                        ? const EdgeInsets.only(left: 16, right: 12)
+                        : const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
                   color: c.white8,
                   borderRadius: BorderRadius.circular(999),

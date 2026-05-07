@@ -24,13 +24,18 @@ import 'package:zapstore/widgets/install_alert_dialog.dart';
 
 /// Split pill install button matching the plan's two-part CTA design.
 ///
-/// Left part: main action (Install / Update / Installed / progress / error).
+/// Left part: main action (Install / Update / Open / progress / error).
 /// Divider: 1px white33 vertical line.
 /// Right part: chevronDown → opens install options dropdown.
+///
+/// During active install operations the button fills available width.
+/// A blurple bar grows left-to-right in the left section as data downloads;
+/// the right (chevron) section is always solid blurple during those states.
 class SplitInstallButton extends HookConsumerWidget {
   const SplitInstallButton({super.key, required this.app});
 
   final App app;
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -149,9 +154,9 @@ class SplitInstallButton extends HookConsumerWidget {
           leftAction = () => _startDownload(context, ref, fileMetadata);
         }
       } else {
-        label = 'Installed';
+        label = 'Open';
         isPrimary = false;
-        leftAction = null;
+        leftAction = () => _openApp(context, ref);
       }
     } else {
       if (fileMetadata == null) {
@@ -165,12 +170,35 @@ class SplitInstallButton extends HookConsumerWidget {
       }
     }
 
+    // ── Expanded-op flag & download progress ─────────────────────────────
+    //
+    // When any "in-flight" phase is active the button grows to fill the
+    // full available width (AppHeader removes the Spacer + wraps us in
+    // Expanded).  A blurple bar sweeps left-to-right across the whole
+    // button surface as data is downloaded.
+
+    final isExpandedOp = effectiveOp is DownloadQueued ||
+        effectiveOp is Downloading ||
+        effectiveOp is DownloadPaused ||
+        effectiveOp is Verifying ||
+        effectiveOp is ReadyToInstall ||
+        effectiveOp is Installing ||
+        effectiveOp is SystemProcessing ||
+        effectiveOp is Uninstalling;
+
+    final downloadProgress = effectiveOp is Downloading
+        ? effectiveOp.progress.clamp(0.0, 1.0)
+        : null;
+
     // ── Background ───────────────────────────────────────────────────────
 
     Gradient? gradient;
     Color? bgColor;
 
-    if (isError) {
+    if (isExpandedOp) {
+      // Base layer during active ops — progress overlay sits on top.
+      gradient = c.blurple33;
+    } else if (isError) {
       bgColor = Theme.of(context).colorScheme.error;
     } else if (isWarning) {
       bgColor = Colors.amber.shade700;
@@ -202,6 +230,68 @@ class SplitInstallButton extends HookConsumerWidget {
     // groupId prevents the chevron's own tap from firing onTapOutside first.
     final groupId = 'install-dropdown-${app.identifier}';
 
+    // ── Shared child widgets ──────────────────────────────────────────────
+
+    final leftSection = GestureDetector(
+      onTap: isDisabled ? null : leftAction,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16, right: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: LabTextStyles.med15.copyWith(
+                color: isDisabled ? c.white33 : c.white,
+              ),
+            ),
+            if (showSpinner) ...[
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 13,
+                height: 13,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: c.white66,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    final divider = Container(
+      width: LabStroke.medium,
+      color: c.whiteEnforced.withValues(alpha: 0.18),
+    );
+
+    final chevron = TapRegion(
+      groupId: groupId,
+      child: GestureDetector(
+        onTap: toggleDropdown,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8, right: 11),
+          child: Center(
+            child: Transform.rotate(
+              angle: isDropdownOpen.value ? 3.14159 : 0.0,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: LabIcon(
+                  LabIcons.chevronDown,
+                  size: 8,
+                  color: c.white66,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
     return OverlayPortal(
       controller: overlayController,
       overlayChildBuilder: (ctx) => CompositedTransformFollower(
@@ -218,23 +308,44 @@ class SplitInstallButton extends HookConsumerWidget {
             child: LabDropdownMenu(
               constraints: const BoxConstraints(minWidth: 160),
               children: [
-                LabDropdownItem(
-                  isFirst: true,
-                  child: const Text('Install'),
-                  onTap: () {
-                    dismissDropdown();
-                    if (fileMetadata != null) {
-                      _startDownload(context, ref, fileMetadata);
-                    }
-                  },
-                ),
-                LabDropdownItem(
-                  child: const Text('Reinstall'),
-                  onTap: () {
-                    dismissDropdown();
-                    // TODO: implement reinstall
-                  },
-                ),
+                // During an active download/install: only offer Cancel.
+                if (isExpandedOp) ...[
+                  LabDropdownItem(
+                    isFirst: true,
+                    child: const Text('Cancel'),
+                    onTap: () {
+                      dismissDropdown();
+                      _cancelDownload(ref);
+                    },
+                  ),
+                ] else ...[
+                  LabDropdownItem(
+                    isFirst: true,
+                    child: const Text('Install'),
+                    onTap: () {
+                      dismissDropdown();
+                      if (fileMetadata != null) {
+                        _startDownload(context, ref, fileMetadata);
+                      }
+                    },
+                  ),
+                  LabDropdownItem(
+                    child: const Text('Install older version'),
+                    onTap: () {
+                      dismissDropdown();
+                      // TODO: show version picker and start download for selected release
+                    },
+                  ),
+                  if (isInstalled)
+                    LabDropdownItem(
+                      isDanger: true,
+                      child: const Text('Uninstall'),
+                      onTap: () {
+                        dismissDropdown();
+                        _uninstall(context, ref);
+                      },
+                    ),
+                ],
                 LabDropdownItem(
                   isDanger: true,
                   child: const Text('Report issue'),
@@ -260,76 +371,54 @@ class SplitInstallButton extends HookConsumerWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(17),
-              child: IntrinsicHeight(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Left: action tap area
-                    GestureDetector(
-                      onTap: isDisabled ? null : leftAction,
-                      behavior: HitTestBehavior.opaque,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 16, right: 12),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              label,
-                              style: LabTextStyles.med15.copyWith(
-                                color: isDisabled ? c.white33 : c.white,
-                              ),
-                            ),
-                            if (showSpinner) ...[
-                              const SizedBox(width: 6),
-                              SizedBox(
-                                width: 13,
-                                height: 13,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: c.white66,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Full-height divider
-                    Container(
-                      width: LabStroke.medium,
-                      color: c.whiteEnforced.withValues(alpha: 0.18),
-                    ),
-
-                    // Right: chevron tap area → install options dropdown
-                    TapRegion(
-                      groupId: groupId,
-                      child: GestureDetector(
-                        onTap: toggleDropdown,
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 8, right: 11),
-                          child: Center(
-                            child: Transform.rotate(
-                              angle: isDropdownOpen.value ? 3.14159 : 0.0,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: LabIcon(
-                                  LabIcons.chevronDown,
-                                  size: 8,
-                                  color: c.white66,
+              child: isExpandedOp
+                  ? Stack(
+                      children: [
+                        // ── Blurple progress fill (full button width) ──────
+                        // Sweeps left-to-right across the entire pill surface.
+                        // ClipRRect rounds the pill corners; no extra borderRadius
+                        // is needed on the fill itself.
+                        if (downloadProgress != null)
+                          Positioned.fill(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                widthFactor: downloadProgress,
+                                heightFactor: 1.0,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(gradient: c.blurple),
                                 ),
                               ),
                             ),
                           ),
+
+                        // ── Content row (rendered on top of the fill) ─────
+                        Positioned.fill(
+                          child: IntrinsicHeight(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.max,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: leftSection),
+                                divider,
+                                chevron,
+                              ],
+                            ),
+                          ),
                         ),
+                      ],
+                    )
+                  : IntrinsicHeight(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          leftSection,
+                          divider,
+                          chevron,
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
             ),
           ),
         ),
@@ -359,6 +448,22 @@ class SplitInstallButton extends HookConsumerWidget {
 
   void _resumeDownload(WidgetRef ref) =>
       ref.read(packageManagerProvider.notifier).resumeDownload(app.identifier);
+
+  void _cancelDownload(WidgetRef ref) =>
+      ref.read(packageManagerProvider.notifier).cancelDownload(app.identifier);
+
+  Future<void> _uninstall(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(packageManagerProvider.notifier).uninstall(app.identifier);
+    } catch (e) {
+      if (context.mounted) {
+        final msg = e.toString();
+        if (!msg.contains('cancelled')) {
+          context.showError('Uninstall failed', technicalDetails: msg);
+        }
+      }
+    }
+  }
 
   Future<void> _retryInstall(WidgetRef ref) =>
       ref.read(packageManagerProvider.notifier).retryInstall(app.identifier);

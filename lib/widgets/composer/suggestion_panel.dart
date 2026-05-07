@@ -7,6 +7,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 
 import 'package:zapstore/data/curated_emoji.dart';
+import 'package:zapstore/providers/custom_emoji_provider.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/color.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
@@ -188,63 +189,63 @@ class _ProfileMenu extends HookConsumerWidget {
 
 // ── Emoji menu (:) ────────────────────────────────────────────────────────────
 
-class _EmojiMenu extends StatefulWidget {
+class _EmojiMenu extends ConsumerStatefulWidget {
   const _EmojiMenu({required this.query, required this.onSelect});
 
   final String query;
   final void Function(EmojiEntry entry) onSelect;
 
   @override
-  State<_EmojiMenu> createState() => _EmojiMenuState();
+  ConsumerState<_EmojiMenu> createState() => _EmojiMenuState();
 }
 
-class _EmojiMenuState extends State<_EmojiMenu> {
-  // Mirrors webapp's `customEmojiInitPending`: shows the loading banner while
-  // the custom emoji fetch is in flight. Currently kind 10030/30030 are not
-  // yet in the models package, so we simulate the init with a brief delay.
-  bool _customEmojiLoading = true;
+class _EmojiMenuState extends ConsumerState<_EmojiMenu> {
   String _activeTab = 'emoji';
 
-  @override
-  void initState() {
-    super.initState();
-    // Show loading state briefly to indicate a fetch attempt is happening.
-    // Replace with actual Nostr query once kind 10030/30030 models are added.
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted) setState(() => _customEmojiLoading = false);
-    });
-  }
-
-  List<EmojiEntry> get _items {
+  List<EmojiEntry> _buildItems(List<EmojiEntry> customEntries) {
     final q = widget.query.trim().toLowerCase();
-    final matches = q.isEmpty
-        ? kCuratedEmoji.take(24)
-        : kCuratedEmoji.where((e) => e.shortcode.contains(q)).take(12);
-    return matches
+
+    // Custom emoji: filter by query or take first 12.
+    final custom = q.isEmpty
+        ? customEntries.take(12).toList()
+        : customEntries
+            .where((e) => e.shortcode.contains(q))
+            .take(12)
+            .toList();
+
+    // Unicode emoji: fill remaining slots up to 24 total.
+    final remaining = (24 - custom.length).clamp(0, 24);
+    final unicodeMatches = q.isEmpty
+        ? kCuratedEmoji.take(remaining)
+        : kCuratedEmoji.where((e) => e.shortcode.contains(q)).take(remaining);
+    final unicode = unicodeMatches
         .map((e) => EmojiEntry(
               shortcode: e.shortcode,
               display: e.emoji,
               source: EmojiSource.unicode,
             ))
         .toList(growable: false);
+
+    return [...custom, ...unicode];
   }
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final items = _items;
+
+    final (:loading, :entries) = ref.watch(customEmojiProvider);
+    final items = _buildItems(entries);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // .suggestion-tabs-row { padding: 8px; gap: 4px }
         _TabsRow(
           tabs: [
             _TabDef(
               id: 'emoji',
               label: 'Emoji',
-              loadingSpinner: _activeTab == 'emoji' && _customEmojiLoading,
+              loadingSpinner: _activeTab == 'emoji' && loading,
             ),
             const _TabDef(id: 'gifs', label: 'GIFs'),
           ],
@@ -256,20 +257,13 @@ class _EmojiMenuState extends State<_EmojiMenu> {
         if (_activeTab == 'gifs')
           _SuggestionEmpty(label: 'GIFs coming soon', colors: c)
         else ...[
-          // Custom emoji loading banner (matches CUSTOM_EMOJI_LOADING_ROW_HTML)
-          if (_customEmojiLoading)
-            _CustomEmojiLoadingBanner(colors: c),
-
-          // ConstrainedBox accounts for the loading banner (~38px) so total
-          // stays within the 280px cap from _SuggestionMenu.
+          if (loading) _CustomEmojiLoadingBanner(colors: c),
           if (items.isEmpty)
             _SuggestionEmpty(label: 'No emoji found', colors: c)
           else
             ConstrainedBox(
-              constraints: BoxConstraints(
-                  maxHeight: _customEmojiLoading ? 192 : 232),
-              child:
-                  _EmojiList(items: items, onSelect: widget.onSelect),
+              constraints: BoxConstraints(maxHeight: loading ? 192 : 232),
+              child: _EmojiList(items: items, onSelect: widget.onSelect),
             ),
         ],
       ],

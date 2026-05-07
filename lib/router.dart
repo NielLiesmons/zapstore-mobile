@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:models/models.dart';
+import 'package:models/models.dart'; // Comment, Utils, AddressData, etc.
 import 'package:zapstore/screens/home_screen.dart';
 import 'package:zapstore/screens/app_detail_screen.dart';
 import 'package:zapstore/screens/app_stacks_screen.dart';
@@ -11,7 +11,7 @@ import 'package:zapstore/screens/app_stack_screen.dart';
 import 'package:zapstore/screens/forum_post_screen.dart';
 import 'package:zapstore/screens/user_screen.dart';
 import 'package:zapstore/screens/updates_screen.dart';
-import 'package:zapstore/screens/profile_screen.dart';
+import 'package:zapstore/screens/profiles_screen.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/services/updates_service.dart';
 
@@ -111,9 +111,14 @@ GoRoute _forumPostRoute() {
     path: 'forum/:id',
     pageBuilder: (context, state) {
       final postId = state.pathParameters['id']!;
+      // Pre-loaded comments passed from ForumPostCard — shown immediately while
+      // the detail query completes, eliminating visible skeleton re-loading.
+      final initialComments = state.extra is List<Comment>
+          ? state.extra as List<Comment>
+          : null;
       return _slideTransitionPage(
         state: state,
-        child: ForumPostScreen(postId: postId),
+        child: ForumPostScreen(postId: postId, initialComments: initialComments),
       );
     },
   );
@@ -187,7 +192,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile',
         pageBuilder: (context, state) => _slideTransitionPage(
           state: state,
-          child: const ProfileScreen(),
+          child: const ProfilesScreen(),
         ),
         routes: [
           _appDetailRoute(),

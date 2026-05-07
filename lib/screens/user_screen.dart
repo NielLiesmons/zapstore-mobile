@@ -1,14 +1,21 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:zapstore/widgets/common/stack_link_card.dart';
 import 'package:zapstore/utils/extensions.dart';
+import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/utils/text_styles.dart';
 import '../theme.dart';
 import '../widgets/common/note_parser.dart';
 import '../widgets/common/profile_identity_row.dart';
 import '../widgets/app_card.dart';
 import '../widgets/zap_widgets.dart';
+import '../widgets/common/top_scroll_fader.dart';
 
 /// User profile screen - shows any user/developer profile
 class UserScreen extends HookConsumerWidget {
@@ -18,6 +25,10 @@ class UserScreen extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final scrollController = useScrollController();
+    final topPad = MediaQuery.paddingOf(context).top;
+    final headerHeight = topPad + 48.0;
+
     // Load user profile
     final profileState = ref.watch(
       query<Profile>(
@@ -78,75 +89,191 @@ class UserScreen extends HookConsumerWidget {
       ..sort((a, b) => b.event.createdAt.compareTo(a.event.createdAt));
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // Header with avatar and name
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: _UserHeader(
-                profile: profile,
-                pubkey: pubkey,
-                isLoading: profileState is StorageLoading && profile == null,
+      body: Stack(
+        children: [
+          // ── Full-body scrollable content (behind the floating header) ─────
+          Positioned.fill(
+            child: TopScrollFader(
+              scrollController: scrollController,
+              fadeStart: headerHeight,
+              child: SingleChildScrollView(
+                controller: scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(
+                  top: headerHeight + 10,
+                  bottom: MediaQuery.paddingOf(context).bottom + 32,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header with avatar and name
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: _UserHeader(
+                        profile: profile,
+                        pubkey: pubkey,
+                        isLoading:
+                            profileState is StorageLoading && profile == null,
+                      ),
+                    ),
+
+                    // Zaps widget
+                    _UserZapsList(apps: apps),
+
+                    // Bio section with max height
+                    if (profile?.about != null && profile!.about!.isNotEmpty)
+                      _UserBio(profile: profile),
+
+                    // Apps section - only show if apps exist
+                    if (apps.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                        child: Text(
+                          'Published Apps',
+                          style: context.textTheme.titleLarge,
+                        ),
+                      ),
+                      ...apps.map((app) => AppCard(app: app, showSignedBy: false)),
+                    ],
+
+                    // App stacks section - only show if stacks exist
+                    if (stacks.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
+                        child: Text(
+                          'App Stacks',
+                          style: context.textTheme.headlineMedium,
+                        ),
+                      ),
+                      ...stacks.map(
+                        (stack) => Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: StackLinkCard(stack: stack),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
 
-          // Zaps widget
-          SliverToBoxAdapter(child: _UserZapsList(apps: apps)),
-
-          // Bio section with max height
-          if (profile?.about != null && profile!.about!.isNotEmpty)
-            SliverToBoxAdapter(child: _UserBio(profile: profile)),
-
-          // Apps section - only show if apps exist
-          if (apps.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                child: Text(
-                  'Published Apps',
-                  style: context.textTheme.titleLarge,
-                ),
-              ),
-            ),
-            SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final app = apps[index];
-                return AppCard(app: app, showSignedBy: false);
-              }, childCount: apps.length),
-            ),
-          ],
-
-          // App stacks section - only show if stacks exist
-          if (stacks.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
-                child: Text(
-                  'App Stacks',
-                  style: context.textTheme.headlineMedium,
-                ),
-              ),
-            ),
-            SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final stack = stacks[index];
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: StackLinkCard(stack: stack),
-                );
-              }, childCount: stacks.length),
-            ),
-          ],
-
-          // Bottom padding
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+          // ── Floating blurred header (on top) ──────────────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _UserDetailHeader(pubkey: pubkey),
+          ),
         ],
       ),
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Floating blurred detail header
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _UserDetailHeader extends StatelessWidget {
+  const _UserDetailHeader({required this.pubkey});
+
+  final String pubkey;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    final topPad = MediaQuery.paddingOf(context).top;
+
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          color: c.black.withValues(alpha: 0.85),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: topPad + 9),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 9),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Back button
+                    GestureDetector(
+                      onTap: () => context.pop(),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: c.gray33,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 2),
+                            child: LabIcon(
+                              LabIcons.chevronLeft,
+                              size: 14,
+                              color: c.white33,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    // Title
+                    Expanded(
+                      child: Text(
+                        'Profile',
+                        style: LabTextStyles.semibold23.copyWith(color: c.white),
+                      ),
+                    ),
+
+                    // Share button
+                    GestureDetector(
+                      onTap: () {
+                        final npub = Utils.encodeShareableFromString(
+                          pubkey,
+                          type: 'npub',
+                        );
+                        SharePlus.instance
+                            .share(ShareParams(text: 'nostr:$npub'));
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: c.gray33,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Center(
+                          child: LabIcon(
+                            LabIcons.shareFill,
+                            size: 14,
+                            color: c.white33,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile identity row (avatar + name + npub)
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _UserHeader extends StatelessWidget {
   const _UserHeader({
@@ -172,6 +299,10 @@ class _UserHeader extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Zaps list
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _UserZapsList extends HookConsumerWidget {
   const _UserZapsList({required this.apps});
@@ -232,7 +363,6 @@ class _UserZapsList extends HookConsumerWidget {
     // Collect zapper pubkeys from metadata (already extracted from description tag)
     final zapperPubkeys = <String>{};
     for (final zap in allZaps) {
-      // The zapper's pubkey is in event.metadata['author'], extracted from description
       final zapperPubkey = zap.event.metadata['author'] as String?;
       if (zapperPubkey != null) {
         zapperPubkeys.add(zapperPubkey);
@@ -261,6 +391,10 @@ class _UserZapsList extends HookConsumerWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bio section
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _UserBio extends HookWidget {
   const _UserBio({required this.profile});

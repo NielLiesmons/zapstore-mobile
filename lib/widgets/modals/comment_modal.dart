@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:models/models.dart';
 
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/composer/nostr_composer.dart';
 import 'package:zapstore/widgets/composer/nostr_text_controller.dart'; // ComposerResult
+import 'package:zapstore/widgets/social/quoted_message.dart';
+import 'package:zapstore/widgets/social/quoted_zap_message.dart';
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -13,18 +16,33 @@ import 'package:zapstore/widgets/composer/nostr_text_controller.dart'; // Compos
 /// ModalNestScope for scale-down when the emoji picker opens on top).
 ///
 /// [placeholder] defaults to "Write your comment…".
+/// [quotedComment] — when set, renders a [QuotedMessage] block above the
+///   composer so the user sees the context they are replying to.
+/// [quotedZap] — when set, renders a [QuotedZapMessage] block above the
+///   composer (mutually exclusive with [quotedComment]; if both are passed
+///   [quotedComment] takes priority).
+/// [quotedAuthorName] — display name for the quoted author (used with
+///   [quotedZap] since the zap model does not carry a resolved profile).
 /// [onSubmit] receives the serialized [ComposerResult]; caller is responsible
 /// for publishing the Nostr event. Returning normally closes the sheet.
 /// Returning by throwing leaves it open (so the user doesn't lose their text).
 Future<void> showCommentModal(
   BuildContext context, {
   String placeholder = 'Write your comment…',
+  Comment? quotedComment,
+  Profile? quotedCommentAuthor,
+  Zap? quotedZap,
+  String? quotedAuthorName,
   Future<void> Function(ComposerResult result)? onSubmit,
 }) {
   return showModal<void>(
     context,
     builder: (_) => _CommentModalContent(
       placeholder: placeholder,
+      quotedComment: quotedComment,
+      quotedCommentAuthor: quotedCommentAuthor,
+      quotedZap: quotedZap,
+      quotedAuthorName: quotedAuthorName,
       onSubmit: onSubmit,
     ),
   );
@@ -35,10 +53,18 @@ Future<void> showCommentModal(
 class _CommentModalContent extends StatefulWidget {
   const _CommentModalContent({
     required this.placeholder,
+    this.quotedComment,
+    this.quotedCommentAuthor,
+    this.quotedZap,
+    this.quotedAuthorName,
     this.onSubmit,
   });
 
   final String placeholder;
+  final Comment? quotedComment;
+  final Profile? quotedCommentAuthor;
+  final Zap? quotedZap;
+  final String? quotedAuthorName;
   final Future<void> Function(ComposerResult result)? onSubmit;
 
   @override
@@ -59,9 +85,31 @@ class _CommentModalContentState extends State<_CommentModalContent> {
     }
   }
 
+  Widget? _buildQuote() {
+    if (widget.quotedComment != null) {
+      return QuotedMessage.fromComment(
+        widget.quotedComment!,
+        author: widget.quotedCommentAuthor,
+      );
+    }
+    if (widget.quotedZap != null) {
+      final name = widget.quotedAuthorName ?? 'Someone';
+      final content = widget.quotedZap!.event.content;
+      return QuotedZapMessage(
+        authorName: name,
+        amountSats: widget.quotedZap!.amount,
+        contentPreview: content,
+      );
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 14px padding on all sides, matching webapp .comment-sheet padding.
+    final quote = _buildQuote();
+
+    // Pass quotedContent directly into NostrComposer so it renders inside
+    // the black33 container, not as a separate element above it.
     return Padding(
       padding: const EdgeInsets.all(14),
       child: NostrComposer(
@@ -69,6 +117,7 @@ class _CommentModalContentState extends State<_CommentModalContent> {
         size: ComposerSize.medium,
         autofocus: true,
         showActionRow: true,
+        quotedContent: quote,
         onSubmit: _submitting ? null : _handleSubmit,
         onClose: () => Navigator.of(context).pop(),
       ),

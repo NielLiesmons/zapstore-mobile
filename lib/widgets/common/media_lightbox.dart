@@ -6,12 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 
-/// Opens a full-screen image lightbox matching webapp's MediaLightboxModal.svelte:
-///   • blurred dark backdrop, tap outside to close
+/// Opens a full-screen image lightbox:
+///   • blurred dark backdrop, tap outside the image to close
 ///   • X close button (top-right, circular)
-///   • prev/next chevron buttons (left/right, circular) when multiple images
-///   • swipeable PageView
-///   • dot indicators at bottom
+///   • swipeable PageView (no chevron buttons — native swipe on mobile)
+///   • dot indicators at bottom when multiple images
+///   • keyboard: Escape = close, ← / → = prev/next
 void showMediaLightbox(
   BuildContext context, {
   required List<String> urls,
@@ -76,9 +76,6 @@ class _MediaLightboxState extends State<MediaLightbox> {
     );
   }
 
-  void _prev() => _animateTo((_index - 1 + widget.urls.length) % widget.urls.length);
-  void _next() => _animateTo((_index + 1) % widget.urls.length);
-
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
@@ -90,23 +87,26 @@ class _MediaLightboxState extends State<MediaLightbox> {
       onKeyEvent: (e) {
         if (e is! KeyDownEvent) return;
         if (e.logicalKey == LogicalKeyboardKey.escape) Navigator.pop(context);
-        if (_hasMultiple && e.logicalKey == LogicalKeyboardKey.arrowLeft) _prev();
-        if (_hasMultiple && e.logicalKey == LogicalKeyboardKey.arrowRight) _next();
+        if (_hasMultiple && e.logicalKey == LogicalKeyboardKey.arrowLeft) _animateTo((_index - 1 + widget.urls.length) % widget.urls.length);
+        if (_hasMultiple && e.logicalKey == LogicalKeyboardKey.arrowRight) _animateTo((_index + 1) % widget.urls.length);
       },
       child: Stack(
         children: [
-          // ── Blurred dark backdrop — tap to close ────────────────────────
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
+          // ── Blurred dark backdrop (fills screen, no tap handler needed —
+          //    tap-to-close is handled per-page in _ImagePage) ─────────────
+          Positioned.fill(
             child: ClipRect(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                child: ColoredBox(color: c.black.withValues(alpha: 0.92)),
+                child: ColoredBox(
+                  color: c.black.withValues(alpha: 0.92),
+                  child: const SizedBox.expand(),
+                ),
               ),
             ),
           ),
 
-          // ── Swipeable images ─────────────────────────────────────────────
+          // ── Swipeable images (each page handles tap-outside-to-close) ───
           PageView.builder(
             controller: _ctrl,
             itemCount: widget.urls.length,
@@ -123,32 +123,6 @@ class _MediaLightboxState extends State<MediaLightbox> {
               child: LabIcon(LabIcons.cross, size: 16, color: c.white),
             ),
           ),
-
-          // ── Prev / Next ─────────────────────────────────────────────────
-          if (_hasMultiple) ...[
-            Positioned(
-              left: 16,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _CircleBtn(
-                  onTap: _prev,
-                  child: LabIcon(LabIcons.chevronLeft, size: 16, color: c.white),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 16,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _CircleBtn(
-                  onTap: _next,
-                  child: LabIcon(LabIcons.chevronRight, size: 16, color: c.white),
-                ),
-              ),
-            ),
-          ],
 
           // ── Dot indicators ──────────────────────────────────────────────
           if (_hasMultiple)
@@ -195,32 +169,38 @@ class _ImagePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    // Absorb taps so they don't bubble to the backdrop GestureDetector.
+    // Tap anywhere outside the image card closes the lightbox.
+    // An inner GestureDetector on the card itself absorbs the tap so that
+    // tapping the image does NOT trigger close.
     return GestureDetector(
-      onTap: () {},
+      onTap: () => Navigator.pop(context),
+      behavior: HitTestBehavior.opaque,
       child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: c.white.withValues(alpha: 0.16),
-                width: 0.33,
-              ),
-              color: c.gray33,
-              boxShadow: [
-                BoxShadow(
-                  color: c.black.withValues(alpha: 0.33),
-                  blurRadius: 80,
-                  spreadRadius: 20,
+        child: GestureDetector(
+          onTap: () {},
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: c.white.withValues(alpha: 0.16),
+                  width: 0.33,
                 ),
-              ],
-            ),
-            clipBehavior: Clip.hardEdge,
-            child: CachedNetworkImage(
-              imageUrl: url,
-              fit: BoxFit.contain,
+                color: c.gray33,
+                boxShadow: [
+                  BoxShadow(
+                    color: c.black.withValues(alpha: 0.33),
+                    blurRadius: 80,
+                    spreadRadius: 20,
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.contain,
+              ),
             ),
           ),
         ),

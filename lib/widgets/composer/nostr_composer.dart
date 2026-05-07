@@ -374,24 +374,25 @@ class _ActionRow extends StatelessWidget {
           // Left cluster: camera / emoji / plus — gap 8px (.action-buttons-left)
           Row(
             children: [
-              // Icon sizes scaled 26/32 ≈ 0.81× vs webapp's 32px buttons.
+              // Buttons at 30px height — matches primaryXs/secondaryXs height tier.
               _ActionBtn(
                 icon: LabIcons.camera,
-                iconSize: 16,
+                iconSize: 15,
                 onTap: onCameraTap,
                 colors: c,
               ),
               const SizedBox(width: 8),
               _ActionBtn(
                 icon: LabIcons.emojiFill,
-                iconSize: 14,
+                iconSize: 18,
                 onTap: onEmojiTap,
                 colors: c,
               ),
               const SizedBox(width: 8),
               _ActionBtn(
                 icon: LabIcons.plus,
-                iconSize: 12,
+                iconSize: 15,
+                thick: true, // 3.2px stroke variant
                 onTap: onAddTap,
                 colors: c,
               ),
@@ -418,12 +419,14 @@ class _ActionBtn extends StatefulWidget {
     required this.iconSize,
     required this.colors,
     this.onTap,
+    this.thick = false,
   });
 
   final String icon;
   final double iconSize;
   final LabColors colors;
   final VoidCallback? onTap;
+  final bool thick;
 
   @override
   State<_ActionBtn> createState() => _ActionBtnState();
@@ -446,16 +449,16 @@ class _ActionBtnState extends State<_ActionBtn> {
         scale: _pressed ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 80),
         child: Container(
-          // 26×26px — matches .btn-primary-xs/.btn-secondary-xs height (26px).
-          // Webapp uses 32px; mobile target is slightly smaller.
-          width: 26,
-          height: 26,
+          // 30×30px — matches primaryXs/secondaryXs height tier.
+          width: 30,
+          height: 30,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: c.white8,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(7),
           ),
-          child: LabIcon(widget.icon, size: widget.iconSize, color: c.white33),
+          child: LabIcon(widget.icon, size: widget.iconSize, color: c.white33,
+              thick: widget.thick),
         ),
       ),
     );
@@ -503,32 +506,32 @@ class _SendButtonState extends State<_SendButton> {
           scale: _pressed ? 0.93 : 1.0,
           duration: const Duration(milliseconds: 80),
           child: Container(
-            // 26px height — matches 26px action btn height.
-            height: 26,
+            // 30px height — matches the 30px action buttons in the same row.
+            height: 30,
             decoration: BoxDecoration(
               gradient: c.blurple as LinearGradient?,
               color: c.blurple is! LinearGradient ? c.blurpleColor : null,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(7),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Send icon area — padding scaled 12→9
+                // Send icon area
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 9),
-                  child: LabIcon(LabIcons.send, size: 13, color: c.whiteEnforced),
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  child: LabIcon(LabIcons.send, size: 15, color: c.whiteEnforced),
                 ),
 
                 // .send-divider
                 Container(
                   width: LabStroke.thin,
-                  height: 26,
+                  height: 30,
                   color: c.white33,
                 ),
 
-                // .chevron-btn — padding scaled 8→6, icon scaled 8→7
+                // .chevron-btn — 1px top offset to optically centre the caret
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  padding: const EdgeInsets.fromLTRB(7, 1, 7, 0),
                   child: LabIcon(
                     LabIcons.chevronDown,
                     size: 7,

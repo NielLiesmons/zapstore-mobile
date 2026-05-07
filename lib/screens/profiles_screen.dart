@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
-import 'package:async_button_builder/async_button_builder.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +21,7 @@ import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/base_dialog.dart';
+import 'package:zapstore/widgets/common/button.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/common/stack_link_card.dart';
 import 'package:zapstore/widgets/common/top_scroll_fader.dart';
@@ -30,19 +30,23 @@ import 'package:zapstore/widgets/nwc_widgets.dart';
 import 'package:zapstore/widgets/relay_management_card.dart';
 import 'package:zapstore/screens/app_stacks_screen.dart';
 import 'package:zapstore/theme.dart';
-import 'package:zapstore/widgets/onboarding/profile_name_modal.dart';
-import 'package:zapstore/widgets/onboarding/spin_key_modal.dart';
 import 'package:zapstore/providers/theme_mode.dart';
+import 'package:zapstore/services/local_signer_service.dart';
+import 'package:zapstore/utils/debug_utils.dart';
+import 'package:zapstore/utils/key_generator.dart';
 import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/widgets/common/selector.dart';
+import 'package:zapstore/widgets/onboarding/get_started_modal.dart';
+import 'package:zapstore/widgets/onboarding/spin_key_modal.dart';
+import 'package:zapstore/widgets/onboarding/use_existing_key_modal.dart';
 import 'package:zapstore/widgets/settings/profile_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ProfileScreen — profile cards + settings list
+// ProfilesScreen — profile cards + settings list
 // ─────────────────────────────────────────────────────────────────────────────
 
-class ProfileScreen extends HookConsumerWidget {
-  const ProfileScreen({super.key});
+class ProfilesScreen extends HookConsumerWidget {
+  const ProfilesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -130,7 +134,7 @@ class _ProfileHeader extends StatelessWidget {
                     const SizedBox(width: 12),
                     Text(
                       'Profiles',
-                      style: LabTextStyles.semibold22.copyWith(color: c.white),
+                      style: LabTextStyles.semibold23.copyWith(color: c.white),
                     ),
                   ],
                 ),
@@ -195,36 +199,24 @@ class _SignedInContent extends ConsumerWidget {
       children: [
         const SizedBox(height: 8),
 
+        // ── Full-width divider above cards ──────────────────────────────────
+        Container(height: LabStroke.medium, color: c.white8),
+
         // ── Profile cards row ───────────────────────────────────────────────
         _ProfileCardsRow(activePubkey: activePubkey),
 
-        const SizedBox(height: 24),
+        // ── Full-width divider below cards ──────────────────────────────────
+        Container(height: LabStroke.medium, color: c.white8),
 
-        // ── Settings list ───────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'SETTINGS',
-                style: LabTextStyles.eyebrow11.copyWith(color: c.white33),
-              ),
-              const SizedBox(height: 10),
-              _SettingsList(activePubkey: activePubkey),
-            ],
-          ),
-        ),
+        // ── Settings list (full-width, dividers edge-to-edge) ───────────────
+        _SettingsList(activePubkey: activePubkey),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 14),
 
         // ── Disconnect Profile ──────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: _DisconnectButton(
-            activePubkey: activePubkey,
-            activeProfile: activeProfile,
-          ),
+        _DisconnectButton(
+          activePubkey: activePubkey,
+          activeProfile: activeProfile,
         ),
       ],
     );
@@ -279,7 +271,7 @@ class _ProfileCardsRow extends ConsumerWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.all(14),
         child: Row(
           children: [
             // Active profile card
@@ -305,7 +297,7 @@ class _ProfileCardsRow extends ConsumerWidget {
             // Add Profile
             const SizedBox(width: 12),
             AddProfileCard(
-              onTap: () => _showAddProfileModal(context, ref),
+              onTap: () => _launchOnboarding(context, ref),
             ),
 
             // Right edge buffer so last card clears the fade zone
@@ -315,22 +307,51 @@ class _ProfileCardsRow extends ConsumerWidget {
       ),
     );
   }
+}
 
-  void _showAddProfileModal(BuildContext context, WidgetRef ref) {
-    final pmState = ref.read(packageManagerProvider);
-    final isAmberInstalled = pmState.installed.containsKey(kAmberPackageId);
-    showModal(
-      context,
-      title: 'Add Profile',
-      builder: (_) => _AddProfileModalContent(
-        isAmberInstalled: isAmberInstalled,
-      ),
-    );
+// ─────────────────────────────────────────────────────────────────────────────
+// Onboarding helpers — slot machine flow
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Launches the profile-creation onboarding: name → slot machine.
+/// Used from both the signed-out full-width card and the Add Profile card in
+/// the signed-in horizontal row.
+void _launchOnboarding(BuildContext context, WidgetRef ref) {
+  showGetStartedModal(
+    context,
+    onContinue: (name) {
+      showSpinKeyModal(
+        context,
+        profileName: name,
+        onSpinComplete: (nsec) => _handleNewKey(context, ref, nsec),
+        onUseExistingKey: () => showUseExistingKeyModal(context),
+      );
+    },
+    onUseExistingKey: () => showUseExistingKeyModal(context),
+  );
+}
+
+Future<void> _handleNewKey(
+  BuildContext context,
+  WidgetRef ref,
+  String nsec,
+) async {
+  try {
+    await ref.read(localSignerServiceProvider).saveNsec(nsec);
+    final hex = KeyGenerator.nsecToHex(nsec);
+    final signer = Bip340PrivateKeySigner(hex, ref.asRef);
+    await signer.signIn();
+    await onSignInSuccess(ref.read(refProvider));
+    if (context.mounted) context.go('/');
+  } catch (e) {
+    if (context.mounted) {
+      context.showError('Sign in failed', technicalDetails: '$e');
+    }
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Settings list (grouped panel with chevron rows)
+// Settings list — full-width rows with hairline dividers, no panel background
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SettingsList extends ConsumerWidget {
@@ -349,9 +370,9 @@ class _SettingsList extends ConsumerWidget {
 
     final themeName = switch (themeMode) {
       AppThemeMode.system => 'System',
-      AppThemeMode.light => 'Light',
-      AppThemeMode.gray => 'Gray',
-      AppThemeMode.dark => 'Dark',
+      AppThemeMode.light  => 'Light',
+      AppThemeMode.dark   => 'Dark',
+      AppThemeMode.black  => 'Black',
     };
     final scaleName = switch (textScale) {
       TextScalePreset.small => 'Small text',
@@ -363,7 +384,6 @@ class _SettingsList extends ConsumerWidget {
       _SettingsItemData(
         icon: LabIcons.zap,
         iconGradient: c.gold,
-        iconBgColor: c.goldColor.withValues(alpha: 0.15),
         title: 'Wallet',
         description: 'Lightning wallet connection',
         onTap: () => showModal(
@@ -375,7 +395,6 @@ class _SettingsList extends ConsumerWidget {
       _SettingsItemData(
         icon: LabIcons.appearance,
         iconGradient: c.graydient66,
-        iconBgColor: c.white8,
         title: 'Preferences',
         description: '$themeName · $scaleName',
         onTap: () => showModal(
@@ -387,7 +406,6 @@ class _SettingsList extends ConsumerWidget {
       _SettingsItemData(
         icon: LabIcons.security,
         iconGradient: c.blurple,
-        iconBgColor: c.blurpleColor33,
         title: 'Security',
         description: 'Signer, keys, backups',
         onTap: () => showModal(
@@ -399,20 +417,16 @@ class _SettingsList extends ConsumerWidget {
       _SettingsItemData(
         icon: LabIcons.backup,
         iconGradient: c.blurple66,
-        iconBgColor: c.blurpleColor33.withValues(alpha: 0.55),
         title: 'Hosting & Backups',
         description: 'Relays, data, stacks',
         onTap: () => showModal(
           context,
           title: 'Hosting & Backups',
           builder: (_) => _HostingModalContent(pubkey: activePubkey),
-          fillHeight: true,
         ),
       ),
       _SettingsItemData(
         icon: LabIcons.info,
-        iconGradient: null,
-        iconBgColor: c.white8,
         iconColor: c.white33,
         title: 'Help & Support',
         description: 'About, version, debug',
@@ -420,13 +434,11 @@ class _SettingsList extends ConsumerWidget {
           context,
           title: 'Help & Support',
           builder: (_) => const _HelpModalContent(),
-          fillHeight: true,
         ),
       ),
       _SettingsItemData(
         icon: LabIcons.crown,
         iconGradient: c.gold,
-        iconBgColor: c.goldColor.withValues(alpha: 0.15),
         title: 'Zapstore Pro',
         description: 'Unlock premium features',
         onTap: () => showModal(
@@ -437,26 +449,15 @@ class _SettingsList extends ConsumerWidget {
       ),
     ];
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(LabRadius.r20),
-      child: Container(
-        color: c.gray33,
-        child: Column(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              if (i > 0)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    height: LabStroke.thin,
-                    color: c.white11,
-                  ),
-                ),
-              _SettingsItem(data: items[i]),
-            ],
-          ],
-        ),
-      ),
+    return Column(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0)
+            Container(height: LabStroke.medium, color: c.white8),
+          _SettingsItem(data: items[i]),
+        ],
+        Container(height: LabStroke.medium, color: c.white8),
+      ],
     );
   }
 }
@@ -468,7 +469,6 @@ class _SettingsList extends ConsumerWidget {
 class _SettingsItemData {
   const _SettingsItemData({
     required this.icon,
-    required this.iconBgColor,
     required this.title,
     required this.description,
     required this.onTap,
@@ -477,7 +477,6 @@ class _SettingsItemData {
   });
 
   final String icon;
-  final Color iconBgColor;
   final Gradient? iconGradient;
   final Color? iconColor;
   final String title;
@@ -513,25 +512,22 @@ class _SettingsItemState extends State<_SettingsItem> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 80),
         color: _pressed ? c.white4 : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            // Icon container
+            // Icon square — all items share gray66 bg, only icon differs
             Container(
-              width: 38,
-              height: 38,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: d.iconBgColor,
-                borderRadius: BorderRadius.circular(LabRadius.r11),
+                color: c.gray66,
+                borderRadius: BorderRadius.circular(LabRadius.r12),
               ),
               child: Center(
                 child: d.iconGradient != null
-                    ? LabIcon(d.icon,
-                        size: 20, gradient: d.iconGradient, thick: false)
-                    : LabIcon(d.icon,
-                        size: 20,
-                        color: d.iconColor ?? c.white66,
-                        thick: false),
+                    ? LabIcon(d.icon, size: 22, gradient: d.iconGradient)
+                    : LabIcon(d.icon, size: 22,
+                        color: d.iconColor ?? c.white66),
               ),
             ),
 
@@ -544,12 +540,12 @@ class _SettingsItemState extends State<_SettingsItem> {
                 children: [
                   Text(
                     d.title,
-                    style: LabTextStyles.semibold15.copyWith(color: c.white),
+                    style: LabTextStyles.med15.copyWith(color: c.white),
                   ),
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 2),
                   Text(
                     d.description,
-                    style: LabTextStyles.reg13.copyWith(color: c.white33),
+                    style: LabTextStyles.reg13.copyWith(color: c.white66),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -560,11 +556,9 @@ class _SettingsItemState extends State<_SettingsItem> {
             const SizedBox(width: 8),
 
             // Chevron
-            LabIcon(
-              LabIcons.chevronRight,
-              size: 16,
-              color: c.white33,
-            ),
+            LabIcon(LabIcons.chevronRight, size: 16, color: c.white33),
+
+            const SizedBox(width: 2),
           ],
         ),
       ),
@@ -576,7 +570,7 @@ class _SettingsItemState extends State<_SettingsItem> {
 // Disconnect Profile button
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DisconnectButton extends ConsumerStatefulWidget {
+class _DisconnectButton extends ConsumerWidget {
   const _DisconnectButton({
     required this.activePubkey,
     this.activeProfile,
@@ -586,48 +580,27 @@ class _DisconnectButton extends ConsumerStatefulWidget {
   final Profile? activeProfile;
 
   @override
-  ConsumerState<_DisconnectButton> createState() => _DisconnectButtonState();
-}
-
-class _DisconnectButtonState extends ConsumerState<_DisconnectButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
 
-    final label = widget.activeProfile?.name?.trim().isNotEmpty == true
-        ? 'Disconnect ${widget.activeProfile!.name}'
+    final label = activeProfile?.name?.trim().isNotEmpty == true
+        ? 'Disconnect ${activeProfile!.name}'
         : 'Disconnect Profile';
 
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        _confirmDisconnect(context);
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        child: Container(
-          width: double.infinity,
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: c.gray33,
-            borderRadius: BorderRadius.circular(LabRadius.r14),
-          ),
-          child: Text(
-            label,
-            style: LabTextStyles.med15.copyWith(color: c.rougeColor),
-          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: SizedBox(
+        width: double.infinity,
+        child: LabButton.secondary(
+          onTap: () => _confirmDisconnect(context, ref),
+          color: c.gray33,
+          child: Text(label, style: LabTextStyles.med15.copyWith(color: c.white66)),
         ),
       ),
     );
   }
 
-  Future<void> _confirmDisconnect(BuildContext context) async {
+  Future<void> _confirmDisconnect(BuildContext context, WidgetRef ref) async {
     final confirmed = await showConfirm(
       context,
       title: 'Disconnect Profile',
@@ -638,6 +611,7 @@ class _DisconnectButtonState extends ConsumerState<_DisconnectButton> {
     );
     if (confirmed == true && context.mounted) {
       try {
+        await ref.read(localSignerServiceProvider).clearNsec();
         await ref.read(amberSignerProvider).signOut();
         if (context.mounted) context.go('/');
       } catch (e) {
@@ -653,72 +627,101 @@ class _DisconnectButtonState extends ConsumerState<_DisconnectButton> {
 // Signed-out content
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Signed-out layout — mirrors the signed-in structure but without a profile.
+///
+/// Shows a full-width (non-scrollable) "Add Profile" card where the horizontal
+/// cards row would be, plus the settings that are available without an account
+/// (Preferences, Help & Support).
 class _SignedOutContent extends ConsumerWidget {
   const _SignedOutContent();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final pmState = ref.watch(packageManagerProvider);
-    final isAmberInstalled = pmState.installed.containsKey(kAmberPackageId);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
 
-          // Sign-in card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: c.gray33,
-              borderRadius: BorderRadius.circular(LabRadius.r20),
-              border: LabBorder.all(color: c.white11, width: LabStroke.thin),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: c.white8,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: LabIcon(
-                          LabIcons.profile,
-                          size: 20,
-                          color: c.white33,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        'Sign in to unlock social features',
-                        style: LabTextStyles.semibold15.copyWith(color: c.white),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: _SignInButtonWithAmberCheck(
-                    isAmberInstalled: isAmberInstalled,
-                  ),
-                ),
-              ],
-            ),
+        // ── Full-width "Add Profile" card — identical to the in-row card ─────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: AddProfileCard(
+            fullWidth: true,
+            onTap: () => _launchOnboarding(context, ref),
           ),
-        ],
+        ),
+
+        const SizedBox(height: 20),
+
+        // ── Full-width divider ────────────────────────────────────────────────
+        Container(height: LabStroke.medium, color: c.white8),
+
+        // ── Settings available without a profile (full-width) ─────────────────
+        _SignedOutSettingsList(),
+      ],
+    );
+  }
+}
+
+/// Subset of settings accessible without a signed-in profile.
+class _SignedOutSettingsList extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    final themeMode =
+        ref.watch(themeModeProvider).valueOrNull ?? AppThemeMode.dark;
+    final textScale =
+        ref.watch(textScalePresetProvider).valueOrNull ?? TextScalePreset.normal;
+
+    final themeName = switch (themeMode) {
+      AppThemeMode.system => 'System',
+      AppThemeMode.light  => 'Light',
+      AppThemeMode.dark   => 'Dark',
+      AppThemeMode.black  => 'Black',
+    };
+    final scaleName = switch (textScale) {
+      TextScalePreset.small => 'Small text',
+      TextScalePreset.normal => 'Normal text',
+      TextScalePreset.large => 'Large text',
+    };
+
+    final items = [
+      _SettingsItemData(
+        icon: LabIcons.appearance,
+        iconGradient: c.graydient66,
+        title: 'Preferences',
+        description: '$themeName · $scaleName',
+        onTap: () => showModal(
+          context,
+          title: 'Preferences',
+          builder: (_) => const _PreferencesModalContent(),
+        ),
       ),
+      _SettingsItemData(
+        icon: LabIcons.info,
+        iconColor: c.white33,
+        title: 'Help & Support',
+        description: 'About, version, debug',
+        onTap: () => showModal(
+          context,
+          title: 'Help & Support',
+          builder: (_) => const _HelpModalContent(),
+        ),
+      ),
+    ];
+
+    return Column(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0)
+            Container(height: LabStroke.medium, color: c.white8),
+          _SettingsItem(data: items[i]),
+        ],
+        Container(height: LabStroke.medium, color: c.white8),
+      ],
     );
   }
 }
@@ -734,7 +737,7 @@ class _WalletModalContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
+    return const Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: NWCConnectionCard(),
     );
@@ -755,7 +758,7 @@ class _PreferencesModalContent extends ConsumerWidget {
     final textScale =
         ref.watch(textScalePresetProvider).valueOrNull ?? TextScalePreset.normal;
 
-    final themeIndex = themeMode.index; // system=0, light=1, gray=2, dark=3
+    final themeIndex = themeMode.index; // system=0, light=1, dark=2, black=3
     final scaleIndex = textScale.index; // small=0, normal=1, large=2
 
     return Padding(
@@ -764,19 +767,22 @@ class _PreferencesModalContent extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Theme ──────────────────────────────────────────────────────────
-          Text(
-            'THEME',
-            style: LabTextStyles.eyebrow11.copyWith(color: c.white33),
+          Padding(
+            padding: const EdgeInsets.only(left: 14),
+            child: Text(
+              'THEME',
+              style: LabTextStyles.eyebrow15.copyWith(color: c.white33),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 7),
           Selector(
             initialIndex: themeIndex,
             dark: true,
             tabs: const [
               SelectorTab(label: 'System'),
               SelectorTab(label: 'Light'),
-              SelectorTab(label: 'Gray'),
               SelectorTab(label: 'Dark'),
+              SelectorTab(label: 'Black'),
             ],
             onChanged: (index) {
               final mode = AppThemeMode.values[index];
@@ -787,11 +793,14 @@ class _PreferencesModalContent extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // ── Text Size ──────────────────────────────────────────────────────
-          Text(
-            'TEXT SIZE',
-            style: LabTextStyles.eyebrow11.copyWith(color: c.white33),
+          Padding(
+            padding: const EdgeInsets.only(left: 14),
+            child: Text(
+              'TEXT SIZE',
+              style: LabTextStyles.eyebrow15.copyWith(color: c.white33),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 7),
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
@@ -887,7 +896,7 @@ class _SecurityModalContent extends ConsumerWidget {
         children: [
           OutlinedButton.icon(
             onPressed: () {
-              showProfileNameModal(context, onContinue: (name) {
+              showGetStartedModal(context, onContinue: (name) {
                 showSpinKeyModal(
                   context,
                   profileName: name,
@@ -924,7 +933,7 @@ class _HostingModalContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
       child: Column(
         children: [
@@ -948,7 +957,7 @@ class _HelpModalContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
+    return const Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 40),
       child: Column(
         children: [
@@ -981,85 +990,8 @@ class _ZapstoreProModalContent extends StatelessWidget {
 
 // Add Profile ─────────────────────────────────────────────────────────────────
 
-class _AddProfileModalContent extends ConsumerWidget {
-  const _AddProfileModalContent({required this.isAmberInstalled});
-
-  final bool isAmberInstalled;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = Theme.of(context).extension<LabColors>()!;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Sign in with an additional profile to switch between accounts.',
-            style: LabTextStyles.reg15.copyWith(color: c.white66),
-          ),
-          const SizedBox(height: 20),
-          _SignInButtonWithAmberCheck(isAmberInstalled: isAmberInstalled),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sign-in button (Amber)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SignInButtonWithAmberCheck extends ConsumerWidget {
-  const _SignInButtonWithAmberCheck({required this.isAmberInstalled});
-
-  final bool isAmberInstalled;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return AsyncButtonBuilder(
-      onPressed: () async {
-        if (!isAmberInstalled) {
-          context.push('/profile/app/$kAmberNaddr');
-        } else {
-          await ref.read(amberSignerProvider).signIn();
-        }
-      },
-      builder: (context, child, callback, state) {
-        final onPressed = state.maybeWhen(loading: () => null, orElse: () => callback);
-        final loading = state.maybeWhen(loading: () => true, orElse: () => false);
-
-        return FilledButton(
-          onPressed: onPressed,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          ),
-          child: loading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.login, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      isAmberInstalled
-                          ? 'Sign in with Amber'
-                          : 'Install Amber to sign in',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ],
-                ),
-        );
-      },
-      child: const SizedBox.shrink(),
-    );
-  }
-}
+// _AddProfileModalContent is no longer used — the Add Profile card taps
+// directly launch the slot-machine onboarding flow via _launchOnboarding.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Below: existing private widgets preserved for modal content

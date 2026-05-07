@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/models/forum_post.dart';
@@ -42,7 +43,11 @@ class ForumPostCard extends HookConsumerWidget {
   });
 
   final ForumPost post;
-  final VoidCallback? onTap;
+
+  /// Called when the card is tapped. Receives the currently loaded
+  /// [Comment] list so the detail screen can display them immediately
+  /// without waiting for a new query to complete.
+  final void Function(List<Comment> comments)? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -124,10 +129,10 @@ class ForumPostCard extends HookConsumerWidget {
     final labels = post.topics.toList();
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: onTap != null ? () => onTap!(comments) : null,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(color: c.white11, width: 0.33),
@@ -219,7 +224,7 @@ class ForumPostCard extends HookConsumerWidget {
                               content,
                               style: LabTextStyles.reg15
                                   .copyWith(color: c.white66),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -261,11 +266,11 @@ class ForumPostCard extends HookConsumerWidget {
                         child: ProfilePicStack(
                           profiles: commentersWithProfiles,
                           text: _stackText(commentersWithProfiles, comments.length),
-                          suffix: comments.length > 3
+                          suffix: comments.isNotEmpty
                               ? comments.length.toString()
                               : '',
                           avatarSize: 24,
-                          onTap: onTap,
+                          onTap: onTap != null ? () => onTap!(comments) : null,
                         ),
                       ),
                     ),
@@ -294,27 +299,44 @@ class ForumPostCard extends HookConsumerWidget {
 // Labels row — scrollable, edge-faded, using LabLabel
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _LabelsRow extends StatelessWidget {
+class _LabelsRow extends HookWidget {
   const _LabelsRow({required this.labels});
 
   final List<String> labels;
 
   @override
   Widget build(BuildContext context) {
+    final scrollController = useScrollController();
+    final isScrolled = useState(false);
+
+    useEffect(() {
+      void listener() {
+        final atStart = scrollController.offset <= 0;
+        if (isScrolled.value == atStart) {
+          isScrolled.value = !atStart;
+        }
+      }
+      scrollController.addListener(listener);
+      return () => scrollController.removeListener(listener);
+    }, [scrollController]);
+
+    final leftStop = isScrolled.value ? 0.03 : 0.0;
+
     return ShaderMask(
-      shaderCallback: (bounds) => const LinearGradient(
+      shaderCallback: (bounds) => LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
-        colors: [
+        colors: const [
           Colors.transparent,
           Colors.black,
           Colors.black,
           Colors.transparent,
         ],
-        stops: [0.0, 0.03, 0.92, 1.0],
+        stops: [0.0, leftStop, 0.92, 1.0],
       ).createShader(bounds),
       blendMode: BlendMode.dstIn,
       child: SingleChildScrollView(
+        controller: scrollController,
         scrollDirection: Axis.horizontal,
         child: Row(
           children: labels
@@ -396,7 +418,7 @@ class ForumPostCardSkeleton extends StatelessWidget {
     final c = Theme.of(context).extension<LabColors>()!;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: c.white11, width: 0.33),

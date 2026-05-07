@@ -49,7 +49,7 @@ Future<T?> showModal<T>(
   WidgetBuilder? footer,
   bool isDismissible = true,
   bool fillHeight = false,
-  double maxHeightFactor = 0.618,
+  double maxHeightFactor = 0.75,
 }) {
   final c = Theme.of(context).extension<LabColors>()!;
 
@@ -125,7 +125,7 @@ class _AppModalSurface extends StatefulWidget {
     this.description,
     this.footer,
     this.fillHeight = false,
-    this.maxHeightFactor = 0.618,
+    this.maxHeightFactor = 0.75,
   });
 
   final Widget child;
@@ -214,6 +214,22 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
     // ValueListenableBuilder drives a ShaderMask without rebuilding the child.
     // We always return ShaderMask (never swap widget types) to avoid detaching
     // the ScrollPosition — same pattern as TopScrollFader.
+    //
+    // When a title is present the modal owns the SingleChildScrollView so the
+    // title scrolls with the content instead of being pinned as a fixed header.
+    // In that case widget.child must be a non-scrolling widget (Padding/Column).
+    final Widget scrollContent = widget.title != null
+        ? SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _TitleBlock(widget.title!, widget.description, c),
+                widget.child,
+              ],
+            ),
+          )
+        : widget.child;
+
     final scrollableChild = NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification.depth == 0) {
@@ -234,25 +250,22 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
                 Colors.black.withValues(alpha: 1.0 - t),
                 Colors.black,
               ],
-            ).createShader(Rect.fromLTWH(0, 0, bounds.width, 17.0)),
+            ).createShader(Rect.fromLTWH(0, 0, bounds.width, 22.0)),
             blendMode: BlendMode.dstIn,
             child: inner!,
           );
         },
-        child: widget.child,
+        child: scrollContent,
       ),
     );
 
-    // The inner column: [optional title block] + [scrollable content] + [footer]
+    // The inner column: [scrollable content (title inside)] + [footer]
     Widget contentColumn = Column(
       mainAxisSize:
           widget.fillHeight ? MainAxisSize.max : MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Title block ───────────────────────────────────────────────────
-        if (widget.title != null) _TitleBlock(widget.title!, widget.description, c),
-
-        // ── Scrollable body ───────────────────────────────────────────────
+        // ── Scrollable body (title scrolls inside when present) ───────────
         if (widget.fillHeight)
           Expanded(child: scrollableChild)
         else
@@ -362,20 +375,26 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 32, 16, 0),
+      padding: EdgeInsets.fromLTRB(16, description != null ? 24 : 28, 16, 0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             title,
-            style: LabTextStyles.semibold22.copyWith(color: c.white),
+            style: LabTextStyles.semibold23.copyWith(
+              color: c.white,
+              fontSize: 26,
+              letterSpacing: -0.4,
+              height: 1.2,
+            ),
+            textAlign: TextAlign.center,
           ),
           if (description != null) ...[
             const SizedBox(height: 10),
             Text(
               description!,
               style: LabTextStyles.reg15.copyWith(color: c.white66),
-              textAlign: TextAlign.start,
+              textAlign: TextAlign.center,
             ),
           ],
         ],
@@ -491,14 +510,14 @@ class _ConfirmContent extends StatelessWidget {
                     child: icon!,
                   ),
                   const SizedBox(width: 8),
-                  Text(title, style: LabTextStyles.semibold22.copyWith(color: c.white)),
+                  Text(title, style: LabTextStyles.semibold23.copyWith(color: c.white)),
                 ],
               ),
             )
           else
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Text(title, style: LabTextStyles.semibold22.copyWith(color: c.white)),
+              child: Text(title, style: LabTextStyles.semibold23.copyWith(color: c.white)),
             ),
 
           Text(message, style: LabTextStyles.reg15.copyWith(color: c.white66)),
@@ -553,7 +572,7 @@ Future<T?> showAppSheet<T>(
   bool isDismissible = true,
   bool enableDrag = false,
   bool showDragHandle = false,
-  double maxHeightFactor = 0.618,
+  double maxHeightFactor = 0.75,
 }) =>
     showModal<T>(context,
         isDismissible: isDismissible,
@@ -626,7 +645,7 @@ class BaseDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DefaultTextStyle(
-            style: LabTextStyles.semibold22.copyWith(color: c.white),
+            style: LabTextStyles.semibold23.copyWith(color: c.white),
             child: titleIcon != null
                 ? Row(children: [
                     DefaultTextStyle.merge(
@@ -684,7 +703,7 @@ class BaseDialogTitle extends StatelessWidget {
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
-      child: Text(text, style: style ?? LabTextStyles.semibold22.copyWith(color: c.white)),
+      child: Text(text, style: style ?? LabTextStyles.semibold23.copyWith(color: c.white)),
     );
   }
 }

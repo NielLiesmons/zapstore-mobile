@@ -2,7 +2,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
-import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/url_utils.dart';
 import 'package:zapstore/theme.dart';
@@ -430,7 +429,7 @@ class NostrEntityWidget extends StatelessWidget {
             colorPair: colorPair,
           ),
       };
-    } catch (e) {
+    } catch (_) {
       return GenericNip19Widget(entity: entity, colorPair: colorPair);
     }
   }
@@ -476,29 +475,18 @@ class ProfileEntityWidget extends ConsumerWidget {
 
     final isLoading = profileState is StorageLoading;
 
+    // Webapp renders mentions as plain colored text — no background pill.
+    // Use DefaultTextStyle so the size always matches the surrounding content.
+    final textStyle = DefaultTextStyle.of(context).style.copyWith(
+      fontWeight: FontWeight.w500,
+      color: isLoading
+          ? mentionColor.withValues(alpha: 0.5)
+          : mentionColor,
+    );
+
     return GestureDetector(
       onTap: handleTap,
-      child: isLoading
-          ? _AnimatedLoadingChip(
-              text: displayText,
-              color: mentionColor,
-            )
-          : DecoratedBox(
-              decoration: BoxDecoration(
-                color: mentionColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4.0),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                child: Text(
-                  displayText,
-                  style: context.textTheme.bodyMedium!.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: mentionColor,
-                  ),
-                ),
-              ),
-            ),
+      child: Text(displayText, style: textStyle),
     );
   }
 }
@@ -611,7 +599,7 @@ class AddressEntityWidget extends ConsumerWidget {
       );
     }
 
-    // Stack or other addressable kind — tappable text chip
+    // Stack or other addressable kind — tappable colored text, no background.
     return GestureDetector(
       onTap: () {
         if (addressData.kind == 30267) {
@@ -620,20 +608,11 @@ class AddressEntityWidget extends ConsumerWidget {
           pushApp(context, addressData.identifier);
         }
       },
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colorPair[0].withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(4.0),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-          child: Text(
-            addressData.identifier,
-            style: context.textTheme.bodyMedium!.copyWith(
-              fontWeight: FontWeight.w500,
-              color: colorPair[0],
-            ),
-          ),
+      child: Text(
+        addressData.identifier,
+        style: DefaultTextStyle.of(context).style.copyWith(
+          fontWeight: FontWeight.w500,
+          color: colorPair[0],
         ),
       ),
     );
@@ -654,20 +633,11 @@ class GenericNip19Widget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorPair[0].withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4.0),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4.0),
-        child: Text(
-          entity,
-          style: context.textTheme.bodyMedium!.copyWith(
-            fontWeight: FontWeight.w500,
-            color: colorPair[0],
-          ),
-        ),
+    return Text(
+      entity,
+      style: DefaultTextStyle.of(context).style.copyWith(
+        fontWeight: FontWeight.w500,
+        color: colorPair[0],
       ),
     );
   }
@@ -675,7 +645,8 @@ class GenericNip19Widget extends StatelessWidget {
 
 // ── Hashtag ───────────────────────────────────────────────────────────────────
 
-/// Inline hashtag pill using blurple color — matches webapp's tag style.
+/// Inline hashtag — blurple colored text, no background pill.
+/// Matches webapp's tag style (plain colored span, no container).
 class HashtagWidget extends StatelessWidget {
   final String hashtag;
   final VoidCallback? onTap;
@@ -691,82 +662,13 @@ class HashtagWidget extends StatelessWidget {
     final c = Theme.of(context).extension<LabColors>()!;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: c.blurpleColor.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(4.0),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 1.0),
-        child: Text(
-          '#$hashtag',
-          style: context.textTheme.bodyMedium!.copyWith(
-            color: c.blurpleLightColor,
-            fontWeight: FontWeight.w500,
-          ),
+      child: Text(
+        '#$hashtag',
+        style: DefaultTextStyle.of(context).style.copyWith(
+          color: c.blurpleLightColor,
+          fontWeight: FontWeight.w500,
         ),
       ),
-    );
-  }
-}
-
-// ── Loading chip ──────────────────────────────────────────────────────────────
-
-class _AnimatedLoadingChip extends StatefulWidget {
-  final String text;
-  final Color color;
-
-  const _AnimatedLoadingChip({required this.text, required this.color});
-
-  @override
-  State<_AnimatedLoadingChip> createState() => _AnimatedLoadingChipState();
-}
-
-class _AnimatedLoadingChipState extends State<_AnimatedLoadingChip>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
-    _animation = Tween<double>(begin: 0.08, end: 0.2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _controller.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, _) {
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: widget.color.withValues(alpha: _animation.value),
-            borderRadius: BorderRadius.circular(4.0),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            child: Text(
-              widget.text,
-              style: context.textTheme.bodyMedium!.copyWith(
-                fontWeight: FontWeight.w500,
-                color: widget.color,
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

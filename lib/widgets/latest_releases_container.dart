@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
-import 'package:zapstore/services/updates_service.dart';
 import 'package:zapstore/utils/app_query.dart';
-import 'package:zapstore/utils/extensions.dart';
 import 'app_small_card.dart';
 import 'common/shimmer.dart';
 
-const _kPageSize = 5;
+const _kPageSize = 8;
 
 // ---------------------------------------------------------------------------
 // State
@@ -252,23 +250,14 @@ class LatestReleasesContainer extends HookConsumerWidget {
     final releases = state?.allReleases ?? [];
     final appsById = state?.appsByIdentifier ?? const {};
 
-    final categorized = ref.watch(categorizedUpdatesProvider);
-    final pinnedApps = [
-      ...categorized.automaticUpdates,
-      ...categorized.manualUpdates,
-    ].where((a) => a.isZapstoreApp).toList();
-    final pinnedIds = pinnedApps.map((a) => a.identifier).toSet();
-
-    final seenAppIds = <String>{...pinnedIds};
-    final dedupedApps = <App>[];
+    final seenAppIds = <String>{};
+    final combinedApps = <App>[];
     for (final release in releases) {
       final app = appsById[release.appIdentifier];
       if (app != null && seenAppIds.add(app.identifier)) {
-        dedupedApps.add(app);
+        combinedApps.add(app);
       }
     }
-
-    final combinedApps = [...pinnedApps, ...dedupedApps];
 
     // Infinite scroll: load more when the horizontal list nears the end
     final hScrollController = useScrollController();

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
@@ -11,7 +13,7 @@ import 'package:zapstore/utils/icons.dart';
 //   • taps to animate back to the top of the scroll view
 //
 // Styling:
-//   gray66 bg · white16 thin-stroke border · arrowUp icon in white33
+//   ClipOval → BackdropFilter blur · gray66 bg · white16 thin-stroke border · arrowUp icon in white33
 //
 // Positioning is handled by the CALLER (typically a Positioned inside the
 // TopScrollFader's Stack), so this widget has no built-in position knowledge.
@@ -55,22 +57,27 @@ class ScrollToTopButton extends StatelessWidget {
                 duration: const Duration(milliseconds: 350),
                 curve: Curves.easeOutCubic,
               ),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: c.gray66,
-                  shape: BoxShape.circle,
-                  border: LabBorder.all(
-                    color: c.white16,
-                    width: LabStroke.thin,
-                  ),
-                ),
-                child: Center(
-                  child: LabIcon(
-                    LabIcons.arrowUp,
-                    size: 18,
-                    color: c.white33,
+              child: ClipOval(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: c.gray66,
+                      shape: BoxShape.circle,
+                      border: LabBorder.all(
+                        color: c.white16,
+                        width: LabStroke.thin,
+                      ),
+                    ),
+                    child: Center(
+                      child: LabIcon(
+                        LabIcons.arrowUp,
+                        size: 18,
+                        color: c.white33,
+                      ),
+                    ),
                   ),
                 ),
               ),

@@ -36,6 +36,8 @@ class ZapSliderModal {
   }) {
     return showModal<void>(
       context,
+      // Arc slider is 296 px tall — needs more than the 61.8 % default.
+      maxHeightFactor: 0.9,
       builder: (ctx) => _ZapSliderContent(app: app, author: author),
     );
   }
@@ -54,7 +56,7 @@ class _ZapSliderContent extends HookConsumerWidget {
     final c = Theme.of(context).extension<LabColors>()!;
 
     final step = useState(_ZapStep.slider);
-    final amount = useState<double>(2100);
+    final amount = useState<double>(1000);
     final invoice = useState<String?>(null);
     final invoiceLoading = useState(false);
     final showManualClose = useState(false);
@@ -131,10 +133,14 @@ class _ZapSliderContent extends HookConsumerWidget {
 
     // ── Slider step ──────────────────────────────────────────────────────────
     if (step.value == _ZapStep.slider) {
+      // Hide the arc slider while the keyboard is open: the amount is already
+      // set at that point, and hiding the 296 px canvas frees enough room for
+      // the comment input without needing any scroll view (which would fight
+      // the arc's pan gesture recogniser).
+      final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: SingleChildScrollView(
-          child: Column(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -144,7 +150,7 @@ class _ZapSliderContent extends HookConsumerWidget {
                 children: [
                   Text(
                     'Zap',
-                    style: LabTextStyles.semibold22.copyWith(color: c.white),
+                    style: LabTextStyles.semibold23.copyWith(color: c.white),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
@@ -186,12 +192,14 @@ class _ZapSliderContent extends HookConsumerWidget {
                 ),
               ),
 
-            // Circular arc slider — profile pic only in center (no amount text)
-            _ZapArcSlider(
-              initialValue: amount.value,
-              profile: author,
-              onChanged: (v) => amount.value = v,
-            ),
+            // Circular arc slider — hidden when the keyboard is open so the
+            // comment input has room and no scroll view is needed.
+            if (!keyboardOpen)
+              _ZapArcSlider(
+                initialValue: amount.value,
+                profile: author,
+                onChanged: (v) => amount.value = v,
+              ),
 
             // ── .input-container ─────────────────────────────────────────────
             // black33, r16, 0.33px white33 border — contains:
@@ -223,7 +231,7 @@ class _ZapSliderContent extends HookConsumerWidget {
                     // this container already provides the black33 + white33 border.
                     NostrComposer(
                       placeholder: 'Write your comment…',
-                      size: ComposerSize.small,
+                      size: ComposerSize.medium,
                       showActionRow: true,
                       allowEmptySubmit: true,
                       nested: true,
@@ -234,7 +242,6 @@ class _ZapSliderContent extends HookConsumerWidget {
               ),
             ),
           ],
-        ),
         ),
       );
     }
@@ -248,7 +255,7 @@ class _ZapSliderContent extends HookConsumerWidget {
           children: [
             Text(
               'Invoice',
-              style: LabTextStyles.semibold22.copyWith(color: c.white),
+              style: LabTextStyles.semibold23.copyWith(color: c.white),
             ),
             const SizedBox(height: 16),
 
@@ -357,7 +364,7 @@ class _ZapSliderContent extends HookConsumerWidget {
           const SizedBox(height: 16),
           Text(
             'Zap Sent!',
-            style: LabTextStyles.semibold22.copyWith(color: c.blurpleColor),
+            style: LabTextStyles.semibold23.copyWith(color: c.blurpleColor),
           ),
           const SizedBox(height: 8),
           Text(
@@ -463,7 +470,7 @@ class _AmountRowState extends State<_AmountRow> {
               },
               onChanged: (v) {
                 final n = int.tryParse(v) ?? 0;
-                widget.onChanged(n.clamp(0, 1000000).toDouble());
+                widget.onChanged(n.clamp(10, 10000000).toDouble());
               },
               onSubmitted: (_) {
                 _editing = false;
@@ -523,9 +530,9 @@ class _ZapArcSliderState extends State<_ZapArcSlider> {
   static const double _startAngle = math.pi * 3 / 4; // 135°
   static const double _totalAngle = math.pi * 3 / 2; // 270°
 
-  // Log-scale: 0 – 1,000,000
-  static const double _minSats = 0;
-  static const double _maxSats = 1000000;
+  // Log-scale: 10 – 10,000,000
+  static const double _minSats = 10;
+  static const double _maxSats = 10000000;
 
   late double _norm; // 0–1
 
@@ -536,13 +543,18 @@ class _ZapArcSliderState extends State<_ZapArcSlider> {
   }
 
   static double _satsToNorm(double sats) {
-    if (sats <= 0) return 0;
-    return (math.log(sats + 1) / math.log(_maxSats + 1)).clamp(0.0, 1.0);
+    if (sats <= _minSats) return 0;
+    if (sats >= _maxSats) return 1;
+    return ((math.log(sats) - math.log(_minSats)) /
+            (math.log(_maxSats) - math.log(_minSats)))
+        .clamp(0.0, 1.0);
   }
 
   static double _normToSats(double norm) {
-    if (norm <= 0) return 0;
-    final raw = math.exp(norm * math.log(_maxSats + 1)) - 1;
+    if (norm <= 0) return _minSats;
+    if (norm >= 1) return _maxSats;
+    final raw = math.exp(
+        math.log(_minSats) + norm * (math.log(_maxSats) - math.log(_minSats)));
     return raw.clamp(_minSats, _maxSats).roundToDouble();
   }
 
@@ -666,7 +678,8 @@ class _ArcPainter extends CustomPainter {
   static const double _markerLength = 8;
   static const double _startAngle = math.pi * 3 / 4; // 135°
   static const double _totalAngle = math.pi * 3 / 2; // 270°
-  static const double _maxSats = 1000000;
+  static const double _minSats = 10;
+  static const double _maxSats = 10000000;
 
   // innerR = 100 − 24 = 76  |  outerR = 100 + 24 + 8 = 132  |  labelR = 146
   static const double _innerR = _radius - _bgThickness / 2;
@@ -674,7 +687,7 @@ class _ArcPainter extends CustomPainter {
   static const double _labelR = _outerR + 14;
 
   static const List<int> _markerValues = [
-    0, 10, 100, 1000, 10000, 100000, 1000000
+    10, 100, 1000, 10000, 100000, 1000000, 10000000
   ];
 
   @override
@@ -704,7 +717,10 @@ class _ArcPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     for (final v in _markerValues) {
-      final pct = v == 0 ? 0.0 : math.log(v + 1) / math.log(_maxSats + 1);
+      final pct = v <= _minSats
+          ? 0.0
+          : (math.log(v) - math.log(_minSats)) /
+              (math.log(_maxSats) - math.log(_minSats));
       final angle = _startAngle + pct * _totalAngle;
       canvas.drawLine(
         Offset(cx + _innerR * math.cos(angle), cy + _innerR * math.sin(angle)),

@@ -57,10 +57,12 @@ class LabIcons {
   static const String impression    = 'impression';
   static const String inbox         = 'inbox';
   static const String incognito     = 'incognito';
+  static const String index         = 'index';
   static const String info          = 'info';
   static const String insights      = 'insights';
   static const String invoice       = 'invoice';
   static const String italic        = 'italic';
+  static const String key           = 'key';
   static const String label         = 'label';
   static const String latex         = 'latex';
   static const String link          = 'link';
@@ -91,6 +93,7 @@ class LabIcons {
   static const String security      = 'security';
   static const String send          = 'send';
   static const String share         = 'share';
+  static const String shareFill     = 'shareFill';
   static const String split         = 'split';
   static const String star          = 'star';
   static const String sticker       = 'sticker';

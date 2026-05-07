@@ -16,8 +16,10 @@ For component APIs (ProfilePic, AppPic, LabButton, LabIcon, showModal, etc.), se
 | Button component | `lib/widgets/common/button.dart` |
 | Icon component + registry | `lib/widgets/icons/icons.dart` |
 | SVG icon assets | `assets/icons/` (normal) and `assets/icons/thick/` |
-| Top scroll fader | `lib/widgets/common/top_scroll_fader.dart` |
+| Top scroll fader + scroll-to-top button | `lib/widgets/common/top_scroll_fader.dart` |
+| Scroll-to-top button | `lib/widgets/common/scroll_to_top_button.dart` |
 | Modal helper | `lib/widgets/common/modal.dart` |
+| Dropdown / context menu | `lib/widgets/common/dropdown_menu.dart` |
 
 ## Color System
 
@@ -74,7 +76,7 @@ Weight 700 throughout. Named for what they are, not where they sit.
 
 | Token | Size | Tracking | Use case |
 |-------|------|----------|----------|
-| `semibold22` | 22px | 0.7 | App name hero, screen titles, modal headings |
+| `semibold23` | 23px | 0.7 | App name hero, screen titles, modal headings |
 | `eyebrow13` | 13px | 2.2 | ALL-CAPS section eyebrows |
 | `eyebrow11` | 11px | 2.2 | Compact ALL-CAPS labels |
 
@@ -160,11 +162,14 @@ LabIcon(LabIcons.zap, size: 20, color: c.white, thick: true) // 3.2px stroke
 | Context | Value |
 |---------|-------|
 | Screen horizontal padding | 14px |
+| Modal horizontal padding | 14px |
 | Default gap between panels and content sections | 12px |
 | Avatar → bubble gap (comments) | 6px |
 | Message bubble vertical spacing | 4px top padding |
 | Top bar height (home) | 42px |
 | Top bar height (detail screens) | 48px |
+
+**14px horizontal padding** is the universal standard across screens and modals. It is applied either at the container level (wrapping the entire screen body) or per-element (e.g. on individual rows that need padding while a full-width divider or image bleeds edge-to-edge). Never mix both on the same layer — pick one approach and be consistent within each screen or modal.
 
 ## Loading States
 
@@ -175,30 +180,164 @@ LabIcon(LabIcons.zap, size: 20, color: c.white, thick: true) // 3.2px stroke
 
 Show loading UI only after a 100ms delay. Before that, the screen is blank.
 
-## Scroll Patterns
+## Standard Screen Layout
 
-Use `TopScrollFader` from `lib/widgets/common/top_scroll_fader.dart` wherever scrollable content passes under a floating header. Pass `offsetBias` equal to the header height so the visual fade region starts just below the header, not at the top of the screen:
+~90% of screens share this layout pattern. Two structural variants exist depending on whether the top bar is floating (Stack) or fixed (Column).
+
+### Floating-header screens (detail screens, updates, user profile, …)
+
+Content scrolls beneath a blurred header that stays pinned at the top.
 
 ```dart
-TopScrollFader(
-  scrollController: scrollController,
-  offsetBias: headerHeight, // e.g. 48 on detail screens; 0 on home (content starts at top)
-  child: SingleChildScrollView(…),
+Scaffold(
+  body: Stack(
+    children: [
+      // Full-body scrollable — behind the header
+      Positioned.fill(
+        child: TopScrollFader(
+          scrollController: scrollController,
+          fadeStart: headerHeight, // positions the fade gradient at the header bottom
+          child: SingleChildScrollView(
+            controller: scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              top: headerHeight + 10, // clears the header
+              bottom: MediaQuery.paddingOf(context).bottom + 24,
+            ),
+            child: …,
+          ),
+        ),
+      ),
+      // Floating blurred header — on top
+      Positioned(top: 0, left: 0, right: 0, child: _DetailHeader(…)),
+    ],
+  ),
 )
 ```
 
+Header height formula: `topPad + 48.0` (safe-area top + 8px gap + 30px row + 10px gap).
+
+### Column-layout screens (home screen)
+
+The top bar is a sibling widget above the scrollable; no overlap occurs.
+
+```dart
+Scaffold(
+  body: Column(
+    children: [
+      _HomeTopBar(…),
+      Expanded(
+        child: TopScrollFader(
+          scrollController: scrollController,
+          // fadeStart and offsetBias omitted — y=0 is already below the bar
+          child: SingleChildScrollView(…),
+        ),
+      ),
+    ],
+  ),
+)
+```
+
+### Floating header appearance
+
+Every floating blurred header uses the same visual recipe:
+
+```dart
+ClipRect(
+  child: BackdropFilter(
+    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+    child: Container(
+      color: c.black, // fills behind the blur so scrolled content doesn't show through
+      child: Column(
+        children: [
+          SizedBox(height: topPad + 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(…), // back button / title / actions
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    ),
+  ),
+)
+```
+
+### Scroll Patterns
+
+Use `TopScrollFader` wherever scrollable content passes under a floating header. It handles:
+- The scroll-driven top-edge fade (content fades as it scrolls under the header)
+- The `ScrollToTopButton` (appears after 1200px of scroll, bottom-right at 14px from edge)
+- A blurred safe-area overlay at the very bottom edge (on screens without a `BottomBar`)
+
+Key parameters:
+
+| Parameter | Default | When to override |
+|-----------|---------|-----------------|
+| `fadeStart` | `null` (= `offsetBias`) | Set to `headerHeight` on floating-header screens |
+| `showScrollToTop` | `true` | `false` on screens with a custom FAB at that position |
+| `hasBottomBar` | `false` | `true` when the screen contains a `BottomBar` widget |
+
 All horizontal scroll rows must apply an edge-fade mask (transparent → opaque → transparent, 14px fade matching screen padding).
+
+## UI Surface Hierarchy
+
+Three surface layers exist in the app. Choose based on content weight, not convenience:
+
+| Layer | Component | When to use |
+|-------|-----------|-------------|
+| Full screen | `GoRouter` page push | Primary navigation destinations — app detail, updates list, user profile, settings |
+| Modal | `showModal` | Secondary views that build on a primary screen — deeper comment threads, zap flow, onboarding steps, setting panels, action confirmations |
+| Dropdown menu | `LabDropdownMenu` | Small contextual menus — option pickers, suggestion panels, inline action lists with 2–6 items |
+
+**Rule:** modals are for depth (a user wants to go deeper into something on the current screen). Dropdowns are for breadth (a user wants to pick from a small set of options without leaving context). Never use a dropdown where a modal belongs.
 
 ## Modals
 
 Use `showModal(context, builder: …)` from `lib/widgets/common/modal.dart`. No raw `showModalBottomSheet` calls.
 
+**Visual spec:**
+- Background: `gray66` + `BackdropFilter` blur 14px
+- Border: `0.33px white8` on top, left, right (no bottom)
 - Radius: 32px top corners
+- Barrier: 65% black
 - No drag handle
 - Dismissible by tapping outside
-- Full-screen overlay (covers top safe area)
-- Default max height: **61.8% of screen height** (golden ratio). Override with explicit `maxHeightFactor` parameter.
-- Modal-in-modal: parent scales to `0.96` and darkens automatically
+
+**Behaviour:**
+- Default max height: **75% of screen height**. Override with `maxHeightFactor`.
+- `fillHeight: true` makes the sheet always reach `maxHeightFactor`.
+- When the keyboard opens, the sheet expands to near-full-height automatically.
+- Modal-in-modal: parent scales to `0.96` and receives a dark overlay automatically. Call `ModalNestScope.setNested(context, isOpen: true)` before opening a child modal and reset it on close.
+
+**Content padding:**
+Use **14px horizontal padding** inside modal content, matching screen padding. Apply it either at the top-level `Padding` wrapping the content column, or per-row when full-width elements (dividers, images) need to bleed edge-to-edge.
+
+**Title and footer:**
+- Pass `title:` and optionally `description:` to `showModal` for a standard centred heading block. The title scrolls with content (not pinned).
+- Use `ModalFooterBar` as the `footer:` argument for a pinned bottom action bar (e.g. a comment input row). It includes a `0.33px white8` top divider and safe-area padding.
+
+**Convenience variants:**
+- `showConfirm(…)` — standard confirm/cancel dialog with title, message, and destructive-flag support.
+
+## Dropdown Menus
+
+Use `LabDropdownMenu` + `LabDropdownItem` from `lib/widgets/common/dropdown_menu.dart` for small floating contextual menus.
+
+**Visual spec:**
+- Background: `gray66` + `BackdropFilter` blur 24px
+- Border: `0.33px white16`
+- Radius: 16px
+- Shadow: `0 8px 32px black33`
+- Items: `10px 14px` padding, 14px/500 white text, `white4` press feedback
+- Auto-divider (`0.33px white16`) between adjacent items; pass `isFirst: true` on the first item to suppress
+
+**Item variants:**
+- `isDanger: true` — label in rouge (destructive actions)
+- `isActive: true` — label in white/600 (selected state)
+- `trailing:` — optional trailing widget (e.g. a chevron icon)
+
+**Positioning:** the caller is responsible for positioning via `Overlay`, `CompositedTransformFollower`, or absolute layout. `LabDropdownMenu` handles only appearance.
 
 ## Screen Transitions
 

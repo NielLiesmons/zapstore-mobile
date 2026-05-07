@@ -8,7 +8,7 @@ import 'package:zapstore/widgets/onboarding/slot_machine.dart';
 /// Shows the slot-machine key-generation step of the onboarding flow.
 ///
 /// Matches webapp SpinKeyModal.svelte:
-///   • "Hey {name}!" title (semibold22)
+///   • "Hey {name}!" title (semibold23)
 ///   • Description with tappable "secret key" underlined link
 ///   • [SpinKeySlotMachine] — drag handle down to spin
 ///   • Divider + "I already have a key" secondary button
@@ -31,6 +31,7 @@ Future<void> showSpinKeyModal(
 }) {
   return showModal<void>(
     context,
+    title: 'Hey $profileName!',
     fillHeight: false,
     builder: (ctx) => _SpinKeyModalContent(
       profileName: profileName,
@@ -54,25 +55,13 @@ class _SpinKeyModalContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    // Scale title down for long names (matching webapp title-long rule: >12 chars)
-    final titleStyle = profileName.length > 12
-        ? LabTextStyles.semibold22.copyWith(color: c.white, fontSize: 20)
-        : LabTextStyles.semibold22.copyWith(color: c.white);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // ── Title ──────────────────────────────────────────────────────────
-          Text(
-            'Hey $profileName!',
-            style: titleStyle,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-
           // ── Description with tappable link ─────────────────────────────────
           Text.rich(
             TextSpan(

@@ -51,6 +51,14 @@ class _SelectorState extends State<Selector> {
   }
 
   @override
+  void didUpdateWidget(Selector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialIndex != widget.initialIndex) {
+      _selectedIndex = widget.initialIndex;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
 

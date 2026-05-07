@@ -57,7 +57,7 @@ class EmptyState extends StatelessWidget {
         padding: padding,
           child: Text(
           message,
-          style: LabTextStyles.semibold22.copyWith(
+          style: LabTextStyles.semibold23.copyWith(
             color: c.white.withValues(alpha: 0.16),
           ),
           textAlign: TextAlign.center,

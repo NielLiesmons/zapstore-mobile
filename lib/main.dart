@@ -24,6 +24,9 @@ import 'package:zapstore/services/deep_link_service.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/providers/theme_mode.dart';
+import 'package:zapstore/services/local_signer_service.dart';
+import 'package:zapstore/utils/key_generator.dart';
+import 'models/emoji_list.dart';
 import 'models/forum_post.dart';
 import 'package:zapstore/widgets/breathing_logo.dart';
 
@@ -37,6 +40,8 @@ void main() {
     // Register app-specific Nostr model types before any widget builds.
     // Model.register writes to a static map — no storage needed at this point.
     ForumPost.register();
+    UserEmojiList.register();
+    EmojiSet.register();
 
     // Edge-to-edge: let content draw behind system bars.
     // The barrier overlay and modal backdrop will now cover the full screen.
@@ -156,9 +161,9 @@ class ZapstoreApp extends HookConsumerWidget {
         return brightness == Brightness.dark ? darkTheme : lightTheme;
       }
       return switch (appThemeMode) {
-        AppThemeMode.light => lightTheme,
-        AppThemeMode.gray => grayTheme,
-        AppThemeMode.dark => darkTheme,
+        AppThemeMode.light  => lightTheme,
+        AppThemeMode.dark   => darkTheme,
+        AppThemeMode.black  => blackTheme,
         AppThemeMode.system => darkTheme,
       };
     }();
@@ -170,66 +175,79 @@ class ZapstoreApp extends HookConsumerWidget {
       routerConfig: ref.watch(routerProvider),
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
-        final mediaQuery = MediaQuery.of(context);
-        // User's preferred scale (0.9 / 1.0 / 1.1) loaded from SharedPreferences.
-        // Falls back to 1.0 while loading — zero extra build cycles during normal use.
-        final userScale = ref.watch(textScaleFactorProvider);
-        // Clamp device accessibility scale then multiply by user preference.
-        final deviceScale = mediaQuery.textScaler.scale(1.0).clamp(1.0, 1.2);
-        final effectiveScale = (deviceScale * userScale).clamp(0.85, 1.32);
-        final constrainedTextScaler = TextScaler.linear(effectiveScale);
+        final mq = MediaQuery.of(context);
+        // Device-level accessibility text scaling is intentionally ignored — the
+        // app has its own text size and UI scale controls.
+        final textScale = ref.watch(textScaleFactorProvider);
+        final uiScale = ref.watch(uiScaleFactorProvider);
 
-        // Show error overlay if initialization failed (do not block UI during loading)
-        if (initState is AsyncError) {
-          return MediaQuery(
-            data: mediaQuery.copyWith(textScaler: constrainedTextScaler),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: child!,
-                ),
-                // Error overlay
-                Container(
-                  color: Colors.black54,
-                  child: Center(
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 64,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Initialization Error',
-                              style: context.textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              initState.error.toString(),
-                              textAlign: TextAlign.center,
-                              style: context.textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+        // Wrap child with text scaler + optional UI zoom.
+        // When uiScale != 1.0 we use Transform.scale + SizedBox + MediaQuery
+        // size override — same mechanism as Android's Display Size setting,
+        // but scoped to this app. GPU-only cost at steady state.
+        Widget scaleChild(Widget inner) {
+          final scaled = MediaQuery(
+            data: mq.copyWith(
+              textScaler: TextScaler.linear(textScale),
+              size: uiScale != 1.0 ? mq.size / uiScale : mq.size,
+              devicePixelRatio:
+                  uiScale != 1.0 ? mq.devicePixelRatio * uiScale : mq.devicePixelRatio,
+            ),
+            child: inner,
+          );
+          if (uiScale == 1.0) return scaled;
+          // OverflowBox breaks the parent's tight screen constraints and gives
+          // the child the logical dimensions it should fill. Transform.scale
+          // then maps that back onto the real screen — same as Android Display Size.
+          return Transform.scale(
+            scale: uiScale,
+            alignment: Alignment.topLeft,
+            child: OverflowBox(
+              minWidth: mq.size.width / uiScale,
+              maxWidth: mq.size.width / uiScale,
+              minHeight: mq.size.height / uiScale,
+              maxHeight: mq.size.height / uiScale,
+              child: scaled,
             ),
           );
         }
 
-        return MediaQuery(
-          data: mediaQuery.copyWith(textScaler: constrainedTextScaler),
-          child: child!,
-        );
+        // Show error overlay if initialization failed (do not block UI during loading)
+        if (initState is AsyncError) {
+          return scaleChild(Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: child!,
+              ),
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.error_outline, size: 64, color: Colors.red),
+                          const SizedBox(height: 16),
+                          Text('Initialization Error',
+                              style: context.textTheme.headlineSmall),
+                          const SizedBox(height: 8),
+                          Text(initState.error.toString(),
+                              textAlign: TextAlign.center,
+                              style: context.textTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ));
+        }
+
+        return scaleChild(child!);
       },
     );
   }
@@ -359,11 +377,24 @@ Future<void> _maybeCopySeedDatabase(String dbPath) async {
 }
 
 Future<void> _attemptAutoSignIn(Ref ref) async {
+  // Try Amber first (NIP-55 external signer app).
   try {
     await ref.read(amberSignerProvider).attemptAutoSignIn();
     await onSignInSuccess(ref);
+    return;
+  } catch (_) {}
+
+  // Fallback: try a locally generated key stored from the onboarding flow.
+  try {
+    final nsec = await ref.read(localSignerServiceProvider).loadNsec();
+    if (nsec != null) {
+      final hex = KeyGenerator.nsecToHex(nsec);
+      final signer = Bip340PrivateKeySigner(hex, ref);
+      await signer.signIn();
+      await onSignInSuccess(ref);
+    }
   } catch (e) {
-    // Auto sign-in fails on first install — that's fine, just continue
+    debugPrint('Local key auto sign-in failed: $e');
   }
 }
 

@@ -37,6 +37,17 @@ class KeyGenerator {
     return parts;
   }
 
+  /// Decode a bech32 [nsec] string to a 64-char lowercase hex private key.
+  /// Used to construct a [Bip340PrivateKeySigner] from a locally generated nsec.
+  static String nsecToHex(String nsec) {
+    const codec = Bech32Codec();
+    final decoded = codec.decode(nsec, 200);
+    final privBytes = _convertBits(decoded.data, 5, 8, false);
+    return privBytes
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
+
   static List<int> _convertBits(List<int> data, int from, int to, bool pad) {
     var acc = 0;
     var bits = 0;

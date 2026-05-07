@@ -3,20 +3,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// The user's preferred font-size scale for the app.
 ///
-/// Three presets matching zaplab_design's small / normal / large factories:
-///   [TextScalePreset.small]  → 0.9   (approx. -1 font size step)
-///   [TextScalePreset.normal] → 1.0   (default)
-///   [TextScalePreset.large]  → 1.1   (approx. +1 font size step)
+/// Three presets:
+///   [TextScalePreset.small]  → text 0.9 · UI 0.95
+///   [TextScalePreset.normal] → text 1.0 · UI 1.0  (default)
+///   [TextScalePreset.large]  → text 1.1 · UI 1.05
 ///
-/// Applied in MaterialApp.builder via [MediaQuery.withClampedTextScaling] so
-/// it only triggers a rebuild when the user explicitly changes the setting.
+/// Both scales are applied in MaterialApp.builder. Text scale goes through
+/// [TextScaler]; UI scale uses Transform.scale + MediaQuery size override so
+/// the full layout responds (same mechanism as Android's Display Size setting).
 enum TextScalePreset {
-  small(0.9),
-  normal(1.0),
-  large(1.1);
+  small(0.9, 0.975),
+  normal(1.0, 1.0),
+  large(1.1, 1.025);
 
-  const TextScalePreset(this.scale);
+  const TextScalePreset(this.scale, this.uiScale);
   final double scale;
+  /// Overall UI zoom applied on top of text scale.
+  final double uiScale;
 
   static TextScalePreset fromScale(double s) {
     if (s <= 0.95) return TextScalePreset.small;
@@ -33,12 +36,19 @@ final textScalePresetProvider =
   TextScaleNotifier.new,
 );
 
-/// Convenience: synchronous current scale factor (defaults to 1.0 until
-/// SharedPreferences is loaded). Watch this in MaterialApp.builder.
+/// Synchronous text scale factor (defaults to 1.0 until SharedPreferences loads).
 final textScaleFactorProvider = Provider<double>((ref) {
   return ref
       .watch(textScalePresetProvider)
       .whenData((p) => p.scale)
+      .valueOrNull ?? 1.0;
+});
+
+/// Synchronous UI zoom factor derived from the same preset (defaults to 1.0).
+final uiScaleFactorProvider = Provider<double>((ref) {
+  return ref
+      .watch(textScalePresetProvider)
+      .whenData((p) => p.uiScale)
       .valueOrNull ?? 1.0;
 });
 

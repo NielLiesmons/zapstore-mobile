@@ -2,9 +2,9 @@ import 'dart:ui';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/theme.dart';
@@ -12,10 +12,12 @@ import 'package:zapstore/utils/debug_utils.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/services/nostr_comment_service.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/widgets/app_detail_widgets.dart';
 import 'package:zapstore/widgets/app_header.dart';
 import 'package:zapstore/widgets/comments_section.dart';
+import 'package:zapstore/widgets/common/dropdown_menu.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
 import 'package:zapstore/widgets/expandable_markdown.dart';
@@ -204,6 +206,7 @@ class _AppDetailContent extends HookConsumerWidget {
             child: TopScrollFader(
               scrollController: scrollController,
               fadeStart: scrollTopPad,
+              hasBottomBar: true,
               child: SingleChildScrollView(
                 controller: scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -313,7 +316,6 @@ class _AppDetailContent extends HookConsumerWidget {
               app: app,
               author: author,
               catalogProfile: catalogProfile,
-              latestMetadata: latestMetadata,
             ),
           ),
 
@@ -328,10 +330,12 @@ class _AppDetailContent extends HookConsumerWidget {
               onComment: () => showCommentModal(
                 context,
                 placeholder: 'Comment on ${app.name ?? 'this app'}…',
-                onSubmit: (result) async {
-                  // TODO: publish NIP-22 comment event referencing app.naddr
-                  debugPrint('[CommentModal] submit: ${result.text}');
-                },
+                onSubmit: (result) => publishRootComment(
+                  ref: ref,
+                  result: result,
+                  app: app,
+                  version: latestMetadata?.version,
+                ),
               ),
               onOptions: () => showModal<void>(
                 context,
@@ -351,30 +355,32 @@ class _AppDetailContent extends HookConsumerWidget {
 // Fixed blurred detail header
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DetailHeader extends StatelessWidget {
+class _DetailHeader extends HookWidget {
   const _DetailHeader({
     required this.app,
     required this.author,
     required this.catalogProfile,
-    required this.latestMetadata,
   });
 
   final App app;
   final Profile? author;
   final Profile? catalogProfile;
-  final Installable? latestMetadata;
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
     final topPad = MediaQuery.paddingOf(context).top;
 
+    final overlayController = useMemoized(() => OverlayPortalController());
+    final layerLink = useMemoized(() => LayerLink());
+    final groupId =
+        useMemoized(() => 'app-community-dropdown-${app.identifier}');
+
     final publisherName = author?.name ?? _shortenPubkey(app.pubkey);
 
     // Build community stack — one item for Zapstore catalog, extensible later.
     final communityItems = [
-      if (catalogProfile != null)
-        ProfilePicItem(profile: catalogProfile),
+      if (catalogProfile != null) ProfilePicItem(profile: catalogProfile),
     ];
 
     return ClipRect(
@@ -387,124 +393,147 @@ class _DetailHeader extends StatelessWidget {
             children: [
               // Safe-area inset + padding above content row.
               SizedBox(height: topPad + 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Back button — gray33 bg, white33 chevron
-                      GestureDetector(
-                        onTap: () => context.pop(),
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: c.gray33,
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 2),
-                              child: LabIcon(
-                                LabIcons.chevronLeft,
-                                size: 14,
-                                color: c.white33,
-                              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Back button — gray33 bg, white33 chevron
+                    GestureDetector(
+                      onTap: () => context.pop(),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: c.gray33,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 2),
+                            child: LabIcon(
+                              LabIcons.chevronLeft,
+                              size: 14,
+                              color: c.white33,
                             ),
                           ),
                         ),
                       ),
+                    ),
 
-                      const SizedBox(width: 10),
+                    const SizedBox(width: 10),
 
-                      // Author avatar
-                      ProfilePic(profile: author, size: 28),
-
-                      const SizedBox(width: 12),
-
-                      // Publisher name + timestamp side-by-side (left-aligned)
+                    // Publisher section: indexer badge for relay-signed apps,
+                    // author avatar + "By name" for developer-published apps.
+                    if (app.isRelaySigned) ...[
+                      LabIcon(
+                        LabIcons.index,
+                        size: 22,
+                        color: c.white33,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                publisherName,
-                                style: LabTextStyles.med15.copyWith(
-                                  color: c.white66,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                              ),
-                            ),
-                            if (latestMetadata != null) ...[
-                              const SizedBox(width: 6),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  _formatTimestamp(latestMetadata!.createdAt),
-                                  style: LabTextStyles.reg13.copyWith(
-                                    color: c.white33,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
+                        child: Text(
+                          'Indexed',
+                          style: LabTextStyles.med15.copyWith(color: c.white33),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
-
-                      // Community stack: avatarSize 28 matches the ProfilePic in
-                      // this row; same pill style as _ReplyIndicator in root_comment.
-                      if (communityItems.isNotEmpty) ...[
-                        const SizedBox(width: 10),
-                        ProfilePicStack(
-                          profiles: communityItems,
-                          avatarSize: 28,
-                          suffix: '${communityItems.length}',
+                    ] else ...[
+                      ProfilePic(profile: author, size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            style: LabTextStyles.med15.copyWith(color: c.white66),
+                            children: [
+                              const TextSpan(text: 'By '),
+                              TextSpan(text: publisherName),
+                            ],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                      ],
+                      ),
                     ],
-                  ),
+
+                    // Community stack with overlay dropdown
+                    if (communityItems.isNotEmpty) ...[
+                      const SizedBox(width: 10),
+                      OverlayPortal(
+                        controller: overlayController,
+                        overlayChildBuilder: (ctx) =>
+                            CompositedTransformFollower(
+                          link: layerLink,
+                          showWhenUnlinked: false,
+                          targetAnchor: Alignment.bottomRight,
+                          followerAnchor: Alignment.topRight,
+                          offset: const Offset(0, 4),
+                          child: Align(
+                            alignment: Alignment.topRight,
+                            child: TapRegion(
+                              groupId: groupId,
+                              onTapOutside: (_) => overlayController.hide(),
+                              child: LabDropdownMenu(
+                                constraints:
+                                    const BoxConstraints(minWidth: 220),
+                                children: [
+                                  LabDropdownItem(
+                                    isFirst: true,
+                                    child: Text(
+                                      'This app is published in the following communities:',
+                                      style: LabTextStyles.reg13
+                                          .copyWith(color: c.white66),
+                                    ),
+                                  ),
+                                  for (final item in communityItems)
+                                    LabDropdownItem(
+                                      child: Text(
+                                        item.profile?.name ?? 'Community',
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        child: TapRegion(
+                          groupId: groupId,
+                          child: CompositedTransformTarget(
+                            link: layerLink,
+                            child: ProfilePicStack(
+                              profiles: communityItems,
+                              avatarSize: 28,
+                              suffix: '${communityItems.length}',
+                              onTap: () {
+                                if (overlayController.isShowing) {
+                                  overlayController.hide();
+                                } else {
+                                  overlayController.show();
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                // Bottom spacing below the header row (matches home_screen top bar).
-                const SizedBox(height: 10),
-              ],
-            ),
+              ),
+              // Bottom spacing below the header row (matches home_screen top bar).
+              const SizedBox(height: 10),
+            ],
           ),
         ),
+      ),
     );
   }
 
   static String _shortenPubkey(String pubkey) {
     if (pubkey.length <= 12) return pubkey;
     return '${pubkey.substring(0, 6)}…${pubkey.substring(pubkey.length - 4)}';
-  }
-
-  static String _formatTimestamp(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-
-    if (diff.inSeconds < 60) return 'Just Now';
-
-    final today = DateTime(now.year, now.month, now.day);
-    final dtDay = DateTime(dt.year, dt.month, dt.day);
-
-    if (dtDay == today) {
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return 'Today $h:$m';
-    }
-
-    final yesterday = today.subtract(const Duration(days: 1));
-    if (dtDay == yesterday) return 'Yesterday';
-
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final base = '${months[dt.month - 1]} ${dt.day}';
-    return dt.year != now.year ? '$base ${dt.year}' : base;
   }
 }
 

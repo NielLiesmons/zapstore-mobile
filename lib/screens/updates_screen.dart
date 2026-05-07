@@ -119,7 +119,7 @@ class _UpdatesHeader extends StatelessWidget {
                     const SizedBox(width: 12),
                     Text(
                       'Updates',
-                      style: LabTextStyles.semibold22.copyWith(color: c.white),
+                      style: LabTextStyles.semibold23.copyWith(color: c.white),
                     ),
                   ],
                 ),

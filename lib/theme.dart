@@ -753,15 +753,15 @@ class LabColors extends ThemeExtension<LabColors> {
 
 TextTheme _buildTextTheme(LabColors c) => TextTheme(
       // Large display: app name hero text
-      displayLarge: LabTextStyles.semibold22.copyWith(fontSize: 56, color: c.white),
-      displayMedium: LabTextStyles.semibold22.copyWith(fontSize: 44, color: c.white),
-      displaySmall: LabTextStyles.semibold22.copyWith(fontSize: 36, color: c.white),
+      displayLarge: LabTextStyles.semibold23.copyWith(fontSize: 56, color: c.white),
+      displayMedium: LabTextStyles.semibold23.copyWith(fontSize: 44, color: c.white),
+      displaySmall: LabTextStyles.semibold23.copyWith(fontSize: 36, color: c.white),
       // Headlines: major screen sections
-      headlineLarge: LabTextStyles.semibold22.copyWith(fontSize: 32, color: c.white),
-      headlineMedium: LabTextStyles.semibold22.copyWith(fontSize: 28, color: c.white),
-      headlineSmall: LabTextStyles.semibold22.copyWith(fontSize: 24, color: c.white),
+      headlineLarge: LabTextStyles.semibold23.copyWith(fontSize: 32, color: c.white),
+      headlineMedium: LabTextStyles.semibold23.copyWith(fontSize: 28, color: c.white),
+      headlineSmall: LabTextStyles.semibold23.copyWith(fontSize: 24, color: c.white),
       // Titles: modal headers, card titles
-      titleLarge: LabTextStyles.semibold22.copyWith(color: c.white),
+      titleLarge: LabTextStyles.semibold23.copyWith(color: c.white),
       titleMedium: LabTextStyles.bold17.copyWith(color: c.white), // 16px w600
       titleSmall: LabTextStyles.bold15.copyWith(color: c.white),  // 14.5px w600
       // Body
@@ -923,6 +923,6 @@ ThemeData _buildMaterialTheme(LabColors c) => ThemeData(
       ),
     );
 
-final grayTheme = _buildMaterialTheme(LabColors.gray());
-final darkTheme = _buildMaterialTheme(LabColors.dark());
+final darkTheme = _buildMaterialTheme(LabColors.gray());
+final blackTheme = _buildMaterialTheme(LabColors.dark());
 final lightTheme = _buildMaterialTheme(LabColors.light());

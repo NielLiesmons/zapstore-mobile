@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import 'package:zapstore/data/curated_emoji.dart';
+import 'package:zapstore/providers/custom_emoji_provider.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
@@ -71,30 +72,20 @@ class _EmojiPickerContent extends HookConsumerWidget {
     final c = Theme.of(context).extension<LabColors>()!;
     final query = useState('');
     final searchCtrl = useTextEditingController();
-    final customEmojis = useState<List<EmojiEntry>>([]);
-    final loadingCustom = useState(false);
 
-    // Load NIP-30 custom emoji (kind 10030 / 30030).
-    // TODO: replace with actual Riverpod query once those kinds are in the
-    // models package. For now we show the loading banner for a realistic
-    // duration then clear it (matching webapp's customEmojiInitPending state).
-    useEffect(() {
-      loadingCustom.value = true;
-      var cancelled = false;
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (!cancelled) loadingCustom.value = false;
-      });
-      return () => cancelled = true;
-    }, const []);
+    // Real NIP-30 custom emoji from kind 10030 / 30030.
+    final customEmojiState = ref.watch(customEmojiProvider);
+    final loadingCustom = customEmojiState.loading;
+    final customEmojis = customEmojiState.entries;
 
     final displayEmojis = useMemoized(() {
       final q = query.value.trim().toLowerCase();
-      final all = [...customEmojis.value, ..._unicodeEntries];
+      final all = [...customEmojis, ..._unicodeEntries];
       if (q.isEmpty) return all;
       return all
           .where((e) => e.shortcode.toLowerCase().contains(q))
           .toList(growable: false);
-    }, [query.value, customEmojis.value]);
+    }, [query.value, customEmojis]);
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -114,7 +105,7 @@ class _EmojiPickerContent extends HookConsumerWidget {
         Expanded(
           child: _PickerBody(
             displayEmojis: displayEmojis,
-            loadingCustom: loadingCustom.value,
+            loadingCustom: loadingCustom,
             query: query.value,
             colors: c,
           ),

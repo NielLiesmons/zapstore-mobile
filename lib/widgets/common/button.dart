@@ -6,13 +6,15 @@ import 'package:zapstore/utils/text_styles.dart';
 /// zaplab_design's LabButton / LabSmallButton / LabTabButton patterns.
 ///
 /// Named constructors map 1:1 to the webapp's `.btn-*` classes:
-///   [LabButton.primary]       → .btn-primary        (40px, blurple gradient, rad10)
-///   [LabButton.primarySmall]  → .btn-primary-small   (34px, blurple gradient, pill)
-///   [LabButton.primaryXs]     → .btn-primary-xs      (26px, blurple gradient, pill)
-///   [LabButton.secondary]     → .btn-secondary       (40px, gray66, rad10)
+///   [LabButton.primaryLarge]  → .btn-primary-large   (46px, blurple gradient, rad16)
+///   [LabButton.primary]       → .btn-primary          (41px, blurple gradient, rad10)
+///   [LabButton.primarySmall]  → .btn-primary-small    (34px, blurple gradient, pill)
+///   [LabButton.primaryXs]     → .btn-primary-xs       (30px, blurple gradient, pill)
+///   [LabButton.secondaryLarge]→ .btn-secondary-large  (46px, gray66, rad16)
+///   [LabButton.secondary]     → .btn-secondary        (41px, gray66, rad10)
 ///   [LabButton.secondarySmall]→ .btn-secondary-small  (34px, gray66, pill)
-///   [LabButton.secondaryXs]   → .btn-secondary-xs     (26px, gray66, pill)
-///   [LabButton.tab]           → SocialTabs tab button  (32px, pill, blurple66 when selected)
+///   [LabButton.secondaryXs]   → .btn-secondary-xs     (30px, gray66, pill)
+///   [LabButton.tab]           → SocialTabs tab button  (34px, pill, blurple66 when selected)
 class LabButton extends StatefulWidget {
   const LabButton({
     super.key,
@@ -50,6 +52,26 @@ class LabButton extends StatefulWidget {
 
   // ── Primary (blurple gradient) ──────────────────────────────────────────
 
+  factory LabButton.primaryLarge({
+    Key? key,
+    required VoidCallback? onTap,
+    Widget? child,
+    String? text,
+  }) {
+    return LabButton(
+      key: key,
+      onTap: onTap,
+      text: text,
+      textStyle: LabTextStyles.med17,
+      height: 46,
+      horizontalPadding: 22,
+      borderRadius: BorderRadius.circular(16),
+      pill: false,
+      isPrimary: true,
+      child: child,
+    );
+  }
+
   factory LabButton.primary({
     Key? key,
     required VoidCallback? onTap,
@@ -61,7 +83,7 @@ class LabButton extends StatefulWidget {
       onTap: onTap,
       text: text,
       textStyle: LabTextStyles.med15,
-      height: 40,
+      height: 41,
       horizontalPadding: 18,
       borderRadius: BorderRadius.circular(17),
       pill: false,
@@ -100,7 +122,7 @@ class LabButton extends StatefulWidget {
       onTap: onTap,
       text: text,
       textStyle: LabTextStyles.med13,
-      height: 26,
+      height: 30,
       horizontalPadding: 12,
       pill: true,
       isPrimary: true,
@@ -109,6 +131,28 @@ class LabButton extends StatefulWidget {
   }
 
   // ── Secondary (gray66) ─────────────────────────────────────────────────
+
+  factory LabButton.secondaryLarge({
+    Key? key,
+    required VoidCallback? onTap,
+    Widget? child,
+    String? text,
+    Color? color,
+  }) {
+    return LabButton(
+      key: key,
+      onTap: onTap,
+      text: text,
+      textStyle: LabTextStyles.med17,
+      gradient: null,
+      color: color,
+      height: 46,
+      horizontalPadding: 22,
+      borderRadius: BorderRadius.circular(16),
+      pill: false,
+      child: child,
+    );
+  }
 
   factory LabButton.secondary({
     Key? key,
@@ -124,7 +168,7 @@ class LabButton extends StatefulWidget {
       textStyle: LabTextStyles.med15,
       gradient: null,
       color: color,
-      height: 40,
+      height: 41,
       horizontalPadding: 18,
       borderRadius: BorderRadius.circular(17),
       pill: false,
@@ -167,7 +211,7 @@ class LabButton extends StatefulWidget {
       textStyle: LabTextStyles.med13,
       gradient: null,
       color: color,
-      height: 26,
+      height: 30,
       horizontalPadding: 12,
       pill: true,
       child: child,

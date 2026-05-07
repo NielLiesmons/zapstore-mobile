@@ -68,7 +68,7 @@ class _BottomBarState extends State<BottomBar> {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+              padding: const EdgeInsets.fromLTRB(14, 14, 6, 8),
               child: SafeArea(
                 top: false,
                 child: widget.isSignedIn
@@ -85,28 +85,28 @@ class _BottomBarState extends State<BottomBar> {
   Widget _buildSignedInBar(LabColors c) {
     return Row(
       children: [
-        // Zap button — 40×40 rounded square, icon only
+        // Zap button — 41px, icon only, blurple gradient
         GestureDetector(
           onTap: widget.onZap,
           child: Container(
-            width: 40,
-            height: 40,
+            width: 41,
+            height: 41,
             decoration: BoxDecoration(
               gradient: c.blurple,
               borderRadius: BorderRadius.circular(17),
             ),
             child: Center(
-              child: LabIcon(LabIcons.zap, size: 18, color: c.whiteEnforced),
+              child: LabIcon(LabIcons.zap, size: 20, color: c.whiteEnforced),
             ),
           ),
         ),
         const SizedBox(width: 12),
-        // Comment input placeholder
+        // Comment input placeholder — 41px
         Expanded(
           child: GestureDetector(
             onTap: widget.onComment,
             child: Container(
-              height: 40,
+              height: 41,
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: c.black33,
@@ -127,14 +127,15 @@ class _BottomBarState extends State<BottomBar> {
             ),
           ),
         ),
-        // Options button — tap target matches bar height
+        // Options button — no background, flush with the comment input.
+        // 41×41 tap area; icon is 27px (80% of original 34px) centered within it.
         GestureDetector(
           onTap: widget.onOptions,
           child: SizedBox(
-            width: 40,
-            height: 40,
+            width: 41,
+            height: 41,
             child: Center(
-              child: LabIcon(LabIcons.options, size: 18, color: c.white33),
+              child: LabIcon(LabIcons.options, size: 27, color: c.white33),
             ),
           ),
         ),

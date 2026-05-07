@@ -140,7 +140,10 @@ class ForumFeedContainer extends HookConsumerWidget {
           (post) => ForumPostCard(
             key: ValueKey(post.id),
             post: post,
-            onTap: () => context.push('/forum/${post.id}'),
+            onTap: (preloadedComments) => context.push(
+              '/forum/${post.id}',
+              extra: preloadedComments,
+            ),
           ),
         ),
 

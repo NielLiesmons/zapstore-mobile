@@ -12,7 +12,7 @@ import 'package:zapstore/utils/url_utils.dart';
 
 /// App detail header — two-row layout:
 ///   Row 1: AppPic (80px) + app name only
-///   Row 2: PlatformPill (left) + SplitInstallButton (right)
+///   Row 2: PlatformPill (left, animates out during install) + SplitInstallButton (right, expands during install)
 ///
 /// VersionPillWidget has been removed; version info lives in the
 /// Latest Release panel below.
@@ -25,6 +25,9 @@ class AppHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
     final platform = ref.read(packageManagerProvider.notifier).platform;
+
+    final operation = ref.watch(installOperationProvider(app.identifier));
+    final isActiveOp = _isActiveOperation(operation);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,7 +51,7 @@ class AppHeader extends ConsumerWidget {
                     app.name ?? app.identifier,
                     // h1 size (24px) + semibold weight via fontVariations so the
                     // Inter variable font actually renders at 600 (not w800/black).
-                    style: LabTextStyles.semibold22.copyWith(
+                    style: LabTextStyles.semibold23.copyWith(
                       color: c.white,
                       fontWeight: FontWeight.w600,
                       fontVariations: const [FontVariation('wght', 600)],
@@ -58,13 +61,34 @@ class AppHeader extends ConsumerWidget {
                     minFontSize: 16,
                   ),
                   Gap(8),
-                  // Platform pill (left) + install button (right)
+                  // Platform pill (left) + install button (right).
+                  // During active install ops, the pill slides out and the
+                  // button expands to fill the full available width.
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      _PlatformPill(platform: platform, colors: c),
-                      const Spacer(),
-                      SplitInstallButton(app: app),
+                      // Pill: collapses (width → 0, opacity → 0) when an
+                      // install/download operation is active.
+                      ClipRect(
+                        child: AnimatedAlign(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: isActiveOp ? 0.0 : 1.0,
+                          duration: const Duration(milliseconds: 280),
+                          curve: Curves.easeInOut,
+                          child: AnimatedOpacity(
+                            opacity: isActiveOp ? 0.0 : 1.0,
+                            duration: const Duration(milliseconds: 180),
+                            child: _PlatformPill(platform: platform, colors: c),
+                          ),
+                        ),
+                      ),
+                      // Spacer only when pill is visible; removed when button
+                      // expands so the button truly fills the available width.
+                      if (!isActiveOp) const Spacer(),
+                      if (isActiveOp)
+                        Expanded(child: SplitInstallButton(app: app))
+                      else
+                        SplitInstallButton(app: app),
                     ],
                   ),
                 ],
@@ -76,6 +100,17 @@ class AppHeader extends ConsumerWidget {
         Gap(16),
       ],
     );
+  }
+
+  static bool _isActiveOperation(Object? op) {
+    return op is DownloadQueued ||
+        op is Downloading ||
+        op is DownloadPaused ||
+        op is Verifying ||
+        op is ReadyToInstall ||
+        op is Installing ||
+        op is SystemProcessing ||
+        op is Uninstalling;
   }
 }
 

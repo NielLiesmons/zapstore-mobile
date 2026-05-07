@@ -21,12 +21,23 @@ abstract final class LabTextStyles {
   // ── Headings — literal tokens (weight 700 throughout) ────────────────────
 
   /// Section/screen titles, modal headings, app name hero. Replaces [h1]/[h2].
-  static const TextStyle semibold22 = TextStyle(
+  static const TextStyle semibold23 = TextStyle(
     fontFamily: _font,
     fontVariations: [FontVariation('wght', 700)],
-    fontSize: 22,
+    fontSize: 23,
     height: 1.5,
     letterSpacing: 0,
+    leadingDistribution: _leading,
+    decoration: TextDecoration.none,
+  );
+
+  /// ALL-CAPS eyebrow label — 15px (rendered 14.5), wide tracking.
+  static const TextStyle eyebrow15 = TextStyle(
+    fontFamily: _font,
+    fontVariations: [FontVariation('wght', 700)],
+    fontSize: 14.5,
+    height: 1.5,
+    letterSpacing: 2.2,
     leadingDistribution: _leading,
     decoration: TextDecoration.none,
   );

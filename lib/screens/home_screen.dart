@@ -164,6 +164,7 @@ class _HomeContent extends ConsumerWidget {
                   title: 'Apps',
                   linkText: 'See more',
                   onLinkTap: () => context.push('/updates'),
+                  bottomPadding: 18,
                 ),
                 LatestReleasesContainer(
                   showSkeleton: !(initState.hasValue || initState.hasError),
@@ -175,7 +176,7 @@ class _HomeContent extends ConsumerWidget {
 
           // ── Stacks ──────────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.only(bottom: 19),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -183,6 +184,7 @@ class _HomeContent extends ConsumerWidget {
                   title: 'Stacks',
                   linkText: 'See more',
                   onLinkTap: () => pushStacks(context),
+                  bottomPadding: 17,
                 ),
                 Padding(
                   padding: const EdgeInsets.only(top: 2, bottom: 6),
@@ -247,6 +249,7 @@ class _ForumSection extends HookConsumerWidget {
           title: 'Forum',
           linkText: 'Our Community',
           onLinkTap: () => context.push('/community'),
+          bottomPadding: 17,
         ),
 
         _ForumFilterRow(
@@ -480,7 +483,7 @@ class _SortButtonState extends State<_SortButton> {
 // When query is empty: blank placeholder (categories / suggestions to come).
 // When query is submitted: shows search results.
 
-class _SearchPanel extends StatelessWidget {
+class _SearchPanel extends HookWidget {
   const _SearchPanel({
     super.key,
     required this.searchQuery,
@@ -490,23 +493,28 @@ class _SearchPanel extends StatelessWidget {
 
   final String searchQuery;
   final String platform;
+  // Kept for API compatibility but not attached to any ScrollView here —
+  // the panel owns its own controller to avoid a double-attach crash when
+  // AnimatedSwitcher keeps both panels alive during the 200ms transition.
   final ScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
+    final panelScrollController = useScrollController();
+
     if (searchQuery.isEmpty) {
       // Placeholder — will hold categories/suggestions in a future iteration.
       return const SizedBox.expand();
     }
     return SingleChildScrollView(
-      controller: scrollController,
+      controller: panelScrollController,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SearchResultsSection(
             searchQuery: searchQuery,
             platform: platform,
-            scrollController: scrollController,
+            scrollController: panelScrollController,
           ),
         ],
       ),
@@ -625,16 +633,18 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                             height: _picSize,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: c.gray33,
+                              color: c.white8,
                               border: LabBorder.all(
                                 color: c.white16,
                                 width: LabStroke.thin,
                               ),
                             ),
-                            child: Icon(
-                              Icons.person_rounded,
-                              size: 20,
-                              color: c.white33,
+                            child: Center(
+                              child: LabIcon(
+                                LabIcons.profile,
+                                size: _picSize * 0.56,
+                                color: c.white33,
+                              ),
                             ),
                           ),
                   ),

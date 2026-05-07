@@ -10,6 +10,7 @@ import 'package:models/models.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import 'package:zapstore/constants/app_constants.dart';
+import 'package:zapstore/services/nostr_comment_service.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/icons.dart';
@@ -18,6 +19,7 @@ import 'package:zapstore/widgets/app_small_card.dart';
 import 'package:zapstore/widgets/floating_overflow_menu.dart'
     show getStackShareUrl;
 import 'package:zapstore/widgets/comments_section.dart';
+import 'package:zapstore/widgets/common/dropdown_menu.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
@@ -260,6 +262,7 @@ class _AppStackContent extends HookConsumerWidget {
             child: TopScrollFader(
               scrollController: scrollController,
               fadeStart: scrollTopPad,
+              hasBottomBar: true,
               child: SingleChildScrollView(
                 controller: scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -362,9 +365,11 @@ class _AppStackContent extends HookConsumerWidget {
               onComment: () => showCommentModal(
                 context,
                 placeholder: 'Comment on ${stack.name ?? 'this stack'}…',
-                onSubmit: (result) async {
-                  debugPrint('[StackCommentModal] submit: ${result.text}');
-                },
+                onSubmit: (result) => publishRootComment(
+                  ref: ref,
+                  result: result,
+                  stack: stack,
+                ),
               ),
               onOptions: () => showModal<void>(
                 context,
@@ -398,11 +403,11 @@ class _AppStackContent extends HookConsumerWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Floating blurred header — identical pattern to _DetailHeader in
-// app_detail_screen.dart: back button · author pic · name · timestamp ·
+// app_detail_screen.dart: back button · author pic · "By name" · timestamp ·
 // community ProfilePicStack (Zapstore catalog).
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _StackDetailHeader extends StatelessWidget {
+class _StackDetailHeader extends HookWidget {
   const _StackDetailHeader({
     required this.stack,
     required this.author,
@@ -417,6 +422,11 @@ class _StackDetailHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
     final topPad = MediaQuery.paddingOf(context).top;
+
+    final overlayController = useMemoized(() => OverlayPortalController());
+    final layerLink = useMemoized(() => LayerLink());
+    final groupId =
+        useMemoized(() => 'stack-community-dropdown-${stack.identifier}');
 
     final publisherName = author?.name ?? _shortenPubkey(stack.pubkey);
 
@@ -469,21 +479,25 @@ class _StackDetailHeader extends StatelessWidget {
 
                     const SizedBox(width: 12),
 
-                    // Publisher name + timestamp
+                    // "By [name]" + timestamp
                     Expanded(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Flexible(
-                            child: Text(
-                              publisherName,
-                              style: LabTextStyles.med15
-                                  .copyWith(color: c.white66),
+                            child: Text.rich(
+                              TextSpan(
+                                style: LabTextStyles.med15.copyWith(color: c.white66),
+                                children: [
+                                  const TextSpan(text: 'By '),
+                                  TextSpan(text: publisherName),
+                                ],
+                              ),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
@@ -496,13 +510,64 @@ class _StackDetailHeader extends StatelessWidget {
                       ),
                     ),
 
-                    // Community stack (Zapstore catalog)
+                    // Community stack with overlay dropdown
                     if (communityItems.isNotEmpty) ...[
                       const SizedBox(width: 10),
-                      ProfilePicStack(
-                        profiles: communityItems,
-                        avatarSize: 28,
-                        suffix: '${communityItems.length}',
+                      OverlayPortal(
+                        controller: overlayController,
+                        overlayChildBuilder: (ctx) =>
+                            CompositedTransformFollower(
+                          link: layerLink,
+                          showWhenUnlinked: false,
+                          targetAnchor: Alignment.bottomRight,
+                          followerAnchor: Alignment.topRight,
+                          offset: const Offset(0, 4),
+                          child: Align(
+                            alignment: Alignment.topRight,
+                            child: TapRegion(
+                              groupId: groupId,
+                              onTapOutside: (_) => overlayController.hide(),
+                              child: LabDropdownMenu(
+                                constraints:
+                                    const BoxConstraints(minWidth: 220),
+                                children: [
+                                  LabDropdownItem(
+                                    isFirst: true,
+                                    child: Text(
+                                      'This stack is published in the following communities:',
+                                      style: LabTextStyles.reg13
+                                          .copyWith(color: c.white66),
+                                    ),
+                                  ),
+                                  for (final item in communityItems)
+                                    LabDropdownItem(
+                                      child: Text(
+                                        item.profile?.name ?? 'Community',
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        child: TapRegion(
+                          groupId: groupId,
+                          child: CompositedTransformTarget(
+                            link: layerLink,
+                            child: ProfilePicStack(
+                              profiles: communityItems,
+                              avatarSize: 28,
+                              suffix: '${communityItems.length}',
+                              onTap: () {
+                                if (overlayController.isShowing) {
+                                  overlayController.hide();
+                                } else {
+                                  overlayController.show();
+                                }
+                              },
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -574,7 +639,7 @@ class _StackTitleBlock extends StatelessWidget {
             Flexible(
               child: Text(
                 stack.name ?? stack.identifier,
-                style: LabTextStyles.semibold22.copyWith(color: c.white),
+                style: LabTextStyles.semibold23.copyWith(color: c.white),
               ),
             ),
             if (isEncrypted) ...[

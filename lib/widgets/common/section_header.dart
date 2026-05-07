@@ -33,11 +33,13 @@ class SectionHeader extends StatefulWidget {
     required this.title,
     this.linkText,
     this.onLinkTap,
+    this.bottomPadding = 16,
   });
 
   final String title;
   final String? linkText;
   final VoidCallback? onLinkTap;
+  final double bottomPadding;
 
   @override
   State<SectionHeader> createState() => _SectionHeaderState();
@@ -52,7 +54,7 @@ class _SectionHeaderState extends State<SectionHeader> {
     final hasLink = widget.linkText != null && widget.onLinkTap != null;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+      padding: EdgeInsets.fromLTRB(14, 0, 14, widget.bottomPadding),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

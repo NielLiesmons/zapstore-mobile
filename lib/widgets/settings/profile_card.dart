@@ -4,6 +4,7 @@ import 'package:models/models.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/widgets/common/npub_display.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 
 /// Active (currently selected) profile card.
@@ -32,9 +33,6 @@ class ActiveProfileCard extends HookWidget {
     final pressed = useState(false);
 
     final name = _displayName(profile, pubkey);
-    final sub = profile?.nip05 != null && profile!.nip05!.isNotEmpty
-        ? profile!.nip05!
-        : _truncNpub(pubkey);
 
     return GestureDetector(
       onTapDown: (_) => pressed.value = true,
@@ -73,18 +71,12 @@ class ActiveProfileCard extends HookWidget {
                       children: [
                         Text(
                           name,
-                          style: LabTextStyles.semibold17
-                              .copyWith(color: c.white),
+                          style: LabTextStyles.semibold17.copyWith(color: c.white),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          sub,
-                          style: LabTextStyles.reg13.copyWith(color: c.white33),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        const SizedBox(height: 3),
+                        NpubDisplay(pubkey: pubkey, profile: profile),
                       ],
                     ),
                   ),
@@ -98,14 +90,14 @@ class ActiveProfileCard extends HookWidget {
                       label: 'View',
                       onTap: onViewProfile,
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     _PillButton(
                       label: 'Edit',
                       onTap: onEditProfile,
                     ),
                     const Spacer(),
                     _PillIconButton(
-                      icon: LabIcons.share,
+                      icon: LabIcons.shareFill,
                       onTap: onShareProfile,
                     ),
                   ] else
@@ -126,7 +118,8 @@ class ActiveProfileCard extends HookWidget {
 
 /// Non-active profile card — matching LabOtherProfileCard layout.
 ///
-/// gray33 background + gray border, fixed height matching add-profile card.
+/// gray33 background + gray border, fixed height slightly less than
+/// the auto-height of [ActiveProfileCard].
 class OtherProfileCard extends HookWidget {
   const OtherProfileCard({
     super.key,
@@ -165,15 +158,11 @@ class OtherProfileCard extends HookWidget {
         duration: const Duration(milliseconds: 100),
         child: Container(
           width: 256,
-          height: 148,
+          height: 142,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: c.gray33,
+            color: c.gray66,
             borderRadius: BorderRadius.circular(LabRadius.r20),
-            border: LabBorder.all(
-              color: c.gray,
-              width: LabStroke.medium,
-            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,10 +170,10 @@ class OtherProfileCard extends HookWidget {
               Row(
                 children: [
                   SizedBox(
-                    width: 56,
-                    height: 56,
+                    width: 44,
+                    height: 44,
                     child: Center(
-                      child: ProfilePic(profile: profile, pubkey: pubkey, size: 48),
+                      child: ProfilePic(profile: profile, pubkey: pubkey, size: 38),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -194,8 +183,7 @@ class OtherProfileCard extends HookWidget {
                       children: [
                         Text(
                           name,
-                          style: LabTextStyles.semibold15
-                              .copyWith(color: c.white),
+                          style: LabTextStyles.semibold15.copyWith(color: c.white),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -218,7 +206,7 @@ class OtherProfileCard extends HookWidget {
                   const Spacer(),
                   if (profile != null)
                     _PillIconButton(
-                      icon: LabIcons.share,
+                      icon: LabIcons.shareFill,
                       onTap: onShareProfile,
                     )
                   else
@@ -239,10 +227,12 @@ class OtherProfileCard extends HookWidget {
 /// Card for adding a new profile — same height as [OtherProfileCard], never square.
 ///
 /// Matches the zaplab_design add-profile card: left-aligned circle icon + label.
+/// Set [fullWidth] to true in the signed-out state so the card fills its parent.
 class AddProfileCard extends HookWidget {
-  const AddProfileCard({super.key, this.onTap});
+  const AddProfileCard({super.key, this.onTap, this.fullWidth = false});
 
   final VoidCallback? onTap;
+  final bool fullWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -260,8 +250,8 @@ class AddProfileCard extends HookWidget {
         scale: pressed.value ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 100),
         child: Container(
-          width: 256,
-          height: 148,
+          width: fullWidth ? double.infinity : 256,
+          height: 142,
           padding: const EdgeInsets.all(16),
           alignment: Alignment.centerLeft,
           decoration: BoxDecoration(
@@ -324,18 +314,18 @@ class _PillButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           gradient: emphasized ? c.blurple : null,
           color: emphasized ? null : c.white8,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(17),
         ),
         child: Center(
           child: Text(
             label,
             style: LabTextStyles.med13.copyWith(
-              color: emphasized ? c.whiteEnforced : c.white66,
+              color: emphasized ? c.whiteEnforced : c.white33,
             ),
           ),
         ),
@@ -357,14 +347,14 @@ class _PillIconButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 28,
-        height: 28,
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
           color: c.white8,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(17),
         ),
         child: Center(
-          child: LabIcon(icon, size: 15, color: c.white33),
+          child: LabIcon(icon, size: 16, color: c.white33),
         ),
       ),
     );

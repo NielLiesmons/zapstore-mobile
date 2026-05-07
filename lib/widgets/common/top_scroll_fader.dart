@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:zapstore/theme.dart';
 import 'package:zapstore/widgets/common/scroll_to_top_button.dart';
 
 /// Wraps [child] in a scroll-driven top-edge fade.
@@ -31,16 +34,22 @@ import 'package:zapstore/widgets/common/scroll_to_top_button.dart';
 /// inside a [Stack]), both [fadeStart] and [offsetBias] can be left at their
 /// default of 0 because y=0 of the fader widget is already below the header.
 ///
-/// ### Scroll-to-top button (default: on)
+/// ### Scroll-to-top button and bottom-bar context (default: no bottom bar)
 ///
-/// When [showScrollToTop] is true (the default), a floating round button
-/// appears at the bottom-right once the user scrolls beyond [scrollToTopThreshold]
-/// px and taps to animate back to the top.  Position:
-///   • `right: 14`
-///   • `bottom: safeAreaBottom + 96`
+/// [hasBottomBar] controls two behaviours:
 ///
-/// Disable per-screen with `showScrollToTop: false` (e.g. screens with their
-/// own custom FABs at that position).
+/// **`hasBottomBar: false` (default — screens without a BottomBar widget):**
+///   - Scroll-to-top button sits at `safeBottom + 24`.
+///   - A blurred safe-area overlay is painted at the very bottom edge, covering
+///     just the system gesture / home-indicator inset. It has a `black66`
+///     background with a thin `white16` top border to blur scrolling content.
+///
+/// **`hasBottomBar: true` (screens with a BottomBar widget):**
+///   - Scroll-to-top button clears the bottom bar: `safeBottom + 80`.
+///   - No bottom overlay (the BottomBar already occupies that region).
+///
+/// Disable the scroll-to-top button per-screen with `showScrollToTop: false`
+/// (e.g. screens with their own custom FABs at that position).
 class TopScrollFader extends StatelessWidget {
   const TopScrollFader({
     super.key,
@@ -52,6 +61,7 @@ class TopScrollFader extends StatelessWidget {
     this.fadeStart,
     this.showScrollToTop = true,
     this.scrollToTopThreshold = 1200.0,
+    this.hasBottomBar = false,
   });
 
   final ScrollController scrollController;
@@ -81,6 +91,13 @@ class TopScrollFader extends StatelessWidget {
   /// Scroll offset (px) beyond which the scroll-to-top button begins to
   /// appear.  The button scales in over the following 17 px.
   final double scrollToTopThreshold;
+
+  /// Whether this screen has a [BottomBar] widget.
+  ///
+  /// - `false` (default): button at `safeBottom + 24`; blurred safe-area
+  ///   overlay shown at the bottom edge.
+  /// - `true`: button at `safeBottom + 80` to clear the bottom bar; no overlay.
+  final bool hasBottomBar;
 
   @override
   Widget build(BuildContext context) {
@@ -114,22 +131,54 @@ class TopScrollFader extends StatelessWidget {
       child: child,
     );
 
-    if (!showScrollToTop) return shaderMask;
-
-    // Wrap in a Stack so the scroll-to-top button floats above the content.
+    // Wrap in a Stack so the scroll-to-top button and optional overlay float
+    // above the content.
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
+    final needsStack = showScrollToTop || (!hasBottomBar && bottomSafe > 0);
+    if (!needsStack) return shaderMask;
+
+    final c = Theme.of(context).extension<LabColors>()!;
 
     return Stack(
       children: [
         Positioned.fill(child: shaderMask),
-        Positioned(
-          bottom: bottomSafe + 96,
-          right: 14,
-          child: ScrollToTopButton(
-            scrollController: scrollController,
-            threshold: scrollToTopThreshold,
+        // Blurred safe-area overlay — only on screens without a bottom bar,
+        // and only when there is a non-zero gesture/home-indicator inset.
+        if (!hasBottomBar && bottomSafe > 0)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: bottomSafe,
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: c.black66,
+                    border: Border(
+                      top: BorderSide(
+                        color: c.white16,
+                        width: LabStroke.thin,
+                        strokeAlign: BorderSide.strokeAlignCenter,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+        // Scroll-to-top button: 24px above safe inset (no bottom bar) or
+        // 80px above (bottom bar present, to clear its height).
+        if (showScrollToTop)
+          Positioned(
+            bottom: bottomSafe + (hasBottomBar ? 80.0 : 24.0),
+            right: 14,
+            child: ScrollToTopButton(
+              scrollController: scrollController,
+              threshold: scrollToTopThreshold,
+            ),
+          ),
       ],
     );
   }

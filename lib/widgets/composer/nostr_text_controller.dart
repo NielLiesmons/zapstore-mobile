@@ -253,25 +253,14 @@ class NostrTextEditingController extends TextEditingController {
     switch (embed) {
       case MentionEmbed(:final pubkey, :final displayName):
         final color = hexToColor(pubkey);
-        final bgColor = Color.fromARGB(51, color.red, color.green, color.blue);
-        return WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 1),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '@$displayName',
-              style: (baseStyle ?? LabTextStyles.reg15).copyWith(
-                color: color,
-                fontWeight: FontWeight.w500,
-                decoration: TextDecoration.none,
-              ),
-            ),
+        // Webapp renders mentions as plain colored text with no background —
+        // use a TextSpan so the size always matches the surrounding typing text.
+        return TextSpan(
+          text: '@$displayName',
+          style: (baseStyle ?? LabTextStyles.reg15).copyWith(
+            color: color,
+            fontWeight: FontWeight.w500,
+            decoration: TextDecoration.none,
           ),
         );
 
