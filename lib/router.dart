@@ -9,6 +9,7 @@ import 'package:zapstore/screens/app_detail_screen.dart';
 import 'package:zapstore/screens/app_stacks_screen.dart';
 import 'package:zapstore/screens/app_stack_screen.dart';
 import 'package:zapstore/screens/forum_post_screen.dart';
+import 'package:zapstore/screens/inbox_screen.dart';
 import 'package:zapstore/screens/user_screen.dart';
 import 'package:zapstore/screens/updates_screen.dart';
 import 'package:zapstore/screens/profiles_screen.dart';
@@ -111,14 +112,9 @@ GoRoute _forumPostRoute() {
     path: 'forum/:id',
     pageBuilder: (context, state) {
       final postId = state.pathParameters['id']!;
-      // Pre-loaded comments passed from ForumPostCard — shown immediately while
-      // the detail query completes, eliminating visible skeleton re-loading.
-      final initialComments = state.extra is List<Comment>
-          ? state.extra as List<Comment>
-          : null;
       return _slideTransitionPage(
         state: state,
-        child: ForumPostScreen(postId: postId, initialComments: initialComments),
+        child: ForumPostScreen(postId: postId),
       );
     },
   );
@@ -129,7 +125,8 @@ GoRoute _allStacksRoute() {
     path: 'stacks',
     pageBuilder: (context, state) => _slideTransitionPage(
       state: state,
-      child: const AppStacksScreen(),    ),
+      child: const AppStacksScreen(),
+    ),
   );
 }
 
@@ -143,6 +140,16 @@ GoRoute _userRoute() {
         child: UserScreen(pubkey: pubkey),
       );
     },
+  );
+}
+
+GoRoute _inboxRoute() {
+  return GoRoute(
+    path: 'inbox',
+    pageBuilder: (context, state) => _slideTransitionPage(
+      state: state,
+      child: const InboxScreen(),
+    ),
   );
 }
 
@@ -169,6 +176,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           _allStacksRoute(),
           _userRoute(),
           _forumPostRoute(),
+          _inboxRoute(),
         ],
       ),
 
@@ -184,6 +192,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           _stackDetailRoute(),
           _allStacksRoute(),
           _userRoute(),
+          _inboxRoute(),
         ],
       ),
 
@@ -199,6 +208,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           _stackDetailRoute(),
           _allStacksRoute(),
           _userRoute(),
+          _inboxRoute(),
         ],
       ),
     ],

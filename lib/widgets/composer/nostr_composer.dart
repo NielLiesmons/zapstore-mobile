@@ -49,11 +49,13 @@ class NostrComposer extends HookConsumerWidget {
     this.showActionRow = true,
     this.autofocus = false,
     this.allowEmptySubmit = false,
+    this.hideTipButton = false,
     this.nested = false,
     this.quotedContent,
     this.onSubmit,
     this.onCameraTap,
     this.onAddTap,
+    this.onTipTap,
     this.onClose,
     this.controller,
   });
@@ -63,6 +65,7 @@ class NostrComposer extends HookConsumerWidget {
   final bool showActionRow;
   final bool autofocus;
   final bool allowEmptySubmit;
+  final bool hideTipButton;
 
   /// When true, removes the composer's own black33 background and border so
   /// it can sit flush inside a parent container that already provides styling
@@ -80,6 +83,9 @@ class NostrComposer extends HookConsumerWidget {
 
   /// Fired when the + button is tapped.
   final VoidCallback? onAddTap;
+
+  /// Fired when the tip (zap) button is tapped — opens tip amount picker.
+  final VoidCallback? onTipTap;
 
   /// When non-null, a × close button appears inside the field.
   final VoidCallback? onClose;
@@ -199,6 +205,9 @@ class NostrComposer extends HookConsumerWidget {
                     maxHeight: size.maxHeight,
                   ),
                   child: SingleChildScrollView(
+                    // Avoid primary-controller conflicts when the composer sits
+                    // inside another vertical scrollable (e.g. comment modal).
+                    primary: false,
                     child: TextField(
                       controller: ctrl,
                       autofocus: autofocus,
@@ -261,7 +270,9 @@ class NostrComposer extends HookConsumerWidget {
               _ActionRow(
                 hasContent: hasContent.value,
                 allowEmptySubmit: allowEmptySubmit,
+                hideTipButton: hideTipButton,
                 onCameraTap: onCameraTap,
+                onTipTap: onTipTap,
                 onEmojiTap: () async {
                   final result = await showEmojiPicker(context);
                   if (result == null) return;
@@ -345,20 +356,24 @@ class _ActionRow extends StatelessWidget {
   const _ActionRow({
     required this.hasContent,
     required this.allowEmptySubmit,
+    required this.hideTipButton,
     required this.onEmojiTap,
     required this.onSubmit,
     required this.colors,
     this.onCameraTap,
     this.onAddTap,
+    this.onTipTap,
   });
 
   final bool hasContent;
   final bool allowEmptySubmit;
+  final bool hideTipButton;
   final VoidCallback onEmojiTap;
   final VoidCallback onSubmit;
   final LabColors colors;
   final VoidCallback? onCameraTap;
   final VoidCallback? onAddTap;
+  final VoidCallback? onTipTap;
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +389,16 @@ class _ActionRow extends StatelessWidget {
           // Left cluster: camera / emoji / plus — gap 8px (.action-buttons-left)
           Row(
             children: [
-              // Buttons at 30px height — matches primaryXs/secondaryXs height tier.
+              if (!hideTipButton) ...[
+                _ActionBtn(
+                  icon: LabIcons.zap,
+                  iconSize: 16,
+                  onTap: onTipTap,
+                  colors: c,
+                  useGoldIcon: true,
+                ),
+                const SizedBox(width: 8),
+              ],
               _ActionBtn(
                 icon: LabIcons.camera,
                 iconSize: 15,
@@ -420,6 +444,7 @@ class _ActionBtn extends StatefulWidget {
     required this.colors,
     this.onTap,
     this.thick = false,
+    this.useGoldIcon = false,
   });
 
   final String icon;
@@ -427,6 +452,7 @@ class _ActionBtn extends StatefulWidget {
   final LabColors colors;
   final VoidCallback? onTap;
   final bool thick;
+  final bool useGoldIcon;
 
   @override
   State<_ActionBtn> createState() => _ActionBtnState();
@@ -457,8 +483,17 @@ class _ActionBtnState extends State<_ActionBtn> {
             color: c.white8,
             borderRadius: BorderRadius.circular(7),
           ),
-          child: LabIcon(widget.icon, size: widget.iconSize, color: c.white33,
-              thick: widget.thick),
+          child: widget.useGoldIcon
+              ? ShaderMask(
+                  shaderCallback: (bounds) =>
+                      widget.colors.gold.createShader(bounds),
+                  blendMode: BlendMode.srcIn,
+                  child: LabIcon(widget.icon,
+                      size: widget.iconSize, color: widget.colors.white,
+                      thick: widget.thick),
+                )
+              : LabIcon(widget.icon, size: widget.iconSize, color: c.white33,
+                  thick: widget.thick),
         ),
       ),
     );

@@ -95,7 +95,7 @@ class UpdatePollerNotifier extends StateNotifier<UpdatePollerState> {
   List<String> _lastBackedUpIds = [];
 
   void _init() {
-    ref.listen<AsyncValue<void>>(appInitializationProvider, (prev, next) {
+    ref.listen<AsyncValue<void>>(storageReadyProvider, (prev, next) {
       if (prev is! AsyncData && next is AsyncData) {
         _startPolling();
       }

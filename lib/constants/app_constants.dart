@@ -1,3 +1,5 @@
+import 'package:models/models.dart';
+
 /// Application identifier for Zapstore itself
 const kZapstoreAppIdentifier = 'dev.zapstore.app';
 
@@ -18,6 +20,37 @@ const kFranzapPubkey =
 /// Zapstore community public key (npub14nl2afh9zsswsp5043zxe2w304afaa496gxe8z2w2rlw84ys92zqlnjx5u)
 const kZapstoreCommunityPubkey =
     'acfeaea6e51420e8068fac446ca9d17d7a9ef6a5d20d93894e50fee3d4902a84';
+
+/// `#h` tag filter for Zapstore community forum posts (kind 11).
+Map<String, Set<String>> get kForumPostCommunityTags => {
+      '#h': {kZapstoreCommunityPubkey},
+    };
+
+/// Returns true when a kind-11 event targets the Zapstore community via `#h`.
+bool forumPostEventFilter(Map<String, dynamic> event) {
+  final kind = event['kind'] as int?;
+  if (kind != null && kind != 11) return true;
+
+  final tags = event['tags'] as List<dynamic>?;
+  if (tags == null) return false;
+
+  for (final tag in tags) {
+    if (tag is! List || tag.length < 2) continue;
+    if (tag[0] == 'h' &&
+        tag[1] is String &&
+        (tag[1] as String).toLowerCase() == kZapstoreCommunityPubkey) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Client-side guard for cached forum posts missing the community `#h` tag.
+bool isZapstoreCommunityForumPost(EventBase event) {
+  return event
+      .getTagSetValues('h')
+      .any((h) => h.toLowerCase() == kZapstoreCommunityPubkey);
+}
 
 /// Identifier for storing user saved apps
 const kAppBookmarksIdentifier = 'zapstore-bookmarks';

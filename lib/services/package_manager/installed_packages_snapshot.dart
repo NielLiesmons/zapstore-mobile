@@ -9,14 +9,28 @@ import 'package:zapstore/services/package_manager/package_manager.dart';
 class InstalledPackagesSnapshot {
   static const _fileName = 'installed_packages_snapshot.json';
 
+  /// Serializes concurrent [save] calls — they share one `.tmp` path.
+  static Future<void> _saveChain = Future<void>.value();
+
   static Future<File> _file() async {
     final dir = await getApplicationSupportDirectory();
     return File(path.join(dir.path, _fileName));
   }
 
-  static Future<void> save(Map<String, PackageInfo> installed) async {
+  static Future<void> save(Map<String, PackageInfo> installed) {
+    final next = _saveChain.then((_) => _saveNow(installed));
+    _saveChain = next.catchError((_) {});
+    return next;
+  }
+
+  static Future<void> _saveNow(Map<String, PackageInfo> installed) async {
     try {
       final file = await _file();
+      final dir = file.parent;
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+
       final tmp = File('${file.path}.tmp');
       final list = installed.values
           .map(

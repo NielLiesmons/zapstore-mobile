@@ -18,6 +18,9 @@ class ProfilePicStack extends StatelessWidget {
     this.suffix = '',
     this.maxDisplay = 3,
     this.avatarSize = 24.0,
+    this.pillHeight,
+    this.pillTextColor,
+    this.showPillBackground = true,
     this.overlap = 8.0,
     this.onTap,
   });
@@ -27,6 +30,15 @@ class ProfilePicStack extends StatelessWidget {
   final String suffix;
   final int maxDisplay;
   final double avatarSize;
+
+  /// Label pill height — defaults to [avatarSize] when null.
+  final double? pillHeight;
+
+  /// Pill label color — defaults to [LabColors.white66].
+  final Color? pillTextColor;
+
+  /// When false, [text] / [suffix] render without the white8 pill background.
+  final bool showPillBackground;
   final double overlap;
   final VoidCallback? onTap;
 
@@ -75,6 +87,7 @@ class ProfilePicStack extends StatelessWidget {
     );
 
     final hasPill = text.isNotEmpty || suffix.isNotEmpty;
+    final effectivePillHeight = pillHeight ?? avatarSize;
 
     // Single-digit count-only: render as a perfect circle (width == height).
     final isSingleDigit = text.isEmpty && suffix.length == 1;
@@ -88,44 +101,75 @@ class ProfilePicStack extends StatelessWidget {
           if (hasPill)
             Transform.translate(
               offset: Offset(-overlap, 0),
-              child: Container(
-                height: avatarSize,
-                width: isSingleDigit ? avatarSize : null,
-                alignment: isSingleDigit ? Alignment.center : null,
-                // Count-only (no text): tighter symmetric padding so the number
-                // isn't pushed right by the extra avatar-overlap indent.
-                // Single-digit: no padding — container is a fixed square.
-                padding: isSingleDigit
-                    ? EdgeInsets.zero
-                    : text.isNotEmpty
-                        ? const EdgeInsets.only(left: 16, right: 12)
-                        : const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: c.white8,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (text.isNotEmpty)
-                      Text(
-                        text,
-                        style: LabTextStyles.med13.copyWith(color: c.white66),
-                        overflow: TextOverflow.ellipsis,
+              child: showPillBackground
+                  ? Container(
+                      height: effectivePillHeight,
+                      width: isSingleDigit ? effectivePillHeight : null,
+                      alignment: isSingleDigit ? Alignment.center : null,
+                      padding: isSingleDigit
+                          ? EdgeInsets.zero
+                          : text.isNotEmpty
+                              ? const EdgeInsets.only(left: 16, right: 12)
+                              : const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: c.white8,
+                        borderRadius: BorderRadius.circular(999),
                       ),
-                    if (text.isNotEmpty && suffix.isNotEmpty)
-                      const SizedBox(width: 6),
-                    if (suffix.isNotEmpty)
-                      Text(
-                        suffix,
-                        style: LabTextStyles.bold13.copyWith(color: c.white33),
+                      child: _PillLabelRow(
+                        text: text,
+                        suffix: suffix,
+                        pillTextColor: pillTextColor,
                       ),
-                  ],
-                ),
-              ),
+                    )
+                  : Padding(
+                      padding: text.isNotEmpty
+                          ? const EdgeInsets.only(left: 8)
+                          : EdgeInsets.zero,
+                      child: _PillLabelRow(
+                        text: text,
+                        suffix: suffix,
+                        pillTextColor: pillTextColor,
+                      ),
+                    ),
             ),
         ],
       ),
+    );
+  }
+}
+
+class _PillLabelRow extends StatelessWidget {
+  const _PillLabelRow({
+    required this.text,
+    required this.suffix,
+    this.pillTextColor,
+  });
+
+  final String text;
+  final String suffix;
+  final Color? pillTextColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (text.isNotEmpty)
+          Text(
+            text,
+            style: LabTextStyles.med13
+                .copyWith(color: pillTextColor ?? c.white66),
+            overflow: TextOverflow.ellipsis,
+          ),
+        if (text.isNotEmpty && suffix.isNotEmpty) const SizedBox(width: 6),
+        if (suffix.isNotEmpty)
+          Text(
+            suffix,
+            style: LabTextStyles.bold13.copyWith(color: c.white33),
+          ),
+      ],
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/widgets/social/thread_root.dart' show kCommentModalBottomFade;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AppModal — the single modal surface (matches webapp Modal.svelte + CommentModal.svelte)
@@ -30,6 +31,10 @@ import 'package:zapstore/utils/text_styles.dart';
 /// Barrier color used by every [showModal] call (65% black = webapp .bg-overlay).
 const _kBarrierColor = Color(0xA6000000); // ~65% black
 
+/// Standard horizontal / bottom inset for modal body content — matches webapp
+/// `--comment-modal-inset` (14px).
+const double kModalInset = 14;
+
 /// Pixels of tappable overlay left visible above the modal when the keyboard
 /// is open, so the user can still dismiss by tapping the barrier.
 const _kKeyboardTopZone = 70.0;
@@ -50,6 +55,10 @@ Future<T?> showModal<T>(
   bool isDismissible = true,
   bool fillHeight = false,
   double maxHeightFactor = 0.75,
+
+  /// When true the barrier is transparent — the parent modal (via
+  /// [ModalNestScope]) provides dimming. Matches webapp `nestedModal`.
+  bool nestedModal = false,
 }) {
   final c = Theme.of(context).extension<LabColors>()!;
 
@@ -60,7 +69,7 @@ Future<T?> showModal<T>(
     enableDrag: false,
     useSafeArea: false,
     backgroundColor: Colors.transparent,
-    barrierColor: _kBarrierColor,
+    barrierColor: nestedModal ? Colors.transparent : _kBarrierColor,
     builder: (ctx) {
       return _AppModalSurface(
         title: title,
@@ -218,6 +227,10 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
     // When a title is present the modal owns the SingleChildScrollView so the
     // title scrolls with the content instead of being pinned as a fixed header.
     // In that case widget.child must be a non-scrolling widget (Padding/Column).
+    // Title-less + fillHeight (e.g. thread modal): [widget.child] must be the
+    // scrollable itself — wrapping a [ListView] in [SingleChildScrollView]
+    // nests viewports and crashes. Title-less + !fillHeight (e.g. comment
+    // composer): outer [SingleChildScrollView] gives [Flexible] a bounded height.
     final Widget scrollContent = widget.title != null
         ? SingleChildScrollView(
             child: Column(
@@ -228,7 +241,13 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
               ],
             ),
           )
-        : widget.child;
+        : widget.fillHeight
+            ? widget.child
+            : SingleChildScrollView(
+                primary: false,
+                physics: const ClampingScrollPhysics(),
+                child: widget.child,
+              );
 
     final scrollableChild = NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -240,19 +259,34 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
       child: ValueListenableBuilder<double>(
         valueListenable: _scrollValue,
         builder: (_, offset, inner) {
-          // Fade reaches full intensity over 4 px after the 4 px trigger.
-          final t = ((offset - 4.0) / 4.0).clamp(0.0, 1.0);
-          return ShaderMask(
-            shaderCallback: (bounds) => LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 1.0 - t),
-                Colors.black,
-              ],
-            ).createShader(Rect.fromLTWH(0, 0, bounds.width, 22.0)),
-            blendMode: BlendMode.dstIn,
-            child: inner!,
+          // Top fade reaches full intensity over 4 px after a 4 px trigger.
+          final topT = ((offset - 4.0) / 4.0).clamp(0.0, 1.0);
+          final hasFooter = widget.footer != null;
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return ShaderMask(
+                shaderCallback: (bounds) {
+                  final bh = bounds.height;
+                  final ts = (40.0 / bh).clamp(0.0, 0.5);
+                  final bs = hasFooter
+                      ? ((bh - kCommentModalBottomFade) / bh).clamp(0.5, 1.0)
+                      : 1.0;
+                  return LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 1.0 - topT),
+                      Colors.black,
+                      Colors.black,
+                      hasFooter ? Colors.transparent : Colors.black,
+                    ],
+                    stops: [0.0, ts, bs, 1.0],
+                  ).createShader(bounds);
+                },
+                blendMode: BlendMode.dstIn,
+                child: inner!,
+              );
+            },
           );
         },
         child: scrollContent,
@@ -375,7 +409,12 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, description != null ? 24 : 28, 16, 0),
+      padding: EdgeInsets.fromLTRB(
+        kModalInset,
+        description != null ? kModalInset + 6 : kModalInset + 14,
+        kModalInset,
+        description != null ? kModalInset : 0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -415,11 +454,13 @@ class ModalFooterBar extends StatelessWidget {
   const ModalFooterBar({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 20),
+    this.padding = const EdgeInsets.fromLTRB(kModalInset, 12, kModalInset, kModalInset),
+    this.showTopDivider = true,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final bool showTopDivider;
 
   @override
   Widget build(BuildContext context) {
@@ -427,7 +468,7 @@ class ModalFooterBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(height: 0.33, color: c.white8),
+        if (showTopDivider) Container(height: 0.33, color: c.white8),
         Padding(padding: padding, child: child),
         // Safe area for home indicator — omitted when keyboard is up since
         // the outer sheet is already raised by keyboardH at that point.

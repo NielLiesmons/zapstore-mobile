@@ -34,6 +34,39 @@ class BottomBar extends StatefulWidget {
   State<BottomBar> createState() => _BottomBarState();
 }
 
+/// Trailing options (⋯) hit area: **41px tall**, **37px wide** (4px narrower
+/// than height). Icon is geometrically centered in that box; nominal size is
+/// ~68% of height so the glyph reads balanced vs the 20px zap icon.
+class BottomBarOptionsHitBox extends StatelessWidget {
+  const BottomBarOptionsHitBox({super.key, this.onTap});
+
+  final VoidCallback? onTap;
+
+  static const double height = 41;
+  static const double width = height - 4;
+  static double get iconNominalSize => height * 0.68;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Center(
+          child: LabIcon(
+            LabIcons.options,
+            size: iconNominalSize,
+            color: c.white33,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BottomBarState extends State<BottomBar> {
   @override
   Widget build(BuildContext context) {
@@ -68,7 +101,12 @@ class _BottomBarState extends State<BottomBar> {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.fromLTRB(14, 14, 6, 8),
+              padding: EdgeInsets.fromLTRB(
+                14,
+                14,
+                widget.isSignedIn ? 6 : 14,
+                6,
+              ),
               child: SafeArea(
                 top: false,
                 child: widget.isSignedIn
@@ -127,18 +165,8 @@ class _BottomBarState extends State<BottomBar> {
             ),
           ),
         ),
-        // Options button — no background, flush with the comment input.
-        // 41×41 tap area; icon is 27px (80% of original 34px) centered within it.
-        GestureDetector(
-          onTap: widget.onOptions,
-          child: SizedBox(
-            width: 41,
-            height: 41,
-            child: Center(
-              child: LabIcon(LabIcons.options, size: 27, color: c.white33),
-            ),
-          ),
-        ),
+        // Options button — square hit target; see [BottomBarOptionsHitBox].
+        BottomBarOptionsHitBox(onTap: widget.onOptions),
       ],
     );
   }
@@ -220,7 +248,7 @@ class CommunityBottomBar extends StatelessWidget {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
               child: SafeArea(
                 top: false,
                 child: isSignedIn

@@ -3,11 +3,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/widgets/common/detail_page_chrome.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ScrollToTopButton
 //
-// Round 44×44 FAB-style button that:
+// Round FAB matching [kDetailActionsButtonSize] that:
 //   • is hidden until the user scrolls past [threshold] (default 1200 px)
 //   • scales in smoothly over the first [scaleRange] px beyond the threshold
 //   • taps to animate back to the top of the scroll view
@@ -61,8 +62,8 @@ class ScrollToTopButton extends StatelessWidget {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                   child: Container(
-                    width: 44,
-                    height: 44,
+                    width: kDetailActionsButtonSize,
+                    height: kDetailActionsButtonSize,
                     decoration: BoxDecoration(
                       color: c.gray66,
                       shape: BoxShape.circle,
@@ -70,6 +71,7 @@ class ScrollToTopButton extends StatelessWidget {
                         color: c.white16,
                         width: LabStroke.thin,
                       ),
+                      boxShadow: detailActionsButtonShadow(),
                     ),
                     child: Center(
                       child: LabIcon(

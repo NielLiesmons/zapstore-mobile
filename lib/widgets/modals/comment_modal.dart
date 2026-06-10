@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:models/models.dart';
 
+import 'package:zapstore/theme.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/composer/nostr_composer.dart';
 import 'package:zapstore/widgets/composer/nostr_text_controller.dart'; // ComposerResult
 import 'package:zapstore/widgets/social/quoted_message.dart';
 import 'package:zapstore/widgets/social/quoted_zap_message.dart';
+import 'package:zapstore/widgets/social/thread_root.dart';
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -33,16 +35,24 @@ Future<void> showCommentModal(
   Profile? quotedCommentAuthor,
   Zap? quotedZap,
   String? quotedAuthorName,
+  ThreadRootContext? rootContext,
+  String? version,
+  bool showRootConnector = false,
   Future<void> Function(ComposerResult result)? onSubmit,
+  bool nestedModal = false,
 }) {
   return showModal<void>(
     context,
+    nestedModal: nestedModal,
     builder: (_) => _CommentModalContent(
       placeholder: placeholder,
       quotedComment: quotedComment,
       quotedCommentAuthor: quotedCommentAuthor,
       quotedZap: quotedZap,
       quotedAuthorName: quotedAuthorName,
+      rootContext: rootContext,
+      version: version,
+      showRootConnector: showRootConnector,
       onSubmit: onSubmit,
     ),
   );
@@ -57,6 +67,9 @@ class _CommentModalContent extends StatefulWidget {
     this.quotedCommentAuthor,
     this.quotedZap,
     this.quotedAuthorName,
+    this.rootContext,
+    this.version,
+    this.showRootConnector = false,
     this.onSubmit,
   });
 
@@ -65,6 +78,9 @@ class _CommentModalContent extends StatefulWidget {
   final Profile? quotedCommentAuthor;
   final Zap? quotedZap;
   final String? quotedAuthorName;
+  final ThreadRootContext? rootContext;
+  final String? version;
+  final bool showRootConnector;
   final Future<void> Function(ComposerResult result)? onSubmit;
 
   @override
@@ -106,21 +122,45 @@ class _CommentModalContentState extends State<_CommentModalContent> {
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
     final quote = _buildQuote();
 
-    // Pass quotedContent directly into NostrComposer so it renders inside
-    // the black33 container, not as a separate element above it.
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: NostrComposer(
-        placeholder: widget.placeholder,
-        size: ComposerSize.medium,
-        autofocus: true,
-        showActionRow: true,
-        quotedContent: quote,
-        onSubmit: _submitting ? null : _handleSubmit,
-        onClose: () => Navigator.of(context).pop(),
-      ),
+    // Top divider (more pronounced than the sheet edge) — avoids
+    // [BoxDecoration] border quirks; pairs with [showModal]’s scrollable body.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(height: LabStroke.thin, color: c.white16),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            kCommentModalInset,
+            kCommentModalInset,
+            kCommentModalInset,
+            6,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.rootContext != null)
+                CommentModalRootRow(
+                  context_: widget.rootContext!,
+                  version: widget.version,
+                  showConnector: widget.showRootConnector,
+                ),
+              NostrComposer(
+                placeholder: widget.placeholder,
+                size: ComposerSize.medium,
+                autofocus: true,
+                showActionRow: true,
+                quotedContent: quote,
+                onSubmit: _submitting ? null : _handleSubmit,
+                onClose: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

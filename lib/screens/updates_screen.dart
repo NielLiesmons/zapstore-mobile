@@ -3,14 +3,12 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/services/updates_service.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/extensions.dart';
-import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/batch_progress_banner.dart';
 import 'package:zapstore/widgets/common/badges.dart';
@@ -94,29 +92,6 @@ class _UpdatesHeader extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: c.gray33,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 2),
-                            child: LabIcon(
-                              LabIcons.chevronLeft,
-                              size: 14,
-                              color: c.white33,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     Text(
                       'Updates',
                       style: LabTextStyles.semibold23.copyWith(color: c.white),

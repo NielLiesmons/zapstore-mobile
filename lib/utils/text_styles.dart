@@ -31,6 +31,18 @@ abstract final class LabTextStyles {
     decoration: TextDecoration.none,
   );
 
+  /// Detail-page hero titles (app / stack / forum) — matches home [SectionHeader]
+  /// rhythm: tighter line-height reads bolder on mobile.
+  static const TextStyle heroTitle = TextStyle(
+    fontFamily: _font,
+    fontVariations: [FontVariation('wght', 650)],
+    fontSize: 22,
+    height: 1.0,
+    letterSpacing: 0.15,
+    leadingDistribution: _leading,
+    decoration: TextDecoration.none,
+  );
+
   /// ALL-CAPS eyebrow label — 15px (rendered 14.5), wide tracking.
   static const TextStyle eyebrow15 = TextStyle(
     fontFamily: _font,

@@ -88,6 +88,7 @@ class LabIcons {
   static const String pricing       = 'pricing';
   static const String profile       = 'profile';
   static const String profileQR     = 'profileQR';
+  static const String qr            = 'QR';
   static const String reply         = 'reply';
   static const String search        = 'search';
   static const String security      = 'security';

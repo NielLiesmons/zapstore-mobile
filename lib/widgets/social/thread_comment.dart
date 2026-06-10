@@ -2,18 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/color.dart';
+import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/time_utils.dart';
 
-/// Flat (non-bubble) root comment display for the top of a thread modal.
+/// Flat (non-bubble) root comment display for opened thread modals.
 ///
 /// Mirrors webapp's ThreadComment.svelte:
-///   [ProfilePic 36]  [author-name (profile-colored)]  [timestamp right-aligned]
+///   [ProfilePic 36]  [author-name (profile-colored)]     [timestamp] [actions]
 ///                    [full content below, no truncation]
 ///
-/// Used in [_ThreadBody] as the root comment header — distinct from the
-/// [MessageBubble] used for replies below the divider.
+/// When [showAvatar] is false the avatar lives on the unified left rail
+/// (see [_ThreadRootUnified] in root_comment.dart).
 class ThreadComment extends StatelessWidget {
   const ThreadComment({
     super.key,
@@ -21,12 +22,20 @@ class ThreadComment extends StatelessWidget {
     this.pubkey,
     required this.content,
     this.timestamp,
+    this.showAvatar = true,
+    this.headerActions,
   });
 
   final Profile? profile;
   final String? pubkey;
   final Widget content;
   final DateTime? timestamp;
+
+  /// When false, avatar is rendered on the thread left rail instead.
+  final bool showAvatar;
+
+  /// Trailing actions on the author row (e.g. options ⋯ on root comment).
+  final Widget? headerActions;
 
   @override
   Widget build(BuildContext context) {
@@ -46,45 +55,55 @@ class ThreadComment extends StatelessWidget {
     final displayName = _resolveDisplayName(profile, effectivePubkey);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: EdgeInsets.fromLTRB(
+        showAvatar ? 14 : 0,
+        showAvatar ? 12 : 8,
+        showAvatar ? 14 : 0,
+        showAvatar ? 12 : 0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Author row: avatar + name + timestamp
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              ProfilePic(profile: profile, pubkey: pubkey, size: 36),
-              const SizedBox(width: 12),
+              if (showAvatar) ...[
+                ProfilePic(profile: profile, pubkey: pubkey, size: 36),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Flexible(
-                      child: Text(
-                        displayName,
-                        style: LabTextStyles.semibold15.copyWith(color: nameColor),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayName,
+                              style: LabTextStyles.semibold15.copyWith(color: nameColor),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                          if (timestamp != null) ...[
+                            const SizedBox(width: 10),
+                            TimeAgoText(
+                              timestamp!,
+                              style: LabTextStyles.reg13.copyWith(color: c.white33),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    if (timestamp != null) ...[
-                      const SizedBox(width: 10),
-                      TimeAgoText(
-                        timestamp!,
-                        style: LabTextStyles.reg13.copyWith(color: c.white33),
-                      ),
-                    ],
+                    if (headerActions != null) headerActions!,
                   ],
                 ),
               ),
             ],
           ),
-
-          // Content — full, no truncation, matches webapp .content mt-8px
-          const SizedBox(height: 10),
+          SizedBox(height: showAvatar ? 10 : 4),
           DefaultTextStyle.merge(
             style: LabTextStyles.reg15.copyWith(
               color: c.white.withValues(alpha: 0.85),
@@ -105,5 +124,28 @@ class ThreadComment extends StatelessWidget {
       return 'npub1${pubkey.substring(0, 3)}…${pubkey.substring(pubkey.length - 6)}';
     }
     return 'anon';
+  }
+}
+
+/// Options (⋯) button for the root comment author row in thread modals.
+class ThreadRootOptionsButton extends StatelessWidget {
+  const ThreadRootOptionsButton({super.key, this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 16,
+        height: 14,
+        child: Center(
+          child: LabIcon(LabIcons.options, size: 14, color: c.white33),
+        ),
+      ),
+    );
   }
 }

@@ -1,31 +1,29 @@
 import 'dart:convert';
-import 'dart:ui' as ui;
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import 'package:zapstore/constants/app_constants.dart';
-import 'package:zapstore/services/nostr_comment_service.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/app_small_card.dart';
-import 'package:zapstore/widgets/floating_overflow_menu.dart'
-    show getStackShareUrl;
 import 'package:zapstore/widgets/comments_section.dart';
-import 'package:zapstore/widgets/common/dropdown_menu.dart';
-import 'package:zapstore/widgets/common/modal.dart';
+import 'package:zapstore/widgets/common/detail_page_chrome.dart';
+import 'package:zapstore/services/nostr_comment_service.dart';
+import 'package:zapstore/widgets/modals/actions_modal.dart';
+import 'package:zapstore/widgets/social/thread_root.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
+import 'package:zapstore/widgets/common/time_utils.dart';
 import 'package:zapstore/widgets/common/top_scroll_fader.dart';
-import 'package:zapstore/widgets/modals/comment_modal.dart';
-import 'package:zapstore/widgets/social/bottom_bar.dart';
+import 'package:zapstore/widgets/floating_overflow_menu.dart'
+    show getStackShareUrl;
 import 'package:zapstore/widgets/social/details_tab.dart';
 import 'package:zapstore/widgets/social/social_tabs.dart';
 import 'package:zapstore/widgets/social/zaps_section.dart';
@@ -215,7 +213,6 @@ class _AppStackContent extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
 
     // Author profile
     final authorState = ref.watch(
@@ -243,37 +240,80 @@ class _AppStackContent extends HookConsumerWidget {
     );
     final catalogProfile = catalogProfileState.models.firstOrNull;
 
+    final commentsState = ref.watch(
+      query<Comment>(
+        tags: {'#A': {stack.id}},
+        source: LocalAndRemoteSource(stream: true, relays: 'AppCatalog'),
+        subscriptionPrefix: 'app-stack-comments',
+      ),
+    );
+    final commentTabMeta = commentFeedTabMeta(commentsState);
+
     final packageManager = ref.watch(packageManagerProvider.notifier);
     final sortedApps = _sortAppsUninstalledFirst(apps, packageManager);
 
     final topPad = MediaQuery.paddingOf(context).top;
-    // safe-area + header row height (≈38 px) + 10 px bottom padding under row
-    final scrollTopPad = topPad + 48.0;
-
     final scrollController = useScrollController();
-    final isSignedIn = signedInPubkey != null;
     final isEncrypted = stack.content.isNotEmpty;
+    final pageTitle = stack.name ?? stack.identifier;
+    final publisherName = author?.name ?? detailShortPubkey(stack.pubkey);
+    final communityItems = [
+      if (catalogProfile != null) ProfilePicItem(profile: catalogProfile),
+    ];
+
+    void openOptions() => showActionsModal(
+          context,
+          contentType: ActionsContentType.stack,
+          rootContext: ThreadRootContext.fromStack(stack),
+          onCommentSubmit: (result) => publishRootComment(
+            ref: ref,
+            result: result,
+            stack: stack,
+          ),
+          ref: ref,
+        );
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── Full-body scrollable content ─────────────────────────────────
           Positioned.fill(
             child: TopScrollFader(
               scrollController: scrollController,
-              fadeStart: scrollTopPad,
-              hasBottomBar: true,
+              fadeHeight: 48,
+              safeEdgeFades: true,
+              hasBottomBar: false,
               child: SingleChildScrollView(
                 controller: scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(
-                  top: scrollTopPad + 10,
-                  bottom: MediaQuery.paddingOf(context).bottom + 80,
+                  top: topPad + 8,
+                  bottom: MediaQuery.paddingOf(context).bottom + 16,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Error banner (decrypt failure etc.)
+                    DetailAuthorMetaRow(
+                      leading: ProfilePic(
+                        profile: author,
+                        pubkey: stack.pubkey,
+                        size: kDetailAuthorAvatarSize,
+                      ),
+                      title: publisherName,
+                      timestamp: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: TimeAgoText(
+                          stack.event.createdAt,
+                          style: LabTextStyles.reg13.copyWith(color: c.white33),
+                        ),
+                      ),
+                      trailing: DetailCommunityMenu(
+                        groupId: 'stack-community-dropdown-${stack.identifier}',
+                        menuTitle:
+                            'This stack is published in the following communities:',
+                        items: communityItems,
+                      ),
+                    ),
+
                     if (errorMessage != null)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
@@ -313,6 +353,9 @@ class _AppStackContent extends HookConsumerWidget {
                     if (!isEncrypted) ...[
                       const SizedBox(height: 16),
                       SocialTabs(
+                        commentCount: commentTabMeta.count,
+                        commentsLoading: commentTabMeta.initialLoading,
+                        commentsSyncing: commentTabMeta.syncing,
                         contentBuilder: (tab) {
                           switch (tab) {
                             case SocialTab.comments:
@@ -343,41 +386,10 @@ class _AppStackContent extends HookConsumerWidget {
             ),
           ),
 
-          // ── Floating blurred header ───────────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _StackDetailHeader(
-              stack: stack,
-              author: author,
-              catalogProfile: catalogProfile,
-            ),
-          ),
-
-          // ── Bottom bar ────────────────────────────────────────────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: BottomBar(
-              isSignedIn: isSignedIn,
-              onComment: () => showCommentModal(
-                context,
-                placeholder: 'Comment on ${stack.name ?? 'this stack'}…',
-                onSubmit: (result) => publishRootComment(
-                  ref: ref,
-                  result: result,
-                  stack: stack,
-                ),
-              ),
-              onOptions: () => showModal<void>(
-                context,
-                title: stack.name ?? stack.identifier,
-                builder: (_) => _StackShareContent(stack: stack),
-              ),
-              onGetStarted: () {},
-            ),
+          DetailActionsButtonOverlay(
+            onTap: openOptions,
+            scrollController: scrollController,
+            expandLabel: pageTitle,
           ),
         ],
       ),
@@ -398,213 +410,6 @@ class _AppStackContent extends HookConsumerWidget {
       }
     }
     return [...uninstalled, ...installed];
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Floating blurred header — identical pattern to _DetailHeader in
-// app_detail_screen.dart: back button · author pic · "By name" · timestamp ·
-// community ProfilePicStack (Zapstore catalog).
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StackDetailHeader extends HookWidget {
-  const _StackDetailHeader({
-    required this.stack,
-    required this.author,
-    required this.catalogProfile,
-  });
-
-  final AppStack stack;
-  final Profile? author;
-  final Profile? catalogProfile;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
-    final topPad = MediaQuery.paddingOf(context).top;
-
-    final overlayController = useMemoized(() => OverlayPortalController());
-    final layerLink = useMemoized(() => LayerLink());
-    final groupId =
-        useMemoized(() => 'stack-community-dropdown-${stack.identifier}');
-
-    final publisherName = author?.name ?? _shortenPubkey(stack.pubkey);
-
-    final communityItems = [
-      if (catalogProfile != null) ProfilePicItem(profile: catalogProfile),
-    ];
-
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          color: c.black,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: topPad + 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Back button — gray33 circle, white33 chevron
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: c.gray33,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 2),
-                            child: LabIcon(
-                              LabIcons.chevronLeft,
-                              size: 14,
-                              color: c.white33,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // Author avatar
-                    ProfilePic(profile: author, pubkey: stack.pubkey, size: 28),
-
-                    const SizedBox(width: 12),
-
-                    // "By [name]" + timestamp
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text.rich(
-                              TextSpan(
-                                style: LabTextStyles.med15.copyWith(color: c.white66),
-                                children: [
-                                  const TextSpan(text: 'By '),
-                                  TextSpan(text: publisherName),
-                                ],
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              _formatTimestamp(stack.event.createdAt),
-                              style: LabTextStyles.reg13
-                                  .copyWith(color: c.white33),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Community stack with overlay dropdown
-                    if (communityItems.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      OverlayPortal(
-                        controller: overlayController,
-                        overlayChildBuilder: (ctx) =>
-                            CompositedTransformFollower(
-                          link: layerLink,
-                          showWhenUnlinked: false,
-                          targetAnchor: Alignment.bottomRight,
-                          followerAnchor: Alignment.topRight,
-                          offset: const Offset(0, 4),
-                          child: Align(
-                            alignment: Alignment.topRight,
-                            child: TapRegion(
-                              groupId: groupId,
-                              onTapOutside: (_) => overlayController.hide(),
-                              child: LabDropdownMenu(
-                                constraints:
-                                    const BoxConstraints(minWidth: 220),
-                                children: [
-                                  LabDropdownItem(
-                                    isFirst: true,
-                                    child: Text(
-                                      'This stack is published in the following communities:',
-                                      style: LabTextStyles.reg13
-                                          .copyWith(color: c.white66),
-                                    ),
-                                  ),
-                                  for (final item in communityItems)
-                                    LabDropdownItem(
-                                      child: Text(
-                                        item.profile?.name ?? 'Community',
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        child: TapRegion(
-                          groupId: groupId,
-                          child: CompositedTransformTarget(
-                            link: layerLink,
-                            child: ProfilePicStack(
-                              profiles: communityItems,
-                              avatarSize: 28,
-                              suffix: '${communityItems.length}',
-                              onTap: () {
-                                if (overlayController.isShowing) {
-                                  overlayController.hide();
-                                } else {
-                                  overlayController.show();
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _shortenPubkey(String pubkey) {
-    if (pubkey.length <= 12) return pubkey;
-    return '${pubkey.substring(0, 6)}…${pubkey.substring(pubkey.length - 4)}';
-  }
-
-  static String _formatTimestamp(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inSeconds < 60) return 'Just Now';
-    final today = DateTime(now.year, now.month, now.day);
-    final dtDay = DateTime(dt.year, dt.month, dt.day);
-    if (dtDay == today) {
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return 'Today $h:$m';
-    }
-    final yesterday = today.subtract(const Duration(days: 1));
-    if (dtDay == yesterday) return 'Yesterday';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final base = '${months[dt.month - 1]} ${dt.day}';
-    return dt.year != now.year ? '$base ${dt.year}' : base;
   }
 }
 
@@ -634,18 +439,25 @@ class _StackTitleBlock extends StatelessWidget {
       children: [
         // Title row
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Flexible(
-              child: Text(
-                stack.name ?? stack.identifier,
-                style: LabTextStyles.semibold23.copyWith(color: c.white),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      stack.name ?? stack.identifier,
+                      style: LabTextStyles.heroTitle.copyWith(color: c.white),
+                    ),
+                  ),
+                  if (isEncrypted) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.lock, size: 18, color: c.white33),
+                  ],
+                ],
               ),
             ),
-            if (isEncrypted) ...[
-              const SizedBox(width: 8),
-              Icon(Icons.lock, size: 18, color: c.white33),
-            ],
           ],
         ),
 
@@ -752,7 +564,7 @@ class _StackShareContent extends StatelessWidget {
     final shareUrl = getStackShareUrl(stack);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

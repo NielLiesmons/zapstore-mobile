@@ -346,36 +346,36 @@ class LatestReleasesContainer extends HookConsumerWidget {
           width: 290,
           child: Padding(
             padding: const EdgeInsets.only(right: 24),
-              child: Column(
-            children: List.generate(_kAppsPerColumn, (i) => Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  // Must match AppSmallCard's crossAxisAlignment so the icon
-                  // sits flush at y=0 — prevents extra visual gap at the top
-                  // of the skeleton compared to the Stacks row.
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Shimmer(width: 56, height: 56, radius: 14),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: SizedBox(
-                        height: 56,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Shimmer(width: 120, height: 16),
-                            const SizedBox(height: 6),
-                            const Shimmer(width: 80, height: 12),
-                          ],
+            child: Column(
+              children: List.generate(
+                _kAppsPerColumn,
+                (i) => Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Shimmer(width: 56, height: 56, radius: 14),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: SizedBox(
+                            height: 56,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Shimmer(width: 120, height: 16),
+                                const SizedBox(height: 6),
+                                const Shimmer(width: 80, height: 12),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            )),
             ),
           ),
         ),
@@ -401,16 +401,10 @@ class _AppColumn extends StatelessWidget {
             for (final app in apps)
               Expanded(
                 child: Padding(
-                  // No top padding on first row → gap from SectionHeader = exactly
-                  // the SectionHeader's 16px bottom padding.  Bottom padding creates
-                  // uniform 8px breathing room between consecutive cards (same as
-                  // symmetric(vertical:4) produced between cards, but without the
-                  // extra 4px top that pushed the first card down).
                   padding: const EdgeInsets.only(bottom: 8),
                   child: AppSmallCard(app: app),
                 ),
               ),
-            // Fill remaining slots to keep even column height
             for (var i = apps.length; i < _kAppsPerColumn; i++)
               const Expanded(child: SizedBox.shrink()),
           ],

@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
+import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/utils/paged_subscription_notifier.dart';
 import 'package:zapstore/widgets/common/shimmer.dart';
@@ -32,7 +33,10 @@ class ForumFeedNotifier extends PagedSubscriptionNotifier<ForumPost> {
       query<ForumPost>(
         until: DateTime.now(),
         limit: pageSize,
-        source: const LocalAndRemoteSource(relays: 'AppCatalog', stream: true),
+        tags: kForumPostCommunityTags,
+        where: (post) => isZapstoreCommunityForumPost(post.event),
+        schemaFilter: forumPostEventFilter,
+        source: const LocalAndRemoteSource(relays: kDefaultRelay, stream: true),
         subscriptionPrefix: 'forum-feed',
       ),
       (_, next) => updateFirstPage(next),
@@ -46,11 +50,18 @@ class ForumFeedNotifier extends PagedSubscriptionNotifier<ForumPost> {
   ) async {
     final storage = ref.read(storageNotifierProvider.notifier);
     final items = await storage.query(
-      RequestFilter<ForumPost>(until: until, limit: pageSize).toRequest(),
-      source: const LocalAndRemoteSource(relays: 'AppCatalog', stream: false),
+      RequestFilter<ForumPost>(
+        until: until,
+        limit: pageSize,
+        tags: kForumPostCommunityTags,
+      ).toRequest(),
+      source: const LocalAndRemoteSource(relays: kDefaultRelay, stream: false),
       subscriptionPrefix: 'forum-feed-older',
     );
-    return (items: items, count: items.length);
+    final filtered = items
+        .where((post) => isZapstoreCommunityForumPost(post.event))
+        .toList();
+    return (items: filtered, count: filtered.length);
   }
 
   @override
@@ -140,10 +151,7 @@ class ForumFeedContainer extends HookConsumerWidget {
           (post) => ForumPostCard(
             key: ValueKey(post.id),
             post: post,
-            onTap: (preloadedComments) => context.push(
-              '/forum/${post.id}',
-              extra: preloadedComments,
-            ),
+            onTap: () => context.push('/forum/${post.id}'),
           ),
         ),
 

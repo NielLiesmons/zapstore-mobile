@@ -1,18 +1,16 @@
 import 'dart:math' show max;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/services/nostr_comment_service.dart';
 import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/theme.dart';
-import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
-import 'package:zapstore/widgets/common/dropdown_menu.dart';
+import 'package:zapstore/widgets/comments_section.dart';
+import 'package:zapstore/widgets/common/detail_page_chrome.dart';
 import 'package:zapstore/widgets/common/empty_state.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
@@ -20,14 +18,15 @@ import 'package:zapstore/widgets/common/profile_pic_stack.dart';
 import 'package:zapstore/widgets/common/time_utils.dart';
 import 'package:zapstore/widgets/common/shimmer.dart';
 import 'package:zapstore/widgets/common/top_scroll_fader.dart';
-import 'package:zapstore/widgets/modals/comment_actions_modal.dart';
+import 'package:zapstore/widgets/modals/actions_modal.dart';
 import 'package:zapstore/widgets/modals/comment_modal.dart';
-import 'package:zapstore/widgets/social/bottom_bar.dart';
+import 'package:zapstore/widgets/social/comment_feed_composer.dart';
 import 'package:zapstore/widgets/social/details_tab.dart';
 import 'package:zapstore/widgets/social/social_tabs.dart';
 import 'package:zapstore/widgets/social/zap_comment_item.dart';
 import 'package:zapstore/widgets/social/zaps_section.dart';
 import 'package:zapstore/widgets/social/root_comment.dart';
+import 'package:zapstore/widgets/social/thread_root.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ForumPostScreen
@@ -43,26 +42,20 @@ import 'package:zapstore/widgets/social/root_comment.dart';
 //   └─ Positioned bottom → BottomBar (when signed in)
 
 class ForumPostScreen extends HookConsumerWidget {
-  const ForumPostScreen({
-    super.key,
-    required this.postId,
-    this.initialComments,
-  });
+  const ForumPostScreen({super.key, required this.postId});
 
   final String postId;
 
-  /// Comments fetched by [ForumPostCard] on the home screen, passed here so
-  /// the detail view can display them instantly while the full query warms up.
-  final List<Comment>? initialComments;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Load the forum post
     final postState = ref.watch(
       query<ForumPost>(
         ids: {postId},
         limit: 1,
-        source: const LocalAndRemoteSource(relays: 'AppCatalog', stream: false),
+        tags: kForumPostCommunityTags,
+        where: (post) => isZapstoreCommunityForumPost(post.event),
+        schemaFilter: forumPostEventFilter,
+        source: const LocalAndRemoteSource(relays: kDefaultRelay, stream: false),
         subscriptionPrefix: 'forum-post-$postId',
       ),
     );
@@ -79,7 +72,7 @@ class ForumPostScreen extends HookConsumerWidget {
       );
     }
 
-    return _ForumPostContent(post: post, initialComments: initialComments);
+    return _ForumPostContent(post: post);
   }
 }
 
@@ -88,16 +81,13 @@ class ForumPostScreen extends HookConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ForumPostContent extends HookConsumerWidget {
-  const _ForumPostContent({required this.post, this.initialComments});
+  const _ForumPostContent({required this.post});
 
   final ForumPost post;
-  final List<Comment>? initialComments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
-    final isSignedIn = signedInPubkey != null;
 
     // Author profile
     final authorState = ref.watch(
@@ -126,37 +116,72 @@ class _ForumPostContent extends HookConsumerWidget {
     final catalogProfile = catalogProfileState.models.firstOrNull;
 
     final topPad = MediaQuery.paddingOf(context).top;
-    final scrollTopPad = topPad + 48.0;
     final scrollController = useScrollController();
+    final publisherName = author?.name ?? detailShortPubkey(post.pubkey);
+    final communityItems = [
+      if (catalogProfile != null) ProfilePicItem(profile: catalogProfile),
+    ];
+
+    final commentsState = ref.watch(
+      query<Comment>(
+        tags: {'#E': {post.id}},
+        source: const LocalAndRemoteSource(
+          relays: kDefaultRelay,
+          stream: true,
+        ),
+        subscriptionPrefix: 'forum-post-comments-${post.id}',
+      ),
+    );
+    final commentTabMeta = commentFeedTabMeta(commentsState);
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── Scrollable body ────────────────────────────────────────────────
           Positioned.fill(
             child: TopScrollFader(
               scrollController: scrollController,
-              fadeStart: scrollTopPad,
-              hasBottomBar: true,
+              fadeHeight: 48,
+              safeEdgeFades: true,
+              hasBottomBar: false,
               child: SingleChildScrollView(
                 controller: scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(
-                  top: scrollTopPad + 10,
-                  bottom: MediaQuery.paddingOf(context).bottom + 80,
+                  top: topPad + 8,
+                  bottom: MediaQuery.paddingOf(context).bottom + 16,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Post title ─────────────────────────────────────────
+                    DetailAuthorMetaRow(
+                      leading: ProfilePic(
+                        profile: author,
+                        pubkey: post.pubkey,
+                        size: kDetailAuthorAvatarSize,
+                      ),
+                      title: publisherName,
+                      timestamp: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: TimeAgoText(
+                          post.createdAt,
+                          style: LabTextStyles.reg13.copyWith(color: c.white33),
+                        ),
+                      ),
+                      trailing: DetailCommunityMenu(
+                        groupId: 'forum-community-dropdown-${post.id}',
+                        menuTitle:
+                            'This post is published in the following communities:',
+                        items: communityItems,
+                      ),
+                    ),
+
                     if (post.title?.isNotEmpty == true)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                         child: Text(
                           post.title!,
-                          style: LabTextStyles.semibold23.copyWith(
+                          style: LabTextStyles.heroTitle.copyWith(
                             color: c.white,
-                            height: 1.3,
                           ),
                         ),
                       ),
@@ -166,12 +191,12 @@ class _ForumPostContent extends HookConsumerWidget {
                       _ExpandableBody(content: post.content),
 
                     // ── Social tabs ────────────────────────────────────────
-                        SocialTabs(
+                    SocialTabs(
+                      commentCount: commentTabMeta.count,
+                      commentsLoading: commentTabMeta.initialLoading,
+                      commentsSyncing: commentTabMeta.syncing,
                       contentBuilder: (tab) => switch (tab) {
-                        SocialTab.comments => _ForumCommentsSection(
-                            post: post,
-                            initialComments: initialComments,
-                          ),
+                        SocialTab.comments => _ForumCommentsSection(post: post),
                         SocialTab.zaps => ZapsSection(
                             tags: {'#e': {post.id}},
                             subscriptionId: post.id,
@@ -194,226 +219,22 @@ class _ForumPostContent extends HookConsumerWidget {
             ),
           ),
 
-          // ── Fixed blurred header ───────────────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _ForumPostHeader(
-              post: post,
-              author: author,
-              catalogProfile: catalogProfile,
-            ),
-          ),
-
-          // ── Bottom bar ────────────────────────────────────────────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: BottomBar(
-              isSignedIn: isSignedIn,
-              onZap: () {},
-              onComment: () => showCommentModal(
-                context,
-                placeholder: 'Reply to this post…',
-                onSubmit: (result) => publishRootComment(
-                  ref: ref,
-                  result: result,
-                  forumPost: post,
-                ),
+          DetailActionsButtonOverlay(
+            onTap: () => showActionsModal(
+              context,
+              contentType: ActionsContentType.forum,
+              rootContext: ThreadRootContext.fromForumPost(post),
+              onCommentSubmit: (result) => publishRootComment(
+                ref: ref,
+                result: result,
+                forumPost: post,
               ),
-              onOptions: () => showCommentActionsModal(context),
-              onGetStarted: () {},
+              ref: ref,
             ),
+            scrollController: scrollController,
+            expandLabel: 'Forum Post',
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fixed blurred header — identical structure to _DetailHeader in AppDetailScreen
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Layout (topPad + 8 + 30 + 10 = topPad + 48, same scrollTopPad constant):
-//   SizedBox(topPad + 8)
-//   Padding(horizontal: 14)
-//     Row: [back 30×30] [10] [ProfilePic 28] [12] [Expanded: "By name" + timestamp] [10] [ProfilePicStack]
-//   SizedBox(10)
-
-class _ForumPostHeader extends HookWidget {
-  const _ForumPostHeader({
-    required this.post,
-    required this.author,
-    required this.catalogProfile,
-  });
-
-  final ForumPost post;
-  final Profile? author;
-  final Profile? catalogProfile;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
-    final topPad = MediaQuery.paddingOf(context).top;
-
-    final overlayController = useMemoized(() => OverlayPortalController());
-    final layerLink = useMemoized(() => LayerLink());
-    final groupId =
-        useMemoized(() => 'forum-community-dropdown-${post.id}');
-
-    final publisherName = author?.name ??
-        '${post.pubkey.substring(0, 6)}…${post.pubkey.substring(post.pubkey.length - 4)}';
-
-    final communityItems = [
-      if (catalogProfile != null) ProfilePicItem(profile: catalogProfile),
-    ];
-
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          color: c.black,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: topPad + 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Back button
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: c.gray33,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 2),
-                            child: LabIcon(
-                              LabIcons.chevronLeft,
-                              size: 14,
-                              color: c.white33,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // Author avatar — 28px matches AppDetailScreen
-                    ProfilePic(profile: author, pubkey: post.pubkey, size: 28),
-
-                    const SizedBox(width: 12),
-
-                    // "By [name]" + timestamp inline
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text.rich(
-                              TextSpan(
-                                style: LabTextStyles.med15.copyWith(color: c.white66),
-                                children: [
-                                  const TextSpan(text: 'By '),
-                                  TextSpan(text: publisherName),
-                                ],
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: TimeAgoText(
-                              post.createdAt,
-                              style: LabTextStyles.reg13
-                                  .copyWith(color: c.white33),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Community stack with overlay dropdown
-                    if (communityItems.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      OverlayPortal(
-                        controller: overlayController,
-                        overlayChildBuilder: (ctx) =>
-                            CompositedTransformFollower(
-                          link: layerLink,
-                          showWhenUnlinked: false,
-                          targetAnchor: Alignment.bottomRight,
-                          followerAnchor: Alignment.topRight,
-                          offset: const Offset(0, 4),
-                          child: Align(
-                            alignment: Alignment.topRight,
-                            child: TapRegion(
-                              groupId: groupId,
-                              onTapOutside: (_) => overlayController.hide(),
-                              child: LabDropdownMenu(
-                                constraints:
-                                    const BoxConstraints(minWidth: 220),
-                                children: [
-                                  LabDropdownItem(
-                                    isFirst: true,
-                                    child: Text(
-                                      'This post is published in the following communities:',
-                                      style: LabTextStyles.reg13
-                                          .copyWith(color: c.white66),
-                                    ),
-                                  ),
-                                  for (final item in communityItems)
-                                    LabDropdownItem(
-                                      child: Text(
-                                        item.profile?.name ?? 'Community',
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        child: TapRegion(
-                          groupId: groupId,
-                          child: CompositedTransformTarget(
-                            link: layerLink,
-                            child: ProfilePicStack(
-                              profiles: communityItems,
-                              avatarSize: 28,
-                              suffix: '${communityItems.length}',
-                              onTap: () {
-                                if (overlayController.isShowing) {
-                                  overlayController.hide();
-                                } else {
-                                  overlayController.show();
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -557,26 +378,20 @@ class _FeedEntry {
 }
 
 class _ForumCommentsSection extends ConsumerWidget {
-  const _ForumCommentsSection({
-    required this.post,
-    this.initialComments,
-  });
+  const _ForumCommentsSection({required this.post});
 
   final ForumPost post;
 
-  /// Comments pre-loaded on the home feed — used as the immediate display
-  /// while the full remote query warms up, eliminating skeleton re-flashing.
-  final List<Comment>? initialComments;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Unified subscription prefix matches ForumPostCard so the Riverpod
-    // provider is shared when the card is still in the widget tree.
+    // Same subscription prefix as ForumPostCard — Riverpod shares the provider
+    // when the card is still in the widget tree, and the SQLite cache populated
+    // by the card's unlimited query provides instant data on first open.
     final commentsState = ref.watch(
       query<Comment>(
         tags: {'#E': {post.id}},
         source: const LocalAndRemoteSource(
-          relays: 'AppCatalog',
+          relays: kDefaultRelay,
           stream: true,
         ),
         subscriptionPrefix: 'forum-post-comments-${post.id}',
@@ -586,21 +401,13 @@ class _ForumCommentsSection extends ConsumerWidget {
     final zapsState = ref.watch(
       query<Zap>(
         tags: {'#e': {post.id}},
-        source: const LocalAndRemoteSource(relays: 'AppCatalog', stream: true),
+        source: const LocalAndRemoteSource(relays: kDefaultRelay, stream: true),
         subscriptionPrefix: 'forum-post-comments-zaps-${post.id}',
       ),
     );
 
-    // When the query is still loading, fall back to pre-loaded comments so the
-    // UI shows content immediately instead of a skeleton.
-    final comments = switch (commentsState) {
-      StorageData(:final models) => models,
-      _ => initialComments ?? <Comment>[],
-    };
-    final zapModels = switch (zapsState) {
-      StorageData(:final models) => models,
-      _ => <Zap>[],
-    };
+    final comments = commentsState.models;
+    final zapModels = zapsState.models;
 
     final rootComments = comments.where((c) => c.parentKind != 1111).toList();
     final zapsWithComments = zapModels
@@ -613,35 +420,54 @@ class _ForumCommentsSection extends ConsumerWidget {
       ...zapsWithComments.map((z) => _FeedEntry(createdAt: z.createdAt, zap: z)),
     ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    if (entries.isEmpty) {
-      // Only show skeleton if we have no pre-loaded data to fall back to.
-      if (commentsState is StorageLoading && initialComments == null) {
-        return const Padding(
-          padding: EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: BubbleSkeletonList(),
-        );
-      }
-      return const EmptyState(
-        message: 'No comments yet. Be the first!',
-        minHeight: 160,
-      );
-    }
-
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (int i = 0; i < entries.length; i++) ...[
-          if (i > 0) const SizedBox(height: 8),
-          if (entries[i].comment != null)
-            RootComment(
-              key: ValueKey(entries[i].comment!.id),
-              comment: entries[i].comment!,
+        CommentFeedComposer(
+          ctaLabel: 'Your Comment',
+          onTap: () => showCommentModal(
+            context,
+            placeholder: 'Comment on this post…',
+            rootContext: ThreadRootContext.fromForumPost(post),
+            showRootConnector: true,
+            onSubmit: (result) => publishRootComment(
+              ref: ref,
+              result: result,
+              forumPost: post,
+            ),
+          ),
+        ),
+        if (entries.isEmpty)
+          if (commentsState is StorageLoading && comments.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: BubbleSkeletonList(),
             )
           else
-            ZapCommentItem(
-              key: ValueKey(entries[i].zap!.id),
-              zap: entries[i].zap!,
-            ),
-        ],
+            const EmptyState(
+              message: 'No comments yet. Be the first!',
+              minHeight: 160,
+            )
+        else
+          Column(
+            children: [
+              for (int i = 0; i < entries.length; i++) ...[
+                if (i > 0) const SizedBox(height: 12),
+                if (entries[i].comment != null)
+                  RootComment(
+                    key: ValueKey(entries[i].comment!.id),
+                    comment: entries[i].comment!,
+                    rootContext: ThreadRootContext.fromForumPost(post),
+                  )
+                else
+                  ZapCommentItem(
+                    key: ValueKey(entries[i].zap!.id),
+                    zap: entries[i].zap!,
+                    topPadding: i == 0 ? 0 : 4,
+                  ),
+              ],
+            ],
+          ),
         const SizedBox(height: 16),
       ],
     );

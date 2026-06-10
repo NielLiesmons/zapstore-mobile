@@ -68,39 +68,41 @@ class QuotedMessage extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       clipBehavior: Clip.hardEdge,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 2.8px colored accent bar — matches .quoted-bar in webapp
-            Container(width: 2.8, color: accentColor),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 2.8px colored accent bar — matches .quoted-bar in webapp
+          Container(
+            width: 2.8,
+            height: 40,
+            color: accentColor,
+          ),
 
-            // Body: name + content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      authorName,
-                      style: LabTextStyles.semibold13.copyWith(color: nameColor),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      preview.isEmpty ? ' ' : preview,
-                      style: LabTextStyles.reg13.copyWith(color: c.white66),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+          // Body: name + content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    authorName,
+                    style: LabTextStyles.semibold13.copyWith(color: nameColor),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    preview.isEmpty ? ' ' : preview,
+                    style: LabTextStyles.reg13.copyWith(color: c.white66),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

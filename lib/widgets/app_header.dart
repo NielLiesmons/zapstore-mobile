@@ -7,6 +7,7 @@ import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/app_pic.dart';
+import 'package:zapstore/widgets/common/header_options_button.dart';
 import 'package:zapstore/widgets/split_install_button.dart';
 import 'package:zapstore/utils/url_utils.dart';
 
@@ -17,9 +18,18 @@ import 'package:zapstore/utils/url_utils.dart';
 /// VersionPillWidget has been removed; version info lives in the
 /// Latest Release panel below.
 class AppHeader extends ConsumerWidget {
-  const AppHeader({super.key, required this.app});
+  const AppHeader({
+    super.key,
+    required this.app,
+    this.onOptions,
+    this.bottomSpacing = 16,
+  });
 
   final App app;
+  final VoidCallback? onOptions;
+
+  /// Space below the icon + name block (tighter when screenshots follow).
+  final double bottomSpacing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,23 +54,30 @@ class AppHeader extends ConsumerWidget {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AutoSizeText(
-                    app.name ?? app.identifier,
-                    // h1 size (24px) + semibold weight via fontVariations so the
-                    // Inter variable font actually renders at 600 (not w800/black).
-                    style: LabTextStyles.semibold23.copyWith(
-                      color: c.white,
-                      fontWeight: FontWeight.w600,
-                      fontVariations: const [FontVariation('wght', 600)],
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    minFontSize: 16,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: AutoSizeText(
+                          app.name ?? app.identifier,
+                          style: LabTextStyles.heroTitle.copyWith(color: c.white),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          minFontSize: 16,
+                        ),
+                      ),
+                      if (onOptions != null) ...[
+                        const SizedBox(width: 10),
+                        HeaderOptionsButton(onTap: onOptions),
+                      ],
+                    ],
                   ),
-                  Gap(8),
+                  Gap(10),
                   // Platform pill (left) + install button (right).
                   // During active install ops, the pill slides out and the
                   // button expands to fill the full available width.
@@ -91,13 +108,14 @@ class AppHeader extends ConsumerWidget {
                         SplitInstallButton(app: app),
                     ],
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
         ),
 
-        Gap(16),
+        Gap(bottomSpacing),
       ],
     );
   }

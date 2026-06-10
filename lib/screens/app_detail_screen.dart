@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -12,26 +10,25 @@ import 'package:zapstore/utils/debug_utils.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
-import 'package:zapstore/services/nostr_comment_service.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/widgets/app_detail_widgets.dart';
 import 'package:zapstore/widgets/app_header.dart';
 import 'package:zapstore/widgets/comments_section.dart';
-import 'package:zapstore/widgets/common/dropdown_menu.dart';
+import 'package:zapstore/widgets/common/detail_page_chrome.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
+import 'package:zapstore/widgets/common/time_utils.dart';
 import 'package:zapstore/widgets/expandable_markdown.dart';
-import 'package:zapstore/widgets/common/modal.dart';
-import 'package:zapstore/widgets/modals/comment_modal.dart';
-import 'package:zapstore/widgets/modals/zap_slider_modal.dart';
+import 'package:zapstore/services/nostr_comment_service.dart';
+import 'package:zapstore/widgets/modals/actions_modal.dart';
+import 'package:zapstore/widgets/modals/releases_modal.dart';
+import 'package:zapstore/widgets/social/thread_root.dart';
+import 'package:zapstore/widgets/modals/security_modal.dart';
 import 'package:zapstore/widgets/screenshots_gallery.dart';
 import 'package:zapstore/widgets/social/details_tab.dart';
-import 'package:zapstore/widgets/social/bottom_bar.dart';
 import 'package:zapstore/widgets/social/social_tabs.dart';
 import 'package:zapstore/widgets/social/zaps_section.dart';
 import 'package:zapstore/widgets/common/top_scroll_fader.dart';
-import 'package:zapstore/widgets/split_install_button.dart';
-
 class AppDetailScreen extends HookConsumerWidget {
   const AppDetailScreen({super.key, required this.appId, this.authorPubkey});
 
@@ -186,47 +183,108 @@ class _AppDetailContent extends HookConsumerWidget {
     final latestRelease = app.latestRelease.value;
     final latestMetadata = app.installable;
 
+    final commentsState = latestMetadata != null
+        ? ref.watch(
+            query<Comment>(
+              tags: {'#A': {app.id}},
+              source: LocalAndRemoteSource(stream: true, relays: 'AppCatalog'),
+              subscriptionPrefix: 'app-comments',
+            ),
+          )
+        : null;
+    final commentTabMeta = commentsState != null
+        ? commentFeedTabMeta(commentsState)
+        : null;
+
     // Security panel: matches webapp's publishedByDeveloper / hasRepository logic.
     // isRelaySigned == published by indexer (not the developer)
     final publishedByDeveloper = !app.isRelaySigned;
     final hasRepository = app.repository?.isNotEmpty == true;
 
     final topPad = MediaQuery.paddingOf(context).top;
-    // safe-area + header row (≈38px) + 10px bottom padding under the row
-    final scrollTopPad = topPad + 48.0;
-
     final scrollController = useScrollController();
-    final isSignedIn = signedInPubkey != null;
+    final pageTitle = app.name ?? app.identifier;
+    final publisherName = author?.name ?? detailShortPubkey(app.pubkey);
+    final communityItems = [
+      if (catalogProfile != null) ProfilePicItem(profile: catalogProfile),
+    ];
+
+    void openOptions() => showActionsModal(
+          context,
+          contentType: ActionsContentType.app,
+          rootContext: ThreadRootContext.fromApp(
+            app,
+            version: latestMetadata?.version,
+          ),
+          version: latestMetadata?.version,
+          onCommentSubmit: (result) => publishRootComment(
+            ref: ref,
+            result: result,
+            app: app,
+            version: latestMetadata?.version,
+          ),
+          ref: ref,
+        );
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── Full-body scrollable content (behind the floating header) ────
           Positioned.fill(
             child: TopScrollFader(
               scrollController: scrollController,
-              fadeStart: scrollTopPad,
-              hasBottomBar: true,
+              fadeHeight: 48,
+              safeEdgeFades: true,
+              hasBottomBar: false,
               child: SingleChildScrollView(
                 controller: scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(
-                  top: scrollTopPad + 10,
-                  bottom: MediaQuery.paddingOf(context).bottom + 80,
+                  top: topPad + 8,
+                  bottom: MediaQuery.paddingOf(context).bottom + 16,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  DetailAuthorMetaRow(
+                    leading: app.isRelaySigned
+                        ? LabIcon(
+                            LabIcons.index,
+                            size: 26,
+                            color: c.white33,
+                          )
+                        : ProfilePic(
+                            profile: author,
+                            size: kDetailAuthorAvatarSize,
+                          ),
+                    title: app.isRelaySigned ? 'Indexer' : publisherName,
+                    timestamp: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: TimeAgoText(
+                        app.event.createdAt,
+                        style: LabTextStyles.reg13.copyWith(color: c.white33),
+                      ),
+                    ),
+                    trailing: DetailCommunityMenu(
+                      groupId: 'app-community-dropdown-${app.identifier}',
+                      menuTitle:
+                          'This app is published in the following communities:',
+                      items: communityItems,
+                    ),
+                  ),
+
                   // App header (pic + name + platform pill + install button)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: AppHeader(app: app),
+                    child: AppHeader(
+                      app: app,
+                      bottomSpacing: 16,
+                    ),
                   ),
 
                   // Screenshots gallery
                   if (app.images.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.only(bottom: 16),
                       child: ScreenshotsGallery(app: app),
                     ),
 
@@ -260,11 +318,17 @@ class _AppDetailContent extends HookConsumerWidget {
                       hasRepository: hasRepository,
                       latestRelease: latestRelease,
                       latestMetadata: latestMetadata,
+                      app: app,
+                      author: author,
+                      catalogProfile: catalogProfile,
                     ),
                   ),
 
                   // Social tabs: Comments · Zaps · Labels · Details
                   SocialTabs(
+                    commentCount: commentTabMeta?.count,
+                    commentsLoading: commentTabMeta?.initialLoading ?? false,
+                    commentsSyncing: commentTabMeta?.syncing ?? false,
                     contentBuilder: (tab) {
                       switch (tab) {
                         case SocialTab.comments:
@@ -307,233 +371,14 @@ class _AppDetailContent extends HookConsumerWidget {
             ),
           ),
 
-          // ── Floating blurred header (on top, fades into content below) ──
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _DetailHeader(
-              app: app,
-              author: author,
-              catalogProfile: catalogProfile,
-            ),
-          ),
-
-          // ── Bottom bar (floats over content at the bottom) ───────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: BottomBar(
-              isSignedIn: isSignedIn,
-              onZap: () => ZapSliderModal.show(context, app: app, author: author),
-              onComment: () => showCommentModal(
-                context,
-                placeholder: 'Comment on ${app.name ?? 'this app'}…',
-                onSubmit: (result) => publishRootComment(
-                  ref: ref,
-                  result: result,
-                  app: app,
-                  version: latestMetadata?.version,
-                ),
-              ),
-              onOptions: () => showModal<void>(
-                context,
-                title: app.name ?? app.identifier,
-                builder: (_) => AppOptionsModalContent(app: app),
-              ),
-              onGetStarted: () {},
-            ),
+          DetailActionsButtonOverlay(
+            onTap: openOptions,
+            scrollController: scrollController,
+            expandLabel: pageTitle,
           ),
         ],
       ),
     );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fixed blurred detail header
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _DetailHeader extends HookWidget {
-  const _DetailHeader({
-    required this.app,
-    required this.author,
-    required this.catalogProfile,
-  });
-
-  final App app;
-  final Profile? author;
-  final Profile? catalogProfile;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
-    final topPad = MediaQuery.paddingOf(context).top;
-
-    final overlayController = useMemoized(() => OverlayPortalController());
-    final layerLink = useMemoized(() => LayerLink());
-    final groupId =
-        useMemoized(() => 'app-community-dropdown-${app.identifier}');
-
-    final publisherName = author?.name ?? _shortenPubkey(app.pubkey);
-
-    // Build community stack — one item for Zapstore catalog, extensible later.
-    final communityItems = [
-      if (catalogProfile != null) ProfilePicItem(profile: catalogProfile),
-    ];
-
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          color: c.black,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Safe-area inset + padding above content row.
-              SizedBox(height: topPad + 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Back button — gray33 bg, white33 chevron
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: c.gray33,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 2),
-                            child: LabIcon(
-                              LabIcons.chevronLeft,
-                              size: 14,
-                              color: c.white33,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // Publisher section: indexer badge for relay-signed apps,
-                    // author avatar + "By name" for developer-published apps.
-                    if (app.isRelaySigned) ...[
-                      LabIcon(
-                        LabIcons.index,
-                        size: 20,
-                        color: c.white33,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Indexer',
-                          style: LabTextStyles.med15.copyWith(color: c.white33),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ] else ...[
-                      ProfilePic(profile: author, size: 28),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            style: LabTextStyles.med15.copyWith(color: c.white66),
-                            children: [
-                              const TextSpan(text: 'By '),
-                              TextSpan(text: publisherName),
-                            ],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ],
-
-                    // Community stack with overlay dropdown
-                    if (communityItems.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      OverlayPortal(
-                        controller: overlayController,
-                        overlayChildBuilder: (ctx) =>
-                            CompositedTransformFollower(
-                          link: layerLink,
-                          showWhenUnlinked: false,
-                          targetAnchor: Alignment.bottomRight,
-                          followerAnchor: Alignment.topRight,
-                          offset: const Offset(0, 4),
-                          child: Align(
-                            alignment: Alignment.topRight,
-                            child: TapRegion(
-                              groupId: groupId,
-                              onTapOutside: (_) => overlayController.hide(),
-                              child: LabDropdownMenu(
-                                constraints:
-                                    const BoxConstraints(minWidth: 160, maxWidth: 160),
-                                children: [
-                                  LabDropdownItem(
-                                    isFirst: true,
-                                    child: Text(
-                                      'This app is published in the following communities:',
-                                      style: LabTextStyles.reg13
-                                          .copyWith(color: c.white66),
-                                    ),
-                                  ),
-                                  for (final item in communityItems)
-                                    LabDropdownItem(
-                                      child: Text(
-                                        item.profile?.name ?? 'Community',
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        child: TapRegion(
-                          groupId: groupId,
-                          child: CompositedTransformTarget(
-                            link: layerLink,
-                            child: ProfilePicStack(
-                              profiles: communityItems,
-                              avatarSize: 28,
-                              suffix: '${communityItems.length}',
-                              onTap: () {
-                                if (overlayController.isShowing) {
-                                  overlayController.hide();
-                                } else {
-                                  overlayController.show();
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              // Bottom spacing below the header row (matches home_screen top bar).
-              const SizedBox(height: 10),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _shortenPubkey(String pubkey) {
-    if (pubkey.length <= 12) return pubkey;
-    return '${pubkey.substring(0, 6)}…${pubkey.substring(pubkey.length - 4)}';
   }
 }
 
@@ -545,14 +390,20 @@ class _InfoPanels extends StatelessWidget {
   const _InfoPanels({
     required this.publishedByDeveloper,
     required this.hasRepository,
+    required this.app,
     this.latestRelease,
     this.latestMetadata,
+    this.author,
+    this.catalogProfile,
   });
 
   final bool publishedByDeveloper;
   final bool hasRepository;
+  final App app;
   final dynamic latestRelease;
   final Installable? latestMetadata;
+  final Profile? author;
+  final Profile? catalogProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -566,6 +417,9 @@ class _InfoPanels extends StatelessWidget {
             child: _SecurityPanel(
               publishedByDeveloper: publishedByDeveloper,
               hasRepository: hasRepository,
+              app: app,
+              author: author,
+              catalogProfile: catalogProfile,
             ),
           ),
           const SizedBox(width: 12),
@@ -575,6 +429,7 @@ class _InfoPanels extends StatelessWidget {
             child: _ReleasesPanel(
               latestRelease: latestRelease,
               latestMetadata: latestMetadata,
+              app: app,
             ),
           ),
         ],
@@ -591,10 +446,16 @@ class _SecurityPanel extends StatelessWidget {
   const _SecurityPanel({
     required this.publishedByDeveloper,
     required this.hasRepository,
+    required this.app,
+    this.author,
+    this.catalogProfile,
   });
 
   final bool publishedByDeveloper;
   final bool hasRepository;
+  final App app;
+  final Profile? author;
+  final Profile? catalogProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -622,7 +483,14 @@ class _SecurityPanel extends StatelessWidget {
     ];
 
     return GestureDetector(
-      onTap: () {}, // TODO: open security modal
+      onTap: () => SecurityModal.show(
+        context,
+        publishedByDeveloper: publishedByDeveloper,
+        hasRepository: hasRepository,
+        app: app,
+        author: author,
+        catalogProfile: catalogProfile,
+      ),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
         decoration: BoxDecoration(
@@ -706,10 +574,11 @@ class _PanelCheckData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ReleasesPanel extends StatelessWidget {
-  const _ReleasesPanel({this.latestRelease, this.latestMetadata});
+  const _ReleasesPanel({this.latestRelease, this.latestMetadata, required this.app});
 
   final dynamic latestRelease;
   final Installable? latestMetadata;
+  final App app;
 
   static const int _maxItems = 3;
 
@@ -750,7 +619,7 @@ class _ReleasesPanel extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: () {}, // TODO: open releases modal
+      onTap: () => ReleasesModal.show(context, app: app),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
         decoration: BoxDecoration(

@@ -3,6 +3,10 @@ import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/widgets/common/button.dart';
+import 'package:zapstore/widgets/common/relay_loading_bar.dart';
+
+/// Vertical rhythm between info panels, tab row, divider, and tab content.
+const double kSocialTabsSectionGap = 14;
 
 /// Tabbed feed interface matching webapp's SocialTabs.svelte exactly.
 ///
@@ -18,11 +22,13 @@ class SocialTabs extends StatefulWidget {
     required this.contentBuilder,
     this.commentCount,
     this.commentsLoading = false,
+    this.commentsSyncing = false,
     this.zapAmount,
     this.zapsLoading = false,
     this.labelCount,
     this.labelsLoading = false,
     this.showDetailsTab = true,
+    this.showTabDivider = true,
     this.initialTab = SocialTab.comments,
   });
 
@@ -32,6 +38,9 @@ class SocialTabs extends StatefulWidget {
   final int? commentCount;
   final bool commentsLoading;
 
+  /// True while relay catch-up runs after local data is already shown.
+  final bool commentsSyncing;
+
   /// Total sats received — shown with ⚡ in the Zaps tab button.
   final int? zapAmount;
   final bool zapsLoading;
@@ -40,6 +49,7 @@ class SocialTabs extends StatefulWidget {
   final bool labelsLoading;
 
   final bool showDetailsTab;
+  final bool showTabDivider;
   final SocialTab initialTab;
 
   @override
@@ -69,6 +79,7 @@ class _SocialTabsState extends State<SocialTabs> {
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
     final tabs = [
       SocialTab.comments,
       SocialTab.zaps,
@@ -82,7 +93,7 @@ class _SocialTabsState extends State<SocialTabs> {
         // ── Tab row (horizontally scrollable, gap 8px) ────────────────────
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: tabs.map((tab) {
@@ -105,6 +116,7 @@ class _SocialTabsState extends State<SocialTabs> {
                     isSelected: isSelected,
                     commentCount: widget.commentCount,
                     commentsLoading: widget.commentsLoading,
+                    commentsSyncing: widget.commentsSyncing,
                     zapAmount: widget.zapAmount,
                     zapsLoading: widget.zapsLoading,
                     labelCount: widget.labelCount,
@@ -116,17 +128,23 @@ class _SocialTabsState extends State<SocialTabs> {
           ),
         ),
 
+        if (widget.showTabDivider) ...[
+          const SizedBox(height: kSocialTabsSectionGap),
+          Container(height: 1, color: c.white11),
+        ],
+
+        RelayLoadingBar(loading: widget.commentsSyncing),
+
         // ── Tab content ───────────────────────────────────────────────────
-        // IndexedStack keeps visited tab subtrees alive in the widget tree so
-        // their Riverpod providers are not disposed on every switch.
-        // Unvisited tabs are SizedBox.shrink() placeholders — no queries are
-        // created until the user actually taps that tab.
-        IndexedStack(
-          index: tabs.indexOf(_active),
-          children: tabs.map((tab) {
-            if (!_visited.contains(tab)) return const SizedBox.shrink();
-            return _cache[tab]!;
-          }).toList(),
+        Padding(
+          padding: const EdgeInsets.only(top: kSocialTabsSectionGap),
+          child: IndexedStack(
+            index: tabs.indexOf(_active),
+            children: tabs.map((tab) {
+              if (!_visited.contains(tab)) return const SizedBox.shrink();
+              return _cache[tab]!;
+            }).toList(),
+          ),
         ),
       ],
     );
@@ -143,6 +161,7 @@ class _TabLabel extends StatelessWidget {
     required this.isSelected,
     this.commentCount,
     this.commentsLoading = false,
+    this.commentsSyncing = false,
     this.zapAmount,
     this.zapsLoading = false,
     this.labelCount,
@@ -153,6 +172,7 @@ class _TabLabel extends StatelessWidget {
   final bool isSelected;
   final int? commentCount;
   final bool commentsLoading;
+  final bool commentsSyncing;
   final int? zapAmount;
   final bool zapsLoading;
   final int? labelCount;
@@ -167,11 +187,13 @@ class _TabLabel extends StatelessWidget {
 
     switch (tab) {
       case SocialTab.comments:
+        final showCommentsSpinner =
+            (commentsLoading && (commentCount ?? 0) == 0) || commentsSyncing;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Comments', style: textStyle),
-            if (commentsLoading) ...[
+            if (showCommentsSpinner) ...[
               const SizedBox(width: 6),
               SizedBox(
                 width: 10,

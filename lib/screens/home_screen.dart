@@ -1,19 +1,27 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
+import 'package:zapstore/utils/color.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/nostr_route.dart';
+import 'package:zapstore/screens/inbox_screen.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/widgets/common/profile_name_widget.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 
 import '../widgets/app_stack_container.dart';
 import '../widgets/common/dropdown_menu.dart';
 import '../widgets/common/label.dart';
-import '../widgets/common/section_header.dart';
 import '../widgets/common/shimmer.dart';
+import '../widgets/common/section_header.dart';
 import '../widgets/forum/forum_feed_container.dart';
 import '../widgets/forum/forum_post_card.dart';
 import '../widgets/latest_releases_container.dart';
@@ -23,6 +31,53 @@ import '../main.dart';
 import '../services/package_manager/package_manager.dart';
 import '../services/updates_service.dart';
 import '../widgets/common/top_scroll_fader.dart';
+import '../widgets/onboarding/welcome_panel.dart';
+
+/// Horizontal padding shared by [_HomeTopBarState] chrome and pill alignment helpers.
+const double _kHomeBarScreenPadding = 14;
+
+/// Inset inside pill before [`LabIcons.search`] — matches [_HomeTopBarState._buildPill].
+const double _kHomePillInsetBeforeSearchGlyph = 14;
+
+/// Search glyph logical size ([_HomeTopBarState._buildPill] LabIcon extent).
+const double _kHomePillSearchGlyphSize = 16;
+
+/// Gap after search glyph before field — [_HomeTopBarState._buildPill] SizedBox(width: 8).
+const double _kHomePillGapAfterSearchGlyph = 8;
+
+/// Extra px added after [_kHomePillGapAfterSearchGlyph] for recent-row label vs pill TextField.
+const double _kHomeRecentSearchExtraGapAfterGlyph = 1;
+
+/// Recent-row glyph inset vs nominal pill left edge ([_kHomeAlignedSearchGlyphLeft]), optical px.
+const double _kHomeRecentSearchGlyphLeadAdjust = 1;
+
+/// Screen-x of pill search icon's left edge while searching ([_HomeTopBarState._buildPill]).
+const double _kHomeAlignedSearchGlyphLeft =
+    _kHomeBarScreenPadding + _kHomePillInsetBeforeSearchGlyph;
+
+/// Dense recent-term row ([_HomeTopBarState._barHeight] is 42; list rows are tighter).
+const double _kHomeRecentSearchRowHeight = 32;
+
+/// Dummy inbox: thin tail under the main card (visual depth, not separate cards).
+const double _kInboxTailMid = 11;
+
+const double _kInboxTailBack = 9;
+
+/// Opacity steps for the two tail segments under the main panel.
+const double _kInboxTailOpacityFactor = 0.66;
+
+/// Each tail tier narrows by this total amount vs the row above (centered).
+const double _kInboxTailWidthStep = 24;
+
+/// Placeholder height while the inbox preview waits out the loading shimmer delay.
+const double _kInboxPreviewBlankHeight = 88;
+
+const List<String> _kDummyRecentSearches = [
+  'Damus',
+  'Zapstore',
+  'Primal',
+  'Amethyst',
+];
 
 /// Home screen: search/discovery + fixed top bar.
 class HomeScreen extends HookConsumerWidget {
@@ -36,6 +91,7 @@ class HomeScreen extends HookConsumerWidget {
     final searchFocusNode = useFocusNode();
     final searchQuery = useState<String>('');
 
+    final storageState = ref.watch(storageReadyProvider);
     final initState = ref.watch(appInitializationProvider);
     final platform = ref.read(packageManagerProvider.notifier).platform;
 
@@ -108,11 +164,18 @@ class HomeScreen extends HookConsumerWidget {
                           searchQuery: trimmedQuery,
                           platform: platform,
                           scrollController: scrollController,
+                          searchController: searchController,
+                          searchFocusNode: searchFocusNode,
+                          onSearch: performSearch,
                         )
                       : _HomeContent(
                           key: const ValueKey('home'),
                           scrollController: scrollController,
-                          initState: initState,
+                          showSkeleton:
+                              !storageState.hasValue && !storageState.hasError,
+                          isSyncing: storageState.hasValue &&
+                              !initState.hasValue &&
+                              !initState.hasError,
                         ),
                 ),
               ),
@@ -132,79 +195,399 @@ class _HomeContent extends ConsumerWidget {
   const _HomeContent({
     super.key,
     required this.scrollController,
-    required this.initState,
+    required this.showSkeleton,
+    required this.isSyncing,
   });
 
   final ScrollController scrollController;
-  final AsyncValue<void> initState;
+
+  /// True while storage is still initializing — show skeletons.
+  final bool showSkeleton;
+
+  /// True while storage is ready but app services are still loading
+  /// (installed packages, deep links, auto sign-in). Show sync spinners.
+  final bool isSyncing;
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
+    final hasProfile = signedInPubkey != null;
+
     return ShimmerTheme(
       child: SingleChildScrollView(
-      controller: scrollController,
-      // Ensures Flutter's gesture arena resolves to vertical scroll
-      // immediately on first touch — especially important when the view
-      // contains nested horizontal lists that would otherwise win the
-      // first-pointer competition.
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Space below the top bar
-          const SizedBox(height: 14),
+        controller: scrollController,
+        // Ensures Flutter's gesture arena resolves to vertical scroll
+        // immediately on first touch — especially important when the view
+        // contains nested horizontal lists that would otherwise win the
+        // first-pointer competition.
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (hasProfile) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _InboxStackPreview(pubkey: signedInPubkey),
+              ),
+            ] else ...[
+              const SizedBox(height: 6),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: WelcomePanel(),
+              ),
+            ],
 
-          // ── Apps ────────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // ── Apps ──────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionHeader(
+                    title: 'Apps',
+                    linkText: 'See more',
+                    onLinkTap: () => context.push('/updates'),
+                    bottomPadding: 18,
+                    isLoading: isSyncing,
+                  ),
+                  LatestReleasesContainer(
+                    showSkeleton: showSkeleton,
+                    scrollController: scrollController,
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Stacks ────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(bottom: 19),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionHeader(
+                    title: 'Stacks',
+                    linkText: 'See more',
+                    onLinkTap: () => pushStacks(context),
+                    bottomPadding: 17,
+                    isLoading: isSyncing,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, bottom: 6),
+                    child: AppStackContainer(
+                      showSkeleton: showSkeleton,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Forum ──────────────────────────────────────────────────────
+            _ForumSection(
+              scrollController: scrollController,
+              showSkeleton: showSkeleton,
+              isSyncing: isSyncing,
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Inbox preview: latest kind-1111 comment that `p`-tags you on the Zapstore relay only (same subscription as [InboxScreen]).
+class _InboxStackPreview extends HookConsumerWidget {
+  const _InboxStackPreview({required this.pubkey});
+
+  final String pubkey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    final commentsState = ref.watch(inboxRepliesProvider(pubkey));
+    final comments = List<Comment>.from(commentsState.models)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final latest = comments.firstOrNull;
+
+    final loadingGate = useState(false);
+    useEffect(() {
+      final timer = Timer(const Duration(milliseconds: 100), () {
+        loadingGate.value = true;
+      });
+      return timer.cancel;
+    }, const []);
+
+    final tailColor1 = c.gray66.withValues(
+      alpha: c.gray66.a * _kInboxTailOpacityFactor,
+    );
+    final tailColor2 = c.gray66.withValues(
+      alpha:
+          c.gray66.a *
+          _kInboxTailOpacityFactor *
+          _kInboxTailOpacityFactor,
+    );
+
+    const mainPanelRadius = BorderRadius.all(Radius.circular(LabRadius.r16));
+    const midTailBottomRadius = BorderRadius.vertical(
+      bottom: Radius.circular(LabRadius.r16),
+    );
+    const backTailBottomRadius = BorderRadius.vertical(
+      bottom: Radius.circular(LabRadius.r16),
+    );
+
+    final mainPanel = () {
+      if (!loadingGate.value) {
+        return SizedBox(
+          height: _kInboxPreviewBlankHeight,
+          child: ClipRRect(
+            borderRadius: mainPanelRadius,
+            child: ColoredBox(color: c.gray66),
+          ),
+        );
+      }
+
+      if (commentsState is StorageError) {
+        return ClipRRect(
+          borderRadius: mainPanelRadius,
+          child: Material(
+            color: c.gray66,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: c.gray33,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: LabIcon(LabIcons.inbox, size: 18, color: c.white33),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Could not load inbox. Tap to retry in full view.',
+                      style: LabTextStyles.reg13.copyWith(color: c.white66),
+                      maxLines: 3,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      if (commentsState is StorageLoading && comments.isEmpty) {
+        return ClipRRect(
+          borderRadius: mainPanelRadius,
+          child: Material(
+            color: c.gray66,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Shimmer(width: 36, height: 36, isCircle: true),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Shimmer(
+                          width: double.infinity,
+                          height: 14,
+                          radius: LabRadius.r8,
+                        ),
+                        SizedBox(height: 8),
+                        Shimmer(
+                          width: 160,
+                          height: 14,
+                          radius: LabRadius.r8,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      if (latest == null) {
+        return ClipRRect(
+          borderRadius: mainPanelRadius,
+          child: Material(
+            color: c.gray66,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: c.gray33,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: LabIcon(LabIcons.inbox, size: 18, color: c.white33),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'No mentions yet',
+                      style: LabTextStyles.reg13.copyWith(color: c.white66),
+                    ),
+                  ),
+                  LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      final authorPk = latest.event.pubkey;
+      final authorState = ref.watch(
+        query<Profile>(
+          authors: {authorPk},
+          source: const LocalAndRemoteSource(
+            relays: {'social', 'vertex'},
+            stream: false,
+            cachedFor: Duration(hours: 2),
+          ),
+          subscriptionPrefix: 'inbox-preview-a-${authorPk.hashCode}',
+        ),
+      );
+      final author = authorState.models.firstOrNull;
+      final authorLoading =
+          authorState is StorageLoading && author == null;
+      final nameColor = profileTextColor(hexToColor(authorPk));
+      final body = latest.content.trim();
+
+      return ClipRRect(
+        borderRadius: mainPanelRadius,
+        child: Material(
+          color: c.gray66,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SectionHeader(
-                  title: 'Apps',
-                  linkText: 'See more',
-                  onLinkTap: () => context.push('/updates'),
-                  bottomPadding: 18,
+                ProfilePic(pubkey: authorPk, size: 36),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RichText(
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        text: TextSpan(
+                          style: LabTextStyles.reg13,
+                          children: [
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: ProfileNameWidget(
+                                pubkey: authorPk,
+                                profile: author,
+                                isLoading: authorLoading,
+                                style: LabTextStyles.semibold13.copyWith(
+                                  color: nameColor,
+                                ),
+                                skeletonWidth: 72,
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' · mentioned you',
+                              style: LabTextStyles.reg13.copyWith(
+                                color: c.white33,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (body.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          body,
+                          style: LabTextStyles.reg13.copyWith(color: c.white66),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                LatestReleasesContainer(
-                  showSkeleton: !(initState.hasValue || initState.hasError),
-                  scrollController: scrollController,
-                ),
+                const SizedBox(width: 8),
+                LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
               ],
             ),
           ),
+        ),
+      );
+    }();
 
-          // ── Stacks ──────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.only(bottom: 19),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: GestureDetector(
+        onTap: () => context.push('/inbox'),
+        behavior: HitTestBehavior.opaque,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final midW = math.max(0.0, w - _kInboxTailWidthStep);
+            final backW = math.max(0.0, w - 2 * _kInboxTailWidthStep);
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SectionHeader(
-                  title: 'Stacks',
-                  linkText: 'See more',
-                  onLinkTap: () => pushStacks(context),
-                  bottomPadding: 17,
+                mainPanel,
+                Align(
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: midW,
+                    height: _kInboxTailMid,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: tailColor1,
+                        borderRadius: midTailBottomRadius,
+                      ),
+                    ),
+                  ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2, bottom: 6),
-                  child: AppStackContainer(
-                    showSkeleton: !(initState.hasValue || initState.hasError),
+                Align(
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: backW,
+                    height: _kInboxTailBack,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: tailColor2,
+                        borderRadius: backTailBottomRadius,
+                      ),
+                    ),
                   ),
                 ),
               ],
-            ),
-          ),
-
-          // ── Forum ────────────────────────────────────────────────────────
-          _ForumSection(
-            scrollController: scrollController,
-            initDone: initState.hasValue || initState.hasError,
-          ),
-          const SizedBox(height: 32),
-        ],
+            );
+          },
+        ),
       ),
-    ),
     );
   }
 }
@@ -231,11 +614,15 @@ const _kForumCategories = [
 class _ForumSection extends HookConsumerWidget {
   const _ForumSection({
     required this.scrollController,
-    required this.initDone,
+    required this.showSkeleton,
+    required this.isSyncing,
   });
 
   final ScrollController scrollController;
-  final bool initDone;
+
+  /// True while storage is not yet ready — show shimmer, do not mount ForumFeedContainer.
+  final bool showSkeleton;
+  final bool isSyncing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -250,6 +637,7 @@ class _ForumSection extends HookConsumerWidget {
           linkText: 'Our Community',
           onLinkTap: () => context.push('/community'),
           bottomPadding: 17,
+          isLoading: isSyncing,
         ),
 
         _ForumFilterRow(
@@ -262,14 +650,14 @@ class _ForumSection extends HookConsumerWidget {
           onSortOrderChange: (order) => sortOrder.value = order,
         ),
 
-        if (initDone)
-          ForumFeedContainer(scrollController: scrollController)
-        else
+        if (showSkeleton)
           ShimmerTheme(
             child: Column(
               children: List.generate(5, (_) => const ForumPostCardSkeleton()),
             ),
-          ),
+          )
+        else
+          ForumFeedContainer(scrollController: scrollController),
       ],
     );
   }
@@ -480,8 +868,8 @@ class _SortButtonState extends State<_SortButton> {
 // Search panel (shown while isSearching = true)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// When query is empty: blank placeholder (categories / suggestions to come).
-// When query is submitted: shows search results.
+// Empty active query + empty draft: recent dummy rows + Scan FAB.
+// Submitted query: search results (+ Scan FAB).
 
 class _SearchPanel extends HookWidget {
   const _SearchPanel({
@@ -489,6 +877,9 @@ class _SearchPanel extends HookWidget {
     required this.searchQuery,
     required this.platform,
     required this.scrollController,
+    required this.searchController,
+    required this.searchFocusNode,
+    required this.onSearch,
   });
 
   final String searchQuery;
@@ -497,26 +888,169 @@ class _SearchPanel extends HookWidget {
   // the panel owns its own controller to avoid a double-attach crash when
   // AnimatedSwitcher keeps both panels alive during the 200ms transition.
   final ScrollController scrollController;
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
+  final void Function(String query) onSearch;
 
   @override
   Widget build(BuildContext context) {
     final panelScrollController = useScrollController();
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    if (searchQuery.isEmpty) {
-      // Placeholder — will hold categories/suggestions in a future iteration.
-      return const SizedBox.expand();
-    }
-    return SingleChildScrollView(
-      controller: panelScrollController,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SearchResultsSection(
-            searchQuery: searchQuery,
-            platform: platform,
-            scrollController: panelScrollController,
+    final body = searchQuery.isEmpty
+        ? ValueListenableBuilder<TextEditingValue>(
+            valueListenable: searchController,
+            builder: (context, draft, _) {
+              if (draft.text.trim().isNotEmpty) {
+                return const SizedBox.expand();
+              }
+
+              return SingleChildScrollView(
+                controller: panelScrollController,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: bottomInset + 88),
+                  child: Transform.translate(
+                    offset: const Offset(0, -2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final term in _kDummyRecentSearches)
+                          _HomeRecentSearchRow(
+                            term: term,
+                            onSelected: () {
+                              searchController.text = term;
+                              searchFocusNode.requestFocus();
+                              onSearch(term);
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          )
+        : SingleChildScrollView(
+            controller: panelScrollController,
+            padding: EdgeInsets.only(bottom: bottomInset + 88),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SearchResultsSection(
+                  searchQuery: searchQuery,
+                  platform: platform,
+                  scrollController: panelScrollController,
+                ),
+              ],
+            ),
+          );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(child: body),
+        Positioned(
+          right: 14,
+          bottom: bottomInset + 14,
+          child: const _HomeSearchScanFab(),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeRecentSearchRow extends StatelessWidget {
+  const _HomeRecentSearchRow({
+    required this.term,
+    required this.onSelected,
+  });
+
+  final String term;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onSelected,
+        child: SizedBox(
+          height: _kHomeRecentSearchRowHeight,
+          child: Padding(
+            padding: const EdgeInsets.only(
+              left:
+                  _kHomeAlignedSearchGlyphLeft +
+                      _kHomeRecentSearchGlyphLeadAdjust,
+              right: 14,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                LabIcon(
+                  LabIcons.search,
+                  size: _kHomePillSearchGlyphSize,
+                  color: c.white16,
+                ),
+                const SizedBox(
+                  width:
+                      _kHomePillGapAfterSearchGlyph +
+                      _kHomeRecentSearchExtraGapAfterGlyph,
+                ),
+                Expanded(
+                  child: Text(
+                    term,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: LabTextStyles.reg15.copyWith(color: c.white33),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeSearchScanFab extends StatelessWidget {
+  const _HomeSearchScanFab();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(26),
+        onTap: () {},
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: c.gray33,
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LabIcon(LabIcons.profileQR, size: 26, color: c.white33),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Scan',
+                    style: LabTextStyles.med15.copyWith(color: c.white66),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -685,7 +1219,12 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
     final pillContent = Container(
       height: _barHeight,
       decoration: BoxDecoration(
-        color: c.gray33,
+        color: searching ? c.gray33 : null,
+        gradient: searching
+            ? null
+            : LinearGradient(
+                colors: [c.gray33, c.gray33.withValues(alpha: 0)],
+              ),
         borderRadius: BorderRadius.circular(_barRadius),
         // Solid border when searching; gradient painter used when idle.
         border: searching

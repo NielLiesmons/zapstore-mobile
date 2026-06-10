@@ -1,9 +1,12 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/nostr_route.dart';
+import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/theme.dart';
 
 import '../widgets/app_stack_container.dart';
@@ -13,6 +16,20 @@ import '../widgets/search_app_card.dart';
 import '../utils/extensions.dart';
 import '../main.dart';
 import '../services/package_manager/package_manager.dart';
+
+/// Insets into [SearchBar]'s default horizontal padding (8) + `leading` offset (4).
+/// Keeps recent-term rows aligned with the bar's search icon and text field gutter.
+const double _kRecentSearchIconLead = 8 + 4;
+
+/// Default M3 [SearchBar] min height.
+const double _kSearchBarVisualHeight = 56;
+
+const List<String> _kDummyRecentSearches = [
+  'Damus',
+  'Zapstore',
+  'Primal',
+  'Amethyst',
+];
 
 /// Main search and app discovery screen
 class SearchScreen extends HookConsumerWidget {
@@ -25,8 +42,9 @@ class SearchScreen extends HookConsumerWidget {
     final searchFocusNode = useFocusNode();
     final searchQuery = useState<String>('');
 
-    // Check if storage is initialized
-    final initState = ref.watch(appInitializationProvider);
+    // Gate content display on storage being ready (not full app init)
+    final storageState = ref.watch(storageReadyProvider);
+    final showSkeleton = !storageState.hasValue && !storageState.hasError;
 
     // Get platform from package manager
     final platform = ref.read(packageManagerProvider.notifier).platform;
@@ -47,122 +65,243 @@ class SearchScreen extends HookConsumerWidget {
 
     final trimmedQuery = searchQuery.value.trim();
 
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
+      body: Stack(
         children: [
-          // Professional search bar with better spacing
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 18),
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: searchController,
-              builder: (context, value, _) {
-                final hasText = value.text.isNotEmpty;
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: searchController,
+                  builder: (context, value, _) {
+                    final hasText = value.text.isNotEmpty;
 
-                return SearchBar(
-                  controller: searchController,
-                  focusNode: searchFocusNode,
-                  hintText: 'Search apps',
-                  leading: Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: LabIcon(
-                      LabIcons.search,
-                      size: 20,
-                      color: Theme.of(context).extension<LabColors>()!.white33,
-                    ),
-                  ),
-                  trailing: [
-                    if (hasText)
-                      IconButton(
-                        icon: LabIcon(
-                          LabIcons.cross,
-                          size: 16,
+                    return SearchBar(
+                      controller: searchController,
+                      focusNode: searchFocusNode,
+                      hintText: 'Search apps',
+                      leading: Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: LabIcon(
+                          LabIcons.search,
+                          size: 20,
                           color: Theme.of(context).extension<LabColors>()!.white33,
                         ),
-                        onPressed: () {
-                          searchController.clear();
-                          searchQuery.value = '';
-                          searchFocusNode.requestFocus();
-                        },
-                        tooltip: 'Clear search',
                       ),
-                  ],
-                  onSubmitted: performSearch,
-                  elevation: WidgetStateProperty.all(0),
-                  backgroundColor: WidgetStateProperty.all(
-                    Theme.of(context).extension<LabColors>()!.gray33,
-                  ),
-                  shape: WidgetStateProperty.all(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(
-                        color: Theme.of(context).extension<LabColors>()!.white16,
-                        width: 0.33,
+                      trailing: [
+                        if (hasText)
+                          IconButton(
+                            icon: LabIcon(
+                              LabIcons.cross,
+                              size: 16,
+                              color: Theme.of(context).extension<LabColors>()!.white33,
+                            ),
+                            onPressed: () {
+                              searchController.clear();
+                              searchQuery.value = '';
+                              searchFocusNode.requestFocus();
+                            },
+                            tooltip: 'Clear search',
+                          ),
+                      ],
+                      onSubmitted: performSearch,
+                      elevation: WidgetStateProperty.all(0),
+                      backgroundColor: WidgetStateProperty.all(
+                        Theme.of(context).extension<LabColors>()!.gray33,
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          // Scrollable content
-          Expanded(
-            child: SingleChildScrollView(
-              controller: scrollController,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Search Results Section
-                  if (trimmedQuery.isNotEmpty)
-                    _SearchResultsSection(
-                      searchQuery: trimmedQuery,
-                      platform: platform,
-                      scrollController: scrollController,
-                    ),
-
-                  // ── Apps section ──────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SectionHeader(
-                          title: 'Apps',
-                          linkText: 'See more',
-                          onLinkTap: () => Navigator.of(context).pushNamed('/updates'),
+                      shape: WidgetStateProperty.all(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: Theme.of(context).extension<LabColors>()!.white16,
+                            width: 0.33,
+                          ),
                         ),
-                        LatestReleasesContainer(
-                          showSkeleton: !(initState.hasValue || initState.hasError),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: searchController,
+                builder: (context, draft, _) {
+                  final showRecents =
+                      trimmedQuery.isEmpty && draft.text.trim().isEmpty;
+                  if (!showRecents) {
+                    return const SizedBox(height: 18);
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 18),
+                    child: Column(
+                      children: [
+                        for (final term in _kDummyRecentSearches)
+                          _RecentSearchDummyRow(
+                            term: term,
+                            onSelected: () {
+                              searchController.text = term;
+                              searchFocusNode.requestFocus();
+                              performSearch(term);
+                            },
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (trimmedQuery.isNotEmpty)
+                        _SearchResultsSection(
+                          searchQuery: trimmedQuery,
+                          platform: platform,
                           scrollController: scrollController,
                         ),
-                      ],
-                    ),
-                  ),
 
-                  // ── Stacks section ──────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SectionHeader(
-                          title: 'Stacks',
-                          linkText: 'See more',
-                          onLinkTap: () => pushStacks(context),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SectionHeader(
+                              title: 'Apps',
+                              linkText: 'See more',
+                              onLinkTap: () =>
+                                  Navigator.of(context).pushNamed('/updates'),
+                            ),
+                            LatestReleasesContainer(
+                              showSkeleton: showSkeleton,
+                              scrollController: scrollController,
+                            ),
+                          ],
                         ),
-                        AppStackContainer(
-                          showSkeleton: !(initState.hasValue || initState.hasError),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
 
-                  const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SectionHeader(
+                              title: 'Stacks',
+                              linkText: 'See more',
+                              onLinkTap: () => pushStacks(context),
+                            ),
+                            AppStackContainer(
+                              showSkeleton: showSkeleton,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: bottomInset + 88),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            right: 14,
+            bottom: bottomInset + 14,
+            child: const _SearchScanFab(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentSearchDummyRow extends StatelessWidget {
+  const _RecentSearchDummyRow({
+    required this.term,
+    required this.onSelected,
+  });
+
+  final String term;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onSelected,
+        child: SizedBox(
+          height: _kSearchBarVisualHeight,
+          child: Padding(
+            padding: const EdgeInsets.only(
+              left: 12 + _kRecentSearchIconLead,
+              right: 12,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                LabIcon(LabIcons.clock, size: 20, color: c.white33),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    term,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: LabTextStyles.med17.copyWith(color: c.white66),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchScanFab extends StatelessWidget {
+  const _SearchScanFab();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(26),
+        onTap: () {},
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: c.gray33,
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LabIcon(LabIcons.profileQR, size: 26, color: c.white33),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Scan',
+                    style: LabTextStyles.med17.copyWith(color: c.white66),
+                  ),
                 ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

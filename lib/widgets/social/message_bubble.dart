@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/color.dart';
-import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
+import 'package:zapstore/widgets/social/bubble_swiper.dart';
 
 /// Chat-style message bubble matching webapp MessageBubble.svelte.
 ///
@@ -37,6 +36,8 @@ class MessageBubble extends StatefulWidget {
     this.trailing,
     this.onReply,
     this.onActions,
+    this.inThreadModal = false,
+    this.topPadding = 4,
   });
 
   final Profile? profile;
@@ -47,6 +48,12 @@ class MessageBubble extends StatefulWidget {
 
   /// Light variant (white8 bg instead of gray66).
   final bool isLight;
+
+  /// When true, horizontal padding comes from the thread-replies container only.
+  final bool inThreadModal;
+
+  /// Top spacing before the bubble row (0 in the comments feed).
+  final double topPadding;
 
   /// Shows a loading spinner instead of timestamp (publishing state).
   final bool isPending;
@@ -79,7 +86,11 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     if (widget.isOutgoing) {
       return Padding(
-        padding: const EdgeInsets.only(top: 4, left: 14, right: 14),
+        padding: EdgeInsets.only(
+          top: widget.topPadding,
+          left: 14,
+          right: 14,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           mainAxisAlignment: MainAxisAlignment.end,
@@ -111,7 +122,11 @@ class _MessageBubbleState extends State<MessageBubble> {
     // _IncomingBubbleSwiper is the replacement for _SwipeReplyBubble and
     // contains avatar + gap + bubble internally (matching the original Row).
     return Padding(
-      padding: const EdgeInsets.only(top: 4, left: 14, right: 40),
+      padding: EdgeInsets.only(
+        top: widget.topPadding,
+        left: widget.inThreadModal ? 0 : 14,
+        right: widget.inThreadModal ? 0 : 40,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisAlignment: MainAxisAlignment.start,
@@ -120,8 +135,13 @@ class _MessageBubbleState extends State<MessageBubble> {
         children: [
           Flexible(
             child: IntrinsicWidth(
-              child: _IncomingBubbleSwiper(
-                  bubble: widget, avatar: avatarWidget, c: c),
+              child: BubbleSwiper(
+                leading: avatarWidget,
+                c: c,
+                onReply: widget.onReply,
+                onActions: widget.onActions,
+                child: _BubbleBody(bubble: widget, c: c),
+              ),
             ),
           ),
           if (widget.trailing != null) ...[
@@ -304,229 +324,3 @@ class _BubbleContent extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Unified swipe handler for incoming bubbles
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Handles both swipe directions for incoming [MessageBubble]s in one widget.
-///
-/// RIGHT swipe → only the bubble body slides right.
-///   Reply circle is revealed in the gap between avatar and bubble.
-/// LEFT swipe  → avatar + bubble translate together as one unit.
-///   Options circle is revealed to the right of the bubble.
-///
-/// Single GestureDetector; two nested Transform.translate calls
-/// (outer for left, inner for right) — exactly mirrors the right-swipe
-/// behaviour but at one level higher for the left direction.
-class _IncomingBubbleSwiper extends StatefulWidget {
-  const _IncomingBubbleSwiper({
-    required this.bubble,
-    required this.avatar,
-    required this.c,
-  });
-
-  final MessageBubble bubble;
-  final Widget avatar;
-  final LabColors c;
-
-  @override
-  State<_IncomingBubbleSwiper> createState() => _IncomingBubbleSwiperState();
-}
-
-class _IncomingBubbleSwiperState extends State<_IncomingBubbleSwiper>
-    with TickerProviderStateMixin {
-  static const double _maxDrag   = 56.0;
-  static const double _triggerAt = 32.0;
-
-  double _liveX     = 0;
-  double _snapStart = 0;
-  bool   _triggered = false;
-  bool?  _goingRight;
-
-  late final AnimationController _snapCtrl;
-  late final CurvedAnimation     _snapCurve;
-  late final AnimationController _popCtrl;
-  late final Animation<double>   _popScale;
-
-  @override
-  void initState() {
-    super.initState();
-    _snapCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 380));
-    _snapCurve =
-        CurvedAnimation(parent: _snapCtrl, curve: Curves.easeOutCubic);
-    _snapCtrl.addStatusListener((s) {
-      if (s == AnimationStatus.completed && mounted) {
-        setState(() { _liveX = 0; _goingRight = null; });
-        _snapStart = 0.0; // clear before reset to avoid spurious addListener
-        _snapCtrl.reset();
-      }
-    });
-    _popCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 140));
-    _popScale = Tween<double>(begin: 1.0, end: 1.2)
-        .animate(CurvedAnimation(parent: _popCtrl, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _snapCurve.dispose();
-    _snapCtrl.dispose();
-    _popCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_snapCtrl.isAnimating) return;
-    final delta = d.delta.dx;
-    if (_goingRight == null) {
-      if (delta.abs() < 1) return;
-      _goingRight = delta > 0;
-    }
-    if (_goingRight! && delta < 0 && _liveX <= 0) return;
-    if (!_goingRight! && delta > 0 && _liveX >= 0) return;
-
-    final newX = (_liveX + delta).clamp(-_maxDrag, _maxDrag);
-    final prevTriggered = _triggered;
-    setState(() {
-      _liveX = newX;
-      _triggered = newX.abs() >= _triggerAt;
-    });
-
-    if (!prevTriggered && _triggered) {
-      HapticFeedback.lightImpact();
-      _popCtrl.forward(from: 0).then((_) {
-        if (mounted) _popCtrl.reverse();
-      });
-      Future.delayed(const Duration(milliseconds: 70), () {
-        if (!mounted) return;
-        if (_liveX > 0) {
-          widget.bubble.onReply?.call();
-        } else {
-          widget.bubble.onActions?.call();
-        }
-      });
-    }
-  }
-
-  void _onDragEnd(DragEndDetails _) {
-    if (_liveX == 0) return;
-    _snapStart = _liveX;
-    setState(() { _triggered = false; _goingRight = null; });
-    _snapCtrl.forward(from: 0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.c;
-
-    return AnimatedBuilder(
-      animation: Listenable.merge([_snapCtrl, _popCtrl]),
-      builder: (context, _) {
-        final offset = _snapCtrl.isAnimating
-            ? _snapStart * (1.0 - _snapCurve.value)
-            : _liveX;
-
-        // Left drag:  whole row (avatar + bubble) moves together.
-        final leftOffset  = offset.clamp(-_maxDrag, 0.0);
-        // Right drag: only the bubble body moves.
-        final rightOffset = offset.clamp(0.0, _maxDrag);
-
-        final rightProg = (offset / _triggerAt).clamp(0.0, 1.0);
-        final leftProg  = (-offset / _triggerAt).clamp(0.0, 1.0);
-        final popMult   = _popScale.value;
-
-        return GestureDetector(
-          onHorizontalDragUpdate: _onDragUpdate,
-          onHorizontalDragEnd: _onDragEnd,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // ── Reply circle ──────────────────────────────────────────────
-              // avatar(36) + gap(6) = 42px; starts 8px inside bubble left edge.
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 50),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Opacity(
-                      opacity: rightProg,
-                      child: Transform.scale(
-                        scale: (0.5 + 0.5 * rightProg) * popMult,
-                        child: _SwipeCircle(icon: LabIcons.reply, c: c),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── Options circle ────────────────────────────────────────────
-              // Fixed at the right edge of the Stack; revealed as the row
-              // slides left.
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Opacity(
-                      opacity: leftProg,
-                      child: Transform.scale(
-                        scale: (0.5 + 0.5 * leftProg) * popMult,
-                        child: _SwipeCircle(icon: LabIcons.options, c: c),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── Content ───────────────────────────────────────────────────
-              // Left drag: the whole row (avatar + bubble) moves together.
-              // The outer Flexible+IntrinsicWidth in _MessageBubbleState gives
-              // this Stack tight constraints so CrossAxisAlignment.stretch in
-              // _BubbleBody works correctly. The inner Row uses the default
-              // mainAxisSize.max to fill those tight constraints.
-              Transform.translate(
-                offset: Offset(leftOffset, 0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  // mainAxisSize: max (default) — fills Stack tight constraints
-                  // propagated from the outer IntrinsicWidth in _MessageBubbleState.
-                  children: [
-                    widget.avatar,
-                    const SizedBox(width: 6),
-                    // Flexible: gets remaining width (= bubble intrinsic width).
-                    // Right drag: only the bubble body translates.
-                    Flexible(
-                      child: Transform.translate(
-                        offset: Offset(rightOffset, 0),
-                        child: _BubbleBody(bubble: widget.bubble, c: widget.c),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SwipeCircle extends StatelessWidget {
-  const _SwipeCircle({required this.icon, required this.c});
-  final String icon;
-  final LabColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: c.gray33),
-      child: Center(
-        child: LabIcon(icon, size: 13, color: c.white33),
-      ),
-    );
-  }
-}

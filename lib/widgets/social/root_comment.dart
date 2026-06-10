@@ -8,13 +8,18 @@ import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/l_connector.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
+import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
-import 'package:zapstore/widgets/modals/comment_actions_modal.dart';
-import 'package:zapstore/widgets/modals/comment_modal.dart';
+import 'package:zapstore/widgets/modals/actions_modal.dart';
+import 'package:zapstore/widgets/composer/nostr_composer.dart';
 import 'package:zapstore/widgets/composer/nostr_text_controller.dart' show ComposerResult;
 import 'package:zapstore/widgets/social/message_bubble.dart';
+import 'package:zapstore/widgets/common/input_button.dart';
 import 'package:zapstore/widgets/social/quoted_message.dart';
 import 'package:zapstore/widgets/social/thread_comment.dart';
+import 'package:zapstore/widgets/social/thread_root.dart';
+import 'package:zapstore/widgets/modals/tip_amount_modal.dart';
+import 'package:zapstore/widgets/social/tip_amount_row.dart';
 
 /// Feed-level comment item matching webapp's RootComment.svelte.
 ///
@@ -28,11 +33,19 @@ class RootComment extends ConsumerWidget {
   const RootComment({
     super.key,
     required this.comment,
+    this.rootContext,
+    this.version,
     this.onReply,
     this.onActions,
   });
 
   final Comment comment;
+
+  /// Optional root app/stack/forum context — when null, resolved from NIP-22 tags.
+  final ThreadRootContext? rootContext;
+
+  /// App version tag shown beside the root label (app detail threads).
+  final String? version;
 
   /// Called when the user swipes right on the bubble (reply gesture).
   /// If null the swipe animation still plays but nothing opens.
@@ -43,20 +56,12 @@ class RootComment extends ConsumerWidget {
   final VoidCallback? onActions;
 
   void _openThread(BuildContext context, WidgetRef ref) {
-    showModal<void>(
+    showThreadModal(
       context,
-      fillHeight: true,
-      maxHeightFactor: 0.75,
-      footer: (ctx) => _ThreadFooter(
-        comment: comment,
-        onReply: (result) =>
-            publishReplyComment(ref: ref, result: result, parentComment: comment),
-      ),
-      builder: (_) => _ThreadBody(
-        comment: comment,
-        onReply: (parent, result) =>
-            publishReplyComment(ref: ref, result: result, parentComment: parent),
-      ),
+      ref,
+      comment: comment,
+      rootContext: rootContext,
+      version: version,
     );
   }
 
@@ -74,12 +79,28 @@ class RootComment extends ConsumerWidget {
       ),
     );
     final author = authorState.models.firstOrNull;
-    final replies = comment.replies.toList();
+    final directReplies = comment.replies.toList();
 
-    // Unique replier pubkeys (up to 3 for avatar stack)
+    // BFS to count and collect ALL descendants (full subtree), not just direct
+    // replies. Mirrors _ThreadBody._collectSubtree used in the thread modal.
+    final allDescendants = <Comment>[];
+    {
+      final seen = <String>{};
+      final queue = <Comment>[...directReplies];
+      while (queue.isNotEmpty) {
+        final c = queue.removeAt(0);
+        if (seen.add(c.id)) {
+          allDescendants.add(c);
+          queue.addAll(c.replies.toList());
+        }
+      }
+    }
+
+    // Unique replier pubkeys (up to 3 for avatar stack) — drawn from the full
+    // subtree so the avatars represent all participants, not just direct repliers.
     final uniqueReplierPubkeys = <String>{};
     final replierItems = <ProfilePicItem>[];
-    for (final r in replies) {
+    for (final r in allDescendants) {
       if (uniqueReplierPubkeys.add(r.event.pubkey)) {
         replierItems.add(ProfilePicItem(pubkey: r.event.pubkey));
         if (replierItems.length >= 3) break;
@@ -134,33 +155,34 @@ class RootComment extends ConsumerWidget {
             pubkey: comment.event.pubkey,
             content: contentWidget,
             timestamp: comment.createdAt,
+            topPadding: 0,
             onReply: onReply ??
-                () => showCommentModal(
+                () => showThreadModal(
                       context,
-                      placeholder: 'Reply…',
-                      quotedComment: comment,
-                      quotedCommentAuthor: author,
-                      onSubmit: (result) => publishReplyComment(
-                        ref: ref,
-                        result: result,
-                        parentComment: comment,
-                      ),
+                      ref,
+                      comment: comment,
+                      rootContext: rootContext,
+                      version: version,
+                      initialExpand: true,
                     ),
             onActions: onActions ??
                 () => showCommentActionsModal(
                       context,
                       comment: comment,
                       commentAuthor: author,
+                      rootContext: rootContext,
+                      version: version,
+                      ref: ref,
                     ),
           ),
 
           // Reply indicator — pulled 2px up to sit closer to the bubble above.
-          if (replies.isNotEmpty)
+          if (allDescendants.isNotEmpty)
             Transform.translate(
               offset: const Offset(0, -2),
               child: _ReplyIndicator(
                 replierItems: replierItemsWithProfiles,
-                replyCount: replies.length,
+                replyCount: allDescendants.length,
                 replyIndicatorText: replyIndicatorText,
                 onTap: () => _openThread(context, ref),
               ),
@@ -197,15 +219,92 @@ class RootComment extends ConsumerWidget {
 // Thread modal — body + footer (used by showAppModal via fillHeight + footer)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Scrollable body: flat [ThreadComment] root + divider + reply bubbles.
+/// Opens the comment thread bottom sheet for [comment].
+void showThreadModal(
+  BuildContext context,
+  WidgetRef ref, {
+  required Comment comment,
+  ThreadRootContext? rootContext,
+  String? version,
+  bool initialExpand = false,
+  Comment? initialReplyTo,
+  Profile? initialReplyAuthor,
+}) {
+  final controller = ThreadModalController(
+    expanded: initialExpand,
+    replyTo: initialReplyTo,
+    replyAuthor: initialReplyAuthor,
+  );
+  showModal<void>(
+    context,
+    fillHeight: true,
+    maxHeightFactor: 0.75,
+    footer: (ctx) => ListenableBuilder(
+      listenable: controller,
+      builder: (_, __) => _ThreadFooter(
+        controller: controller,
+        comment: comment,
+        onSubmit: (parent, result) =>
+            publishReplyComment(ref: ref, result: result, parentComment: parent),
+      ),
+    ),
+    builder: (_) => _ThreadBody(
+      comment: comment,
+      rootContext: rootContext,
+      version: version,
+      controller: controller,
+    ),
+  ).whenComplete(controller.dispose);
+}
+
+/// Shared expand/collapse state for the thread modal footer composer.
+class ThreadModalController extends ChangeNotifier {
+  ThreadModalController({
+    this.expanded = false,
+    Comment? replyTo,
+    Profile? replyAuthor,
+  })  : replyTarget = replyTo,
+        replyTargetAuthor = replyAuthor;
+
+  bool expanded;
+  Comment? replyTarget;
+  Profile? replyTargetAuthor;
+  int? pendingTipSats;
+
+  void expand({Comment? replyTo, Profile? replyAuthor}) {
+    expanded = true;
+    replyTarget = replyTo;
+    replyTargetAuthor = replyAuthor;
+    notifyListeners();
+  }
+
+  void collapse() {
+    expanded = false;
+    replyTarget = null;
+    replyTargetAuthor = null;
+    pendingTipSats = null;
+    notifyListeners();
+  }
+
+  void setPendingTip(int? sats) {
+    pendingTipSats = sats;
+    notifyListeners();
+  }
+}
+
+/// Scrollable body: unified root rail + divider + reply bubbles.
 class _ThreadBody extends ConsumerWidget {
-  const _ThreadBody({required this.comment, this.onReply});
+  const _ThreadBody({
+    required this.comment,
+    this.rootContext,
+    this.version,
+    required this.controller,
+  });
 
   final Comment comment;
-
-  /// Called when the user submits a reply from inside the thread body.
-  /// Receives (parentComment, composerResult) — the immediate parent to reply to.
-  final Future<void> Function(Comment parent, ComposerResult result)? onReply;
+  final ThreadRootContext? rootContext;
+  final String? version;
+  final ThreadModalController controller;
 
   /// BFS walk of [root.replies] → [reply.replies] → … collecting ALL
   /// descendants at every depth, sorted chronologically.
@@ -252,152 +351,292 @@ class _ThreadBody extends ConsumerWidget {
     );
     final author = authorState.models.firstOrNull;
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        // Root comment — flat ThreadComment header (not a bubble)
-        ThreadComment(
-          profile: author,
-          pubkey: comment.event.pubkey,
-          content: NoteParser.parse(
-            context,
-            comment.content,
-            emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
-          ),
-          timestamp: comment.createdAt,
-        ),
-
-        // Divider — 1.4px white11, matching .thread-divider in webapp
-        Container(height: 1.4, color: c.white11),
-
-        // 4px top padding before the first reply
-        const SizedBox(height: 4),
-
-        // Replies — 4px additional gap between each bubble
-        if (replies.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-            child: Center(
-              child: Text(
-                'No comments yet',
-                style: LabTextStyles.reg15.copyWith(color: c.white33),
-              ),
-            ),
-          )
-        else
-          for (int i = 0; i < replies.length; i++) ...[
-            if (i > 0) const SizedBox(height: 4),
-            _ThreadReply(
-              reply: replies[i],
-              rootId: comment.id,
-              byId: byId,
-              onReply: () {
-                final scope = ModalNestScope.maybeOf(context);
-                scope?.onNestedChange(true);
-                showCommentModal(
-                  context,
-                  placeholder: 'Reply…',
-                  quotedComment: replies[i],
-                  onSubmit: onReply != null
-                      ? (result) => onReply!(replies[i], result)
-                      : null,
-                ).then((_) => scope?.onNestedChange(false));
-              },
-              onActions: () => showCommentActionsModal(
+    return ThreadRootContextWatch(
+      comment: comment,
+      rootContextOverride: rootContext,
+      builder: (context, resolvedRoot) {
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            _ThreadRootUnified(
+              comment: comment,
+              rootContext: resolvedRoot,
+              version: version,
+              author: author,
+              content: NoteParser.parse(
                 context,
-                comment: replies[i],
+                comment.content,
+                emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
+              ),
+              onOptions: () => showCommentActionsModal(
+                context,
+                comment: comment,
+                commentAuthor: author,
+                rootContext: resolvedRoot,
+                version: version,
+                ref: ref,
+                onComment: () => controller.expand(),
               ),
             ),
-          ],
 
-        const SizedBox(height: 8),
-      ],
+            // Replies — border-top + 14px horizontal inset (webapp .thread-replies)
+            Container(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: c.white11, width: 1.4)),
+              ),
+              padding: const EdgeInsets.fromLTRB(
+                kCommentModalInset,
+                12,
+                kCommentModalInset,
+                0,
+              ),
+              child: Column(
+                children: [
+                  if (replies.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: Text(
+                          'No comments yet',
+                          style: LabTextStyles.reg15.copyWith(color: c.white33),
+                        ),
+                      ),
+                    )
+                  else
+                    for (int i = 0; i < replies.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 12),
+                      _ThreadReply(
+                        reply: replies[i],
+                        rootId: comment.id,
+                        byId: byId,
+                        controller: controller,
+                        onActions: () => showCommentActionsModal(
+                          context,
+                          comment: replies[i],
+                          rootContext: resolvedRoot,
+                          version: version,
+                          ref: ref,
+                        ),
+                      ),
+                    ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 8),
+          ],
+        );
+      },
     );
   }
 }
 
-/// Pinned footer bar for the thread modal — three-button row matching the
-/// [BottomBar] used on forum post / app / stack detail screens:
-///   [Zap ⚡] [Comment input placeholder ────────────] [⋯]
-class _ThreadFooter extends StatelessWidget {
-  const _ThreadFooter({required this.comment, this.onReply});
+/// Unified left-rail root block — port of webapp `.thread-root-unified`.
+class _ThreadRootUnified extends StatelessWidget {
+  const _ThreadRootUnified({
+    required this.comment,
+    required this.rootContext,
+    required this.author,
+    required this.content,
+    this.version,
+    this.onOptions,
+  });
 
   final Comment comment;
-
-  /// Called with the composer result when the user submits a reply.
-  final Future<void> Function(ComposerResult result)? onReply;
+  final ThreadRootContext? rootContext;
+  final Profile? author;
+  final Widget content;
+  final String? version;
+  final VoidCallback? onOptions;
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
 
-    return ModalFooterBar(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        kCommentModalInset,
+        kCommentModalInset,
+        kCommentModalInset,
+        0,
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Zap button — blurple, 41px (stub; no zap flow yet)
-          Container(
-            width: 41,
-            height: 41,
-            decoration: BoxDecoration(
-              gradient: c.blurple,
-              borderRadius: BorderRadius.circular(17),
-            ),
-            child: Center(
-              child: LabIcon(LabIcons.zap, size: 20, color: c.whiteEnforced),
+          SizedBox(
+            width: 36,
+            child: Column(
+              children: [
+                if (rootContext != null) ...[
+                  ThreadRootBadge(context_: rootContext!),
+                  Container(
+                    width: 2,
+                    height: 12,
+                    color: c.white16,
+                  ),
+                ],
+                ProfilePic(
+                  profile: author,
+                  pubkey: comment.event.pubkey,
+                  size: 36,
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
-
-          // Comment input placeholder — tapping opens the composer with
-          // the root comment as quoted context.
           Expanded(
-            child: GestureDetector(
-              onTap: () {
-                final scope = ModalNestScope.maybeOf(context);
-                scope?.onNestedChange(true);
-                showCommentModal(
-                  context,
-                  placeholder: 'Reply…',
-                  quotedComment: comment,
-                  onSubmit: onReply,
-                ).then((_) => scope?.onNestedChange(false));
-              },
-              child: Container(
-                height: 41,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: c.black33,
-                  borderRadius: BorderRadius.circular(17),
-                  border: LabBorder.all(color: c.white33, width: 0.33),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (rootContext != null)
+                  ThreadRootEvent(context_: rootContext!, version: version),
+                ThreadComment(
+                  profile: author,
+                  pubkey: comment.event.pubkey,
+                  content: content,
+                  timestamp: comment.createdAt,
+                  showAvatar: false,
+                  headerActions: onOptions != null
+                      ? ThreadRootOptionsButton(onTap: onOptions)
+                      : null,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    LabIcon(LabIcons.reply, size: 16, color: c.white33),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Reply',
-                      style: LabTextStyles.med15.copyWith(color: c.white33),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Options button — 41×41 hit area, 34px icon, no background.
-          GestureDetector(
-            onTap: () => showCommentActionsModal(context, comment: comment),
-            child: SizedBox(
-              width: 41,
-              height: 41,
-              child: Center(
-                child: LabIcon(LabIcons.options, size: 34, color: c.white33),
-              ),
+                const SizedBox(height: 12),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Pinned footer — collapsed [InputButton] or inline [NostrComposer].
+class _ThreadFooter extends StatefulWidget {
+  const _ThreadFooter({
+    required this.controller,
+    required this.comment,
+    this.onSubmit,
+  });
+
+  final ThreadModalController controller;
+  final Comment comment;
+  final Future<void> Function(Comment parent, ComposerResult result)? onSubmit;
+
+  @override
+  State<_ThreadFooter> createState() => _ThreadFooterState();
+}
+
+class _ThreadFooterState extends State<_ThreadFooter> {
+  bool _submitting = false;
+
+  Future<void> _handleSubmit(ComposerResult result) async {
+    if (_submitting || widget.onSubmit == null) return;
+    final hasTip = widget.controller.pendingTipSats != null &&
+        widget.controller.pendingTipSats! >= 1;
+    if (result.isEmpty && !hasTip) return;
+
+    final parent = widget.controller.replyTarget ?? widget.comment;
+
+    if (hasTip) {
+      // Text-only reply path when a tip is attached — comment zap invoice flow
+      // (webapp ZapSliderModal + z-wrapper) is not ported to Flutter yet.
+      if (!result.isEmpty) {
+        setState(() => _submitting = true);
+        try {
+          await widget.onSubmit!(parent, result);
+          if (mounted) widget.controller.collapse();
+        } finally {
+          if (mounted) setState(() => _submitting = false);
+        }
+      }
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      await widget.onSubmit!(parent, result);
+      if (mounted) widget.controller.collapse();
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _openTipPicker() async {
+    final amount = await showTipAmountModal(
+      context,
+      initialAmount: widget.controller.pendingTipSats,
+    );
+    if (amount != null && mounted) {
+      widget.controller.setPendingTip(amount);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    final bottomPad = MediaQuery.viewInsetsOf(context).bottom > 0
+        ? 0.0
+        : MediaQuery.paddingOf(context).bottom;
+    final pendingTip = widget.controller.pendingTipSats;
+    final hasTip = pendingTip != null && pendingTip >= 1;
+
+    Widget? quote;
+    final replyTarget = widget.controller.replyTarget;
+    if (replyTarget != null) {
+      quote = QuotedMessage.fromComment(
+        replyTarget,
+        author: widget.controller.replyTargetAuthor,
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            kCommentModalInset,
+            0,
+            kCommentModalInset,
+            kCommentModalInset + bottomPad,
+          ),
+          child: widget.controller.expanded
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: c.black33,
+                    borderRadius: BorderRadius.circular(LabRadius.r17),
+                    border: LabBorder.all(color: c.white33, width: LabStroke.thin),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (hasTip)
+                        TipAmountRow(
+                          amountSats: pendingTip,
+                          onEdit: _openTipPicker,
+                        ),
+                      NostrComposer(
+                        placeholder: replyTarget != null ? 'Reply…' : 'Reply…',
+                        size: ComposerSize.medium,
+                        autofocus: true,
+                        showActionRow: true,
+                        nested: true,
+                        allowEmptySubmit: hasTip,
+                        quotedContent: quote,
+                        onTipTap: _openTipPicker,
+                        onSubmit: _submitting ? null : _handleSubmit,
+                        onClose: widget.controller.collapse,
+                      ),
+                    ],
+                  ),
+                )
+              : InputButton(
+                  placeholder: 'Comment',
+                  leading: LabIcon(LabIcons.reply, size: 18, color: c.white33),
+                  onTap: () => widget.controller.expand(),
+                ),
+        ),
+      ],
     );
   }
 }
@@ -412,20 +651,14 @@ class _ThreadReply extends ConsumerWidget {
     required this.reply,
     required this.rootId,
     required this.byId,
-    this.onReply,
+    required this.controller,
     this.onActions,
   });
 
   final Comment reply;
-
-  /// The ID of the root comment — used to detect nested (non-direct) replies.
   final String rootId;
-
-  /// All comments in this thread keyed by event ID — used to resolve the
-  /// quoted parent for nested replies.
   final Map<String, Comment> byId;
-
-  final VoidCallback? onReply;
+  final ThreadModalController controller;
   final VoidCallback? onActions;
 
   @override
@@ -472,7 +705,8 @@ class _ThreadReply extends ConsumerWidget {
       content: bubbleContent,
       timestamp: reply.createdAt,
       isLight: true,
-      onReply: onReply,
+      inThreadModal: true,
+      onReply: () => controller.expand(replyTo: reply, replyAuthor: profile),
       onActions: onActions,
     );
   }

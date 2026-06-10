@@ -20,6 +20,7 @@ class ZapBubble extends StatelessWidget {
     this.timestamp,
     this.isPending = false,
     this.avatarSize = 36,
+    this.topPadding = 4,
   });
 
   final String name;
@@ -31,13 +32,14 @@ class ZapBubble extends StatelessWidget {
   final DateTime? timestamp;
   final bool isPending;
   final double avatarSize;
+  final double topPadding;
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 4, left: 14, right: 14),
+      padding: EdgeInsets.only(top: topPadding, left: 14, right: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisAlignment: MainAxisAlignment.start,

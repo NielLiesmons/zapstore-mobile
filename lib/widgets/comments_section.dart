@@ -5,6 +5,33 @@ import 'package:zapstore/widgets/common/empty_state.dart';
 import 'package:zapstore/widgets/common/shimmer.dart';
 import 'package:zapstore/widgets/social/root_comment.dart';
 import 'package:zapstore/widgets/social/zap_comment_item.dart';
+import 'package:zapstore/widgets/social/comment_feed_composer.dart';
+import 'package:zapstore/widgets/modals/comment_modal.dart';
+import 'package:zapstore/services/nostr_comment_service.dart';
+import 'package:zapstore/widgets/social/thread_root.dart';
+
+/// Tab badge + relay-bar stats derived from a comments [StorageState].
+CommentFeedTabMeta commentFeedTabMeta(StorageState<Comment> state) {
+  final models = state.models;
+  final rootCount = models.where((c) => c.parentKind != 1111).length;
+  return CommentFeedTabMeta(
+    count: rootCount,
+    initialLoading: state is StorageLoading && models.isEmpty,
+    syncing: state is StorageLoading && models.isNotEmpty,
+  );
+}
+
+class CommentFeedTabMeta {
+  const CommentFeedTabMeta({
+    required this.count,
+    required this.initialLoading,
+    required this.syncing,
+  });
+
+  final int count;
+  final bool initialLoading;
+  final bool syncing;
+}
 
 /// A merged feed entry: either a root [Comment] or a [Zap] with a comment.
 class _FeedEntry {
@@ -45,14 +72,8 @@ class CommentsSection extends ConsumerWidget {
       ),
     );
 
-    final comments = switch (commentsState) {
-      StorageData(:final models) => models,
-      _ => <Comment>[],
-    };
-    final zapModels = switch (zapsState) {
-      StorageData(:final models) => models,
-      _ => <Zap>[],
-    };
+    final comments = commentsState.models;
+    final zapModels = zapsState.models;
     final errorException = switch (commentsState) {
       StorageError(:final exception) => exception,
       _ => null,
@@ -64,7 +85,7 @@ class CommentsSection extends ConsumerWidget {
           .where((z) => z.event.content.trim().isNotEmpty)
           .toList(),
       errorException: errorException,
-      isLoading: commentsState is StorageLoading,
+      isLoading: commentsState is StorageLoading && comments.isEmpty,
       app: app,
       fileMetadata: fileMetadata!,
     );
@@ -95,14 +116,8 @@ class StackCommentsSection extends ConsumerWidget {
       ),
     );
 
-    final comments = switch (commentsState) {
-      StorageData(:final models) => models,
-      _ => <Comment>[],
-    };
-    final zapModels = switch (zapsState) {
-      StorageData(:final models) => models,
-      _ => <Zap>[],
-    };
+    final comments = commentsState.models;
+    final zapModels = zapsState.models;
     final errorException = switch (commentsState) {
       StorageError(:final exception) => exception,
       _ => null,
@@ -114,7 +129,7 @@ class StackCommentsSection extends ConsumerWidget {
           .where((z) => z.event.content.trim().isNotEmpty)
           .toList(),
       errorException: errorException,
-      isLoading: commentsState is StorageLoading,
+      isLoading: commentsState is StorageLoading && comments.isEmpty,
       stack: stack,
     );
   }
@@ -122,7 +137,7 @@ class StackCommentsSection extends ConsumerWidget {
 
 /// Shared layout for both App and Stack comments — renders a merged feed
 /// of root [Comment]s and [Zap]s that carry a comment, sorted newest first.
-class _CommentsSectionLayout extends StatelessWidget {
+class _CommentsSectionLayout extends ConsumerWidget {
   const _CommentsSectionLayout({
     required this.comments,
     this.zapsWithComments = const [],
@@ -142,7 +157,7 @@ class _CommentsSectionLayout extends StatelessWidget {
   final AppStack? stack;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final rootComments = comments.where((c) => c.parentKind != 1111).toList();
 
     // Merge root comments and zaps-with-comments, sorted newest first.
@@ -151,9 +166,48 @@ class _CommentsSectionLayout extends StatelessWidget {
       ...zapsWithComments.map((z) => _FeedEntry(createdAt: z.createdAt, zap: z)),
     ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
+    Widget? composer;
+    if (app != null && fileMetadata != null) {
+      composer = CommentFeedComposer(
+        ctaLabel: 'Your Comment',
+        onTap: () => showCommentModal(
+          context,
+          placeholder: 'Comment on ${app!.name ?? 'this app'}…',
+          rootContext: ThreadRootContext.fromApp(
+            app!,
+            version: fileMetadata!.version,
+          ),
+          version: fileMetadata!.version,
+          showRootConnector: true,
+          onSubmit: (result) => publishRootComment(
+            ref: ref,
+            result: result,
+            app: app!,
+            version: fileMetadata!.version,
+          ),
+        ),
+      );
+    } else if (stack != null) {
+      composer = CommentFeedComposer(
+        ctaLabel: 'Your Comment',
+        onTap: () => showCommentModal(
+          context,
+          placeholder: 'Comment on ${stack!.name ?? 'this stack'}…',
+          rootContext: ThreadRootContext.fromStack(stack!),
+          showRootConnector: true,
+          onSubmit: (result) => publishRootComment(
+            ref: ref,
+            result: result,
+            stack: stack!,
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (composer != null) composer,
         if (errorException != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -172,11 +226,25 @@ class _CommentsSectionLayout extends StatelessWidget {
           Column(
             children: [
               for (int i = 0; i < entries.length; i++) ...[
-                if (i > 0) const SizedBox(height: 8),
+                if (i > 0) const SizedBox(height: 12),
                 if (entries[i].comment != null)
-                  RootComment(comment: entries[i].comment!)
+                  RootComment(
+                    comment: entries[i].comment!,
+                    rootContext: app != null
+                        ? ThreadRootContext.fromApp(
+                            app!,
+                            version: fileMetadata?.version,
+                          )
+                        : stack != null
+                            ? ThreadRootContext.fromStack(stack!)
+                            : null,
+                    version: fileMetadata?.version,
+                  )
                 else
-                  ZapCommentItem(zap: entries[i].zap!),
+                  ZapCommentItem(
+                    zap: entries[i].zap!,
+                    topPadding: i == 0 ? 0 : 4,
+                  ),
               ],
             ],
           ),

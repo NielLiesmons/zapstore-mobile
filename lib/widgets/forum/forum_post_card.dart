@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
+import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
@@ -21,7 +22,7 @@ import 'package:zapstore/widgets/common/time_utils.dart';
 //
 // Data strategy (mirrors app_detail_screen.dart):
 //   • Author profile  — inline query<Profile> on social+vertex relays, 2h cache
-//   • Comments        — inline query<Comment> (#E tag) on AppCatalog relay
+//   • Comments        — inline query<Comment> (#E tag) on Zapstore relay
 //     → derives commenter ProfilePicItems and reply count for the reply row
 //
 // Layout: left column (32px: avatar + connector) + right column (meta/title/
@@ -44,10 +45,7 @@ class ForumPostCard extends HookConsumerWidget {
 
   final ForumPost post;
 
-  /// Called when the card is tapped. Receives the currently loaded
-  /// [Comment] list so the detail screen can display them immediately
-  /// without waiting for a new query to complete.
-  final void Function(List<Comment> comments)? onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -66,21 +64,39 @@ class ForumPostCard extends HookConsumerWidget {
     );
     final author = profileState.models.firstOrNull;
 
-    // ── Comments (for reply row) ──────────────────────────────────────────────
-    // Forum posts are RegularModel (kind 11) so comments reference them via
-    // uppercase E tag (NIP-22 root event reference).
+    // ── Comments — all levels via NIP-22 uppercase #E root tag ──────────────
+    // No limit: all comments are fetched so (a) the count is accurate for the
+    // full tree and (b) they land in SQLite cache for instant display when the
+    // post screen opens.
     final commentsState = ref.watch(
       query<Comment>(
         tags: {'#E': {post.id}},
-        limit: 10,
         source: const LocalAndRemoteSource(
-          relays: 'AppCatalog',
+          relays: kDefaultRelay,
           stream: false,
         ),
         subscriptionPrefix: 'forum-post-comments-${post.id}',
       ),
     );
     final comments = commentsState.models;
+
+    // ── Zaps with content (text zaps count toward engagement total) ───────────
+    final zapsState = ref.watch(
+      query<Zap>(
+        tags: {'#e': {post.id}},
+        source: const LocalAndRemoteSource(
+          relays: kDefaultRelay,
+          stream: false,
+        ),
+        subscriptionPrefix: 'forum-post-card-zaps-${post.id}',
+      ),
+    );
+    final zapsWithContent = zapsState.models
+        .where((z) => z.event.content.trim().isNotEmpty)
+        .toList();
+
+    // Total engagement = all comments in tree + zaps with content
+    final totalCount = comments.length + zapsWithContent.length;
 
     // De-duplicate commenter pubkeys and build ProfilePicItems
     final seen = <String>{};
@@ -122,14 +138,14 @@ class ForumPostCard extends HookConsumerWidget {
             ))
         .toList();
 
-    final showReplyRow = commenters.isNotEmpty;
+    final showReplyRow = totalCount > 0;
 
     final title = post.title;
     final content = post.content;
     final labels = post.topics.toList();
 
     return GestureDetector(
-      onTap: onTap != null ? () => onTap!(comments) : null,
+      onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -263,14 +279,12 @@ class ForumPostCard extends HookConsumerWidget {
                     Flexible(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: ProfilePicStack(
+                        child:                         ProfilePicStack(
                           profiles: commentersWithProfiles,
-                          text: _stackText(commentersWithProfiles, comments.length),
-                          suffix: comments.isNotEmpty
-                              ? comments.length.toString()
-                              : '',
+                          text: _stackText(commentersWithProfiles, totalCount),
+                          suffix: totalCount > 0 ? totalCount.toString() : '',
                           avatarSize: 24,
-                          onTap: onTap != null ? () => onTap!(comments) : null,
+                          onTap: onTap,
                         ),
                       ),
                     ),
@@ -283,8 +297,7 @@ class ForumPostCard extends HookConsumerWidget {
     );
   }
 
-  static String _stackText(
-      List<ProfilePicItem> items, int totalCount) {
+  static String _stackText(List<ProfilePicItem> items, int totalCount) {
     if (items.isEmpty) return '';
     final name0 = items[0].profile?.name ?? 'Someone';
     if (items.length == 1 && totalCount <= 1) return name0;

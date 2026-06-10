@@ -578,10 +578,12 @@ class AppOptionsModalContent extends HookConsumerWidget {
 
     final shareUrl = getAppShareUrl(app);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _OptionTile(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _OptionTile(
           icon: LabIcons.share,
           label: 'Share',
           onTap: () {
@@ -641,8 +643,8 @@ class AppOptionsModalContent extends HookConsumerWidget {
             },
           ),
         ],
-        SizedBox(height: MediaQuery.paddingOf(context).bottom + 8),
-      ],
+        ],
+      ),
     );
   }
 
@@ -775,7 +777,7 @@ class _OptionTile extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
           children: [
             LabIcon(icon, size: 18, color: color),

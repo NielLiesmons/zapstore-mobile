@@ -1,8 +1,95 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/widgets/common/scroll_to_top_button.dart';
+
+/// Max pixels a safe-area fade overlay may extend beyond the system inset.
+const double kSafeFadeMaxExtend = 8.0;
+
+/// Opacity at the 50% midpoint of each safe-edge fade zone.
+const double kSafeFadePlateauOpacity = 0.8;
+
+/// Height over which the bottom safe-area fades into [LabColors.black]
+/// (screens without [TopScrollFader.safeEdgeFades]).
+const double kBottomSafeFadeHeight = 16.0;
+
+/// Top safe-edge fade (50/50 split): 100% → 80% → 0%.
+LinearGradient _topSafeEdgeGradient(Color black) {
+  return LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      black,
+      black.withValues(alpha: kSafeFadePlateauOpacity),
+      black.withValues(alpha: 0),
+    ],
+    stops: const [0, 0.5, 1],
+  );
+}
+
+/// Bottom safe-edge fade (50/50 split): 0% → 80% → 100%.
+LinearGradient _bottomSafeEdgeGradient(Color black) {
+  return LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      black.withValues(alpha: 0),
+      black.withValues(alpha: kSafeFadePlateauOpacity),
+      black,
+    ],
+    stops: const [0, 0.5, 1],
+  );
+}
+///
+/// Use this **inside** a [SingleChildScrollView] when a prefix of the scroll
+/// column must **not** be masked (e.g. `BackdropFilter` over inbox cards:
+/// a parent [ShaderMask] would break blur compositing).
+class ScrollContentTopFade extends StatelessWidget {
+  const ScrollContentTopFade({
+    super.key,
+    required this.scrollController,
+    required this.child,
+    this.fadeHeight = 28.0,
+    this.triggerDistance = 4.0,
+    this.offsetBias = 0.0,
+    this.fadeStart,
+  });
+
+  final ScrollController scrollController;
+  final Widget child;
+  final double fadeHeight;
+  final double triggerDistance;
+  final double offsetBias;
+  final double? fadeStart;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: scrollController,
+      builder: (context, child) {
+        final t = scrollController.hasClients
+            ? ((scrollController.offset - offsetBias) / triggerDistance)
+                .clamp(0.0, 1.0)
+            : 0.0;
+        final gradStart = fadeStart ?? offsetBias;
+        return ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withValues(alpha: 1.0 - t),
+              Colors.black,
+            ],
+          ).createShader(
+            Rect.fromLTWH(0, gradStart, bounds.width, fadeHeight),
+          ),
+          blendMode: BlendMode.dstIn,
+          child: child!,
+        );
+      },
+      child: child,
+    );
+  }
+}
 
 /// Wraps [child] in a scroll-driven top-edge fade.
 ///
@@ -40,9 +127,12 @@ import 'package:zapstore/widgets/common/scroll_to_top_button.dart';
 ///
 /// **`hasBottomBar: false` (default — screens without a BottomBar widget):**
 ///   - Scroll-to-top button sits at `safeBottom + 24`.
-///   - A blurred safe-area overlay is painted at the very bottom edge, covering
-///     just the system gesture / home-indicator inset. It has a `black66`
-///     background with a thin `white16` top border to blur scrolling content.
+///   - A bottom gradient fades scrolling content into [LabColors.black].
+///
+/// **`safeEdgeFades: true` (detail pages):** each edge overlay is
+/// `safeInset + [kSafeFadeMaxExtend]` tall with a 50/50 stop split: 100% at
+/// the screen edge → [kSafeFadePlateauOpacity] at midpoint → 0% at the content
+/// edge (top; mirrored for bottom).
 ///
 /// **`hasBottomBar: true` (screens with a BottomBar widget):**
 ///   - Scroll-to-top button clears the bottom bar: `safeBottom + 80`.
@@ -50,6 +140,10 @@ import 'package:zapstore/widgets/common/scroll_to_top_button.dart';
 ///
 /// Disable the scroll-to-top button per-screen with `showScrollToTop: false`
 /// (e.g. screens with their own custom FABs at that position).
+///
+/// Set [applyScrollShader] to `false` when [child] applies its own
+/// [ScrollContentTopFade] on part of the scroll column (e.g. home feed below
+/// inbox) so [BackdropFilter] is not under a global [ShaderMask].
 class TopScrollFader extends StatelessWidget {
   const TopScrollFader({
     super.key,
@@ -62,6 +156,8 @@ class TopScrollFader extends StatelessWidget {
     this.showScrollToTop = true,
     this.scrollToTopThreshold = 1200.0,
     this.hasBottomBar = false,
+    this.applyScrollShader = true,
+    this.safeEdgeFades = false,
   });
 
   final ScrollController scrollController;
@@ -94,76 +190,87 @@ class TopScrollFader extends StatelessWidget {
 
   /// Whether this screen has a [BottomBar] widget.
   ///
-  /// - `false` (default): button at `safeBottom + 24`; blurred safe-area
-  ///   overlay shown at the bottom edge.
+  /// - `false` (default): button at `safeBottom + 24`; bottom safe-area fade.
   /// - `true`: button at `safeBottom + 80` to clear the bottom bar; no overlay.
   final bool hasBottomBar;
 
+  /// When `true` (default), wraps [child] in [ScrollContentTopFade]. Home
+  /// passes `false` and fades only the feed subsection inside the scroll view.
+  final bool applyScrollShader;
+
+  /// Detail-style edge fades: solid black within each safe inset, with the
+  /// transparent transition at most [kSafeFadeMaxExtend] px into the content.
+  final bool safeEdgeFades;
+
   @override
   Widget build(BuildContext context) {
-    // IMPORTANT: always return ShaderMask (never swap to a non-ShaderMask
-    // widget) so the widget type at this position in the tree never changes —
-    // changing type forces a rebuild that can detach the ScrollPosition.
-    final shaderMask = ListenableBuilder(
-      listenable: scrollController,
-      builder: (context, child) {
-        final t = scrollController.hasClients
-            ? ((scrollController.offset - offsetBias) / triggerDistance)
-                .clamp(0.0, 1.0)
-            : 0.0;
-        final gradStart = fadeStart ?? offsetBias;
-        return ShaderMask(
-          shaderCallback: (bounds) => LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              // alpha=1 at t=0 → no fade; alpha=0 at t=1 → full fade
-              Colors.black.withValues(alpha: 1.0 - t),
-              Colors.black,
-            ],
-          ).createShader(
-            Rect.fromLTWH(0, gradStart, bounds.width, fadeHeight),
-          ),
-          blendMode: BlendMode.dstIn,
-          child: child!,
-        );
-      },
-      child: child,
-    );
+    final scrollShaderLayer = applyScrollShader
+        ? ScrollContentTopFade(
+            scrollController: scrollController,
+            fadeHeight: fadeHeight,
+            triggerDistance: triggerDistance,
+            offsetBias: offsetBias,
+            fadeStart: fadeStart,
+            child: child,
+          )
+        : child;
 
     // Wrap in a Stack so the scroll-to-top button and optional overlay float
     // above the content.
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    final needsStack = showScrollToTop || (!hasBottomBar && bottomSafe > 0);
-    if (!needsStack) return shaderMask;
+    final topSafe = MediaQuery.paddingOf(context).top;
+    final showTopEdgeFade = safeEdgeFades && topSafe > 0;
+    final showBottomEdgeFade = !hasBottomBar && bottomSafe > 0;
+    final needsStack =
+        showScrollToTop || showTopEdgeFade || showBottomEdgeFade;
+    if (!needsStack) return scrollShaderLayer;
 
     final c = Theme.of(context).extension<LabColors>()!;
+    final topFadeZone = topSafe + kSafeFadeMaxExtend;
+    final bottomFadeZone = bottomSafe + kSafeFadeMaxExtend;
 
     return Stack(
       children: [
-        Positioned.fill(child: shaderMask),
-        // Blurred safe-area overlay — only on screens without a bottom bar,
-        // and only when there is a non-zero gesture/home-indicator inset.
-        if (!hasBottomBar && bottomSafe > 0)
+        Positioned.fill(child: scrollShaderLayer),
+        if (showTopEdgeFade)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: topFadeZone,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: _topSafeEdgeGradient(c.black),
+                ),
+              ),
+            ),
+          ),
+        // Bottom safe-area fade — content dissolves into design-system black.
+        if (showBottomEdgeFade)
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            height: bottomSafe,
-            child: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: c.black66,
-                    border: Border(
-                      top: BorderSide(
-                        color: c.white16,
-                        width: LabStroke.thin,
-                        strokeAlign: BorderSide.strokeAlignCenter,
-                      ),
-                    ),
-                  ),
+            height: safeEdgeFades ? bottomFadeZone : bottomSafe,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: safeEdgeFades
+                      ? _bottomSafeEdgeGradient(c.black)
+                      : LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            c.black.withValues(alpha: 0),
+                            c.black,
+                          ],
+                          stops: [
+                            0,
+                            (kBottomSafeFadeHeight / bottomSafe)
+                                .clamp(0.0, 1.0),
+                          ],
+                        ),
                 ),
               ),
             ),

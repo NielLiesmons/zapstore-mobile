@@ -8,9 +8,10 @@ import 'package:zapstore/widgets/social/zap_bubble.dart';
 /// a [ZapBubble].  Used in both the app/stack comments feed and the forum post
 /// comments feed.
 class ZapCommentItem extends ConsumerWidget {
-  const ZapCommentItem({super.key, required this.zap});
+  const ZapCommentItem({super.key, required this.zap, this.topPadding = 4});
 
   final Zap zap;
+  final double topPadding;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -49,6 +50,7 @@ class ZapCommentItem extends ConsumerWidget {
       pubkey: senderPubkey,
       message: zap.event.content.isEmpty ? null : zap.event.content,
       timestamp: zap.createdAt,
+      topPadding: topPadding,
     );
   }
 }

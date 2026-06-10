@@ -689,49 +689,52 @@ class _MediaImageBlock extends StatelessWidget {
       onTap: () => navigateToContent(context, url),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        // Fixed width so IntrinsicWidth in MessageBubble gets a finite value.
-        // BoxFit.cover crops the image to fill the 240×180 frame.
-        child: SizedBox(
-          width: 240,
-          height: 180,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              url,
-              fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return ColoredBox(
+        // Cap at 240×180 but shrink in narrow bubbles (inbox cards, modals).
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 240, maxHeight: 180),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return ColoredBox(
+                    color: c.white8,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: progress.expectedTotalBytes != null
+                            ? progress.cumulativeBytesLoaded /
+                                progress.expectedTotalBytes!
+                            : null,
+                        color: c.white33,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (_, __, ___) => Container(
                   color: c.white8,
                   child: Center(
-                    child: CircularProgressIndicator(
-                      value: progress.expectedTotalBytes != null
-                          ? progress.cumulativeBytesLoaded /
-                              progress.expectedTotalBytes!
-                          : null,
-                      color: c.white33,
-                      strokeWidth: 2,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (_, __, ___) => Container(
-                color: c.white8,
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      LabIcon(LabIcons.camera, size: 14, color: c.white33),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          NoteParser._stripUrlForDisplay(url),
-                          style: LabTextStyles.reg13.copyWith(color: c.white33),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        LabIcon(LabIcons.camera, size: 14, color: c.white33),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            NoteParser._stripUrlForDisplay(url),
+                            style:
+                                LabTextStyles.reg13.copyWith(color: c.white33),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

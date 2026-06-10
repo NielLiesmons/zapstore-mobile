@@ -27,6 +27,9 @@ class SectionTitle extends StatelessWidget {
 /// Section header matching webapp's SectionHeader.svelte:
 /// title (semibold20 = h2) on the left, optional "See more" with stroked
 /// chevron icon on the right.
+///
+/// Pass [isLoading] to replace the link with a small spinner — use while
+/// background sync is in progress (storage ready but services still loading).
 class SectionHeader extends StatefulWidget {
   const SectionHeader({
     super.key,
@@ -34,12 +37,16 @@ class SectionHeader extends StatefulWidget {
     this.linkText,
     this.onLinkTap,
     this.bottomPadding = 16,
+    this.isLoading = false,
   });
 
   final String title;
   final String? linkText;
   final VoidCallback? onLinkTap;
   final double bottomPadding;
+
+  /// When true, shows a 12px spinner in place of the link text.
+  final bool isLoading;
 
   @override
   State<SectionHeader> createState() => _SectionHeaderState();
@@ -76,7 +83,19 @@ class _SectionHeaderState extends State<SectionHeader> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (hasLink)
+          if (widget.isLoading)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: c.white33,
+                ),
+              ),
+            )
+          else if (hasLink)
             GestureDetector(
               onTap: widget.onLinkTap,
               onTapDown: (_) => setState(() => _pressed = true),

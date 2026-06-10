@@ -52,6 +52,7 @@ Future<EmojiEntry?> showEmojiPicker(BuildContext context) async {
   ModalNestScope.setNested(context, isOpen: true);
   final result = await showModal<EmojiEntry>(
     context,
+    nestedModal: true,
     maxHeightFactor: 0.5,
     fillHeight: true,
     builder: (_) => const _EmojiPickerContent(),

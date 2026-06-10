@@ -25,6 +25,7 @@ import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/providers/theme_mode.dart';
 import 'package:zapstore/services/local_signer_service.dart';
+import 'package:zapstore/services/updates_service.dart';
 import 'package:zapstore/utils/key_generator.dart';
 import 'models/emoji_list.dart';
 import 'models/forum_post.dart';
@@ -101,6 +102,10 @@ class ZapstoreApp extends HookConsumerWidget {
 
     // Watch initialization state for error overlay display
     final initState = ref.watch(appInitializationProvider);
+
+    // Keep update polling alive app-wide — independent of profile sign-in.
+    ref.watch(updatePollerProvider);
+    ref.watch(updateCountProvider);
 
     // Listen to app lifecycle and check for updates when app regains focus
     useEffect(() {
@@ -203,6 +208,7 @@ class ZapstoreApp extends HookConsumerWidget {
             scale: uiScale,
             alignment: Alignment.topLeft,
             child: OverflowBox(
+              alignment: Alignment.topLeft,
               minWidth: mq.size.width / uiScale,
               maxWidth: mq.size.width / uiScale,
               minHeight: mq.size.height / uiScale,
@@ -281,7 +287,9 @@ class ZapstoreHome extends StatelessWidget {
 
 const _kDefaultAppCatalogRelay = 'wss://relay.zapstore.dev';
 
-final appInitializationProvider = FutureProvider<void>((ref) async {
+/// Resolves as soon as local storage is open and queries can be made.
+/// UI content gates on this — not on the full [appInitializationProvider].
+final storageReadyProvider = FutureProvider<void>((ref) async {
   final dir = await getApplicationSupportDirectory();
   final dbPath = path.join(dir.path, 'zapstore.db');
 
@@ -296,7 +304,7 @@ final appInitializationProvider = FutureProvider<void>((ref) async {
   final settings = await ref.read(settingsServiceProvider).load();
   final appCatalogRelays = settings.appCatalogRelays ?? {_kDefaultAppCatalogRelay};
 
-  // Initialize storage with local relay config
+  // Initialize storage with local relay config — after this, queries work
   await ref.read(
     initializationProvider(
       StorageConfiguration(
@@ -320,6 +328,14 @@ final appInitializationProvider = FutureProvider<void>((ref) async {
       ),
     ).future,
   );
+});
+
+/// Resolves after all app services are ready (installed packages, deep links,
+/// auto sign-in). Gates update polling and the error overlay in [_AppWidget].
+/// Content display gates on [storageReadyProvider] instead.
+final appInitializationProvider = FutureProvider<void>((ref) async {
+  // Wait for storage to be open first
+  await ref.watch(storageReadyProvider.future);
 
   // Initialize device capabilities (used for dynamic download concurrency)
   await DeviceCapabilitiesCache.initialize();
@@ -453,6 +469,9 @@ class _AppLifecycleObserver with WidgetsBindingObserver {
 
       // Sync installed packages to detect installs that completed while backgrounded
       unawaited(packageManager.syncInstalledPackages());
+
+      // Re-check for app updates (works without a signed-in profile).
+      unawaited(_ref.read(updatePollerProvider.notifier).checkNow());
 
       // Check for permission grants that happened in settings
       unawaited(_checkPermissionGrants());

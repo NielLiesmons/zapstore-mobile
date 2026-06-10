@@ -36,7 +36,8 @@ import 'package:zapstore/utils/debug_utils.dart';
 import 'package:zapstore/utils/key_generator.dart';
 import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/widgets/common/selector.dart';
-import 'package:zapstore/widgets/onboarding/get_started_modal.dart';
+import 'package:zapstore/widgets/onboarding/new_profile_modal.dart';
+import 'package:zapstore/widgets/onboarding/onboarding_flow.dart';
 import 'package:zapstore/widgets/onboarding/spin_key_modal.dart';
 import 'package:zapstore/widgets/onboarding/use_existing_key_modal.dart';
 import 'package:zapstore/widgets/settings/profile_card.dart';
@@ -109,29 +110,6 @@ class _ProfileHeader extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: c.gray33,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 2),
-                            child: LabIcon(
-                              LabIcons.chevronLeft,
-                              size: 14,
-                              color: c.white33,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     Text(
                       'Profiles',
                       style: LabTextStyles.semibold23.copyWith(color: c.white),
@@ -297,7 +275,7 @@ class _ProfileCardsRow extends ConsumerWidget {
             // Add Profile
             const SizedBox(width: 12),
             AddProfileCard(
-              onTap: () => _launchOnboarding(context, ref),
+              onTap: () => launchProfileOnboarding(context, ref),
             ),
 
             // Right edge buffer so last card clears the fade zone
@@ -306,47 +284,6 @@ class _ProfileCardsRow extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Onboarding helpers — slot machine flow
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Launches the profile-creation onboarding: name → slot machine.
-/// Used from both the signed-out full-width card and the Add Profile card in
-/// the signed-in horizontal row.
-void _launchOnboarding(BuildContext context, WidgetRef ref) {
-  showGetStartedModal(
-    context,
-    onContinue: (name) {
-      showSpinKeyModal(
-        context,
-        profileName: name,
-        onSpinComplete: (nsec) => _handleNewKey(context, ref, nsec),
-        onUseExistingKey: () => showUseExistingKeyModal(context),
-      );
-    },
-    onUseExistingKey: () => showUseExistingKeyModal(context),
-  );
-}
-
-Future<void> _handleNewKey(
-  BuildContext context,
-  WidgetRef ref,
-  String nsec,
-) async {
-  try {
-    await ref.read(localSignerServiceProvider).saveNsec(nsec);
-    final hex = KeyGenerator.nsecToHex(nsec);
-    final signer = Bip340PrivateKeySigner(hex, ref.asRef);
-    await signer.signIn();
-    await onSignInSuccess(ref.read(refProvider));
-    if (context.mounted) context.go('/');
-  } catch (e) {
-    if (context.mounted) {
-      context.showError('Sign in failed', technicalDetails: '$e');
-    }
   }
 }
 
@@ -649,7 +586,7 @@ class _SignedOutContent extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: AddProfileCard(
             fullWidth: true,
-            onTap: () => _launchOnboarding(context, ref),
+            onTap: () => launchProfileOnboarding(context, ref),
           ),
         ),
 
@@ -895,21 +832,7 @@ class _SecurityModalContent extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           OutlinedButton.icon(
-            onPressed: () {
-              showGetStartedModal(context, onContinue: (name) {
-                showSpinKeyModal(
-                  context,
-                  profileName: name,
-                  onSpinComplete: (nsec) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Key generated: ${nsec.substring(0, 20)}…'),
-                      ),
-                    );
-                  },
-                );
-              });
-            },
+            onPressed: () => launchProfileOnboarding(context, ref),
             icon: const Icon(Icons.vpn_key, size: 16),
             label: const Text('Generate new keypair'),
           ),
@@ -991,7 +914,7 @@ class _ZapstoreProModalContent extends StatelessWidget {
 // Add Profile ─────────────────────────────────────────────────────────────────
 
 // _AddProfileModalContent is no longer used — the Add Profile card taps
-// directly launch the slot-machine onboarding flow via _launchOnboarding.
+// directly launch the slot-machine onboarding flow via launchProfileOnboarding.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Below: existing private widgets preserved for modal content
