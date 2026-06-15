@@ -11,6 +11,7 @@ import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/services/package_manager/package_manager.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/app_small_card.dart';
 import 'package:zapstore/widgets/comments_section.dart';
@@ -299,6 +300,7 @@ class _AppStackContent extends HookConsumerWidget {
                         size: kDetailAuthorAvatarSize,
                       ),
                       title: publisherName,
+                      onAuthorTap: () => pushUser(context, stack.pubkey),
                       timestamp: Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: TimeAgoText(

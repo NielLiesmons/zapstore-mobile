@@ -4,6 +4,13 @@ import 'package:zapstore/models/forum_post.dart';
 
 import 'storage_test_container.dart';
 
+class _PartialForumPost extends RegularPartialModel<ForumPost> {
+  _PartialForumPost({String? title, String? content}) {
+    if (title != null) event.addTagValue('title', title);
+    if (content != null) event.content = content;
+  }
+}
+
 /// Inbox owner — matches models test fixtures.
 const kInboxTestOwnerPk =
     'a9434ee165ed01b286becfc2771ef1705d3537d051b387288898cc00d5c885be';
@@ -39,18 +46,26 @@ Future<List<Comment>> seedInboxTestComments(ProviderContainer container) async {
   final signedApp = app.dummySign(kInboxTestAuthorPk);
   await container.testStorage.save({signedApp});
 
+  final signedForum = _PartialForumPost(
+    title: 'Forum thread',
+    content: 'Root forum post for inbox badge regression',
+  ).dummySign(kInboxTestAuthorPk);
+  await container.testStorage.save({signedForum});
+
   final comments = <Comment>[];
 
   Comment mention({
     required String content,
     required String authorPk,
+    Model? rootModel,
     Model? parentModel,
     DateTime? createdAt,
   }) {
+    final root = rootModel ?? parentModel ?? signedApp;
     final partial = PartialComment(
       content: content,
-      rootModel: signedApp,
-      parentModel: parentModel ?? signedApp,
+      rootModel: root,
+      parentModel: parentModel ?? root,
       createdAt: createdAt,
     );
     partial.event.addTagValue('p', kInboxTestOwnerPk);
@@ -58,6 +73,16 @@ Future<List<Comment>> seedInboxTestComments(ProviderContainer container) async {
   }
 
   comments.add(mention(content: _longBody, authorPk: kInboxTestAuthorPk));
+
+  comments.add(
+    mention(
+      content: 'Mention on a forum thread — exercises ForumEmojiBadge.',
+      authorPk: kInboxTestReplyAuthorPk,
+      rootModel: signedForum,
+      parentModel: signedForum,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(1_699_999_000_000),
+    ),
+  );
 
   final parent = mention(
     content: 'Parent comment on the app thread',

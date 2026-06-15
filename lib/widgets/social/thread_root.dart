@@ -6,6 +6,7 @@ import 'package:models/models.dart';
 import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/theme.dart';
+import 'package:zapstore/utils/nostr_query_id.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/app_pic.dart';
@@ -18,6 +19,9 @@ const String kForumEmojiAsset = 'assets/images/emoji/forum.png';
 
 /// Bottom scroll fade height above pinned footer — matches webapp inset token.
 const double kCommentModalBottomFade = 14;
+
+/// Thread / reply sheet height cap — matches webapp default modal (80vh).
+const double kThreadModalMaxHeightFactor = 0.80;
 
 /// Root app / stack / forum context shown above comment composers and in
 /// opened thread modals — port of webapp `rootContext` on RootComment.
@@ -147,6 +151,32 @@ class ThreadRootContext {
     } catch (_) {}
     return null;
   }
+
+  /// Route from a NIP-22 `E` / `A` root coordinate when the model isn't loaded.
+  static String? hrefForRootCoord(String? coord, {int? kind}) {
+    final id = normalizeNostrQueryId(coord);
+    if (id == null) return null;
+
+    if (id.length == 64 && RegExp(r'^[a-f0-9]+$').hasMatch(id)) {
+      if (kind == 11) return '/forum/$id';
+      return null;
+    }
+
+    if (!id.contains(':')) return null;
+
+    try {
+      final parts = id.split(':');
+      final k = int.tryParse(parts.first);
+      if (k == 32267) {
+        return '/app/${Utils.encodeShareableFromString(id, type: 'naddr')}';
+      }
+      if (k == 30267) {
+        return '/stack/${Utils.encodeShareableFromString(id, type: 'naddr')}';
+      }
+    } catch (_) {}
+
+    return null;
+  }
 }
 
 String _truncateOneliner(String raw, [int max = 80]) {
@@ -202,14 +232,18 @@ class ThreadRootContextWatch extends ConsumerWidget {
       return builder(context, rootContextOverride);
     }
 
-    final rootCoord = ThreadRootContext.rootCoord(comment.event);
-    if (rootCoord == null) {
-      return builder(context, null);
+    final rootQueryId =
+        normalizeNostrQueryId(ThreadRootContext.rootCoord(comment.event));
+    if (rootQueryId == null) {
+      return builder(
+        context,
+        ThreadRootContext.deletedForKind(comment.rootKind ?? 11),
+      );
     }
 
     final rootState = ref.watch(
       queryKinds(
-        ids: {rootCoord},
+        ids: {rootQueryId},
         limit: 1,
         source: kThreadRootSource,
         subscriptionPrefix: 'tr-root-${comment.id.hashCode}',
@@ -265,6 +299,8 @@ class ForumEmojiBadge extends StatelessWidget {
           kForumEmojiAsset,
           width: 14,
           height: 14,
+          errorBuilder: (_, __, ___) =>
+              LabIcon(LabIcons.openBook, size: 14, color: c.white66),
         ),
       ),
     );

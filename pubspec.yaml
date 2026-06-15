@@ -108,6 +108,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/
+    # Subdirs are not included by `assets/images/` — forum badge needs this.
+    - assets/images/emoji/
     - assets/seed.db
     - assets/icons/
     - assets/icons/thick/

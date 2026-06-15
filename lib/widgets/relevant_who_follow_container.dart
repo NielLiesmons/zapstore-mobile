@@ -295,7 +295,7 @@ class RelevantWhoFollowContainer extends HookConsumerWidget {
 
     // Add zap info if present: " and was zapped by you and (z1)"
     if (hasZapInfo) {
-      spans.add(TextSpan(text: ' and was zapped by ', style: baseStyle));
+      spans.add(TextSpan(text: ' and was tipped by ', style: baseStyle));
 
       // Add "you" if user zapped
       if (userZapped) {

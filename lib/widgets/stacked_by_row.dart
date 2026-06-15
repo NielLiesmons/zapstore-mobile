@@ -87,7 +87,7 @@ class StackedByRow extends ConsumerWidget {
       padding: const EdgeInsets.only(top: 2, bottom: 4),
       child: Row(
         children: [
-          Text('Stacked or zapped by ', style: baseStyle),
+          Text('Stacked or tipped by ', style: baseStyle),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,

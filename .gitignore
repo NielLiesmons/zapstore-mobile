@@ -54,6 +54,9 @@ app.*.map.json
 
 reference/*
 
+# Optional multi-root workspace (includes sibling webapp — local dev only)
+zapstore.local.code-workspace
+
 # FVM Version Cache
 .fvm/
 

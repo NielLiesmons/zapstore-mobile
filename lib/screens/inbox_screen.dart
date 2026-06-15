@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/constants/app_constants.dart';
-import 'package:zapstore/services/inbox_seen_service.dart';
+import 'package:zapstore/providers/inbox_seen_provider.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/empty_state.dart';
@@ -95,7 +95,7 @@ class InboxScreen extends HookConsumerWidget {
       emptyBodyChildren = const [
         EmptyState(
           message:
-              'Nothing here yet. When someone mentions you on Zapstore, it shows up here.',
+              'Nothing here yet. When someone comments on Zapstore, it shows up here.',
           minHeight: 200,
         ),
       ];
@@ -109,8 +109,6 @@ class InboxScreen extends HookConsumerWidget {
               child: TopScrollFader(
                 scrollController: scrollController,
                 fadeStart: headerHeight,
-                // Avoid global ShaderMask over feed rows (header uses BackdropFilter).
-                applyScrollShader: false,
                 child: comments.isEmpty
                     ? ListView(
                         controller: scrollController,
@@ -133,24 +131,38 @@ class InboxScreen extends HookConsumerWidget {
                             const SizedBox(height: kCommentCardListGap),
                         itemBuilder: (context, i) {
                           final comment = comments[i];
+                          final eventId = comment.event.id;
+                          void markSeen() => ref
+                              .read(inboxSeenProvider(pubkey).notifier)
+                              .markSeen([eventId]);
                           return CommentCard(
                             comment: comment,
-                            onCardTap: () => showThreadModal(
-                              context,
-                              ref,
-                              comment: comment,
-                            ),
-                            onReply: () => showThreadModal(
-                              context,
-                              ref,
-                              comment: comment,
-                              initialExpand: true,
-                            ),
-                            onActions: () => showCommentActionsModal(
-                              context,
-                              comment: comment,
-                              ref: ref,
-                            ),
+                            inboxOwnerPubkey: pubkey,
+                            onCardTap: () {
+                              markSeen();
+                              showThreadModal(
+                                context,
+                                ref,
+                                comment: comment,
+                              );
+                            },
+                            onReply: () {
+                              markSeen();
+                              showThreadModal(
+                                context,
+                                ref,
+                                comment: comment,
+                                initialExpand: true,
+                              );
+                            },
+                            onActions: () {
+                              markSeen();
+                              showCommentActionsModal(
+                                context,
+                                comment: comment,
+                                ref: ref,
+                              );
+                            },
                           );
                         },
                       ),
@@ -162,10 +174,9 @@ class InboxScreen extends HookConsumerWidget {
               right: 0,
               child: _InboxHeader(
                 onMarkAllRead: comments.isNotEmpty
-                    ? () => InboxSeenStorage.markEventsSeen(
-                          pubkey,
-                          comments.map((c) => c.event.id),
-                        )
+                    ? () => ref
+                        .read(inboxSeenProvider(pubkey).notifier)
+                        .markSeen(comments.map((c) => c.event.id))
                     : null,
               ),
             ),

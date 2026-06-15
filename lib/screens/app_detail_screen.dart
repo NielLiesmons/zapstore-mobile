@@ -5,6 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
+import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/debug_utils.dart';
 import 'package:zapstore/utils/extensions.dart';
@@ -257,6 +258,9 @@ class _AppDetailContent extends HookConsumerWidget {
                             size: kDetailAuthorAvatarSize,
                           ),
                     title: app.isRelaySigned ? 'Indexer' : publisherName,
+                    onAuthorTap: app.isRelaySigned
+                        ? null
+                        : () => pushUser(context, app.pubkey),
                     timestamp: Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: TimeAgoText(
@@ -324,7 +328,7 @@ class _AppDetailContent extends HookConsumerWidget {
                     ),
                   ),
 
-                  // Social tabs: Comments · Zaps · Labels · Details
+                  // Social tabs: Comments · Tips · Labels · Details
                   SocialTabs(
                     commentCount: commentTabMeta?.count,
                     commentsLoading: commentTabMeta?.initialLoading ?? false,

@@ -59,7 +59,7 @@ const double _kStackCardWidth = 290;
 /// Row height — content-driven (max of icon grid + text column).
 /// No vertical padding in the card so there is zero dead space at the top.
 ///   icon grid: 95px  |  text col: bold17(25)+gap2+reg13×2(39)+gap8+author24 ≈ 98px
-const double _kStackRowHeight = 104;
+const double _kStackRowHeight = 92;
 
 /// App Stack Container — horizontally scrolling row of fixed-width stack cards,
 /// matching the webapp discover layout.
@@ -226,10 +226,14 @@ class StackCardSkeleton extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Shimmer(width: 95, height: 95, radius: LabRadius.r18),
+          Shimmer(
+            width: StackCard.gridExtent,
+            height: StackCard.gridExtent,
+            radius: LabRadius.r16,
+          ),
           const SizedBox(width: 16),
           SizedBox(
-            height: 95,
+            height: StackCard.gridExtent,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -267,6 +271,7 @@ class StackCard extends ConsumerWidget {
     required this.previewIdentifiers,
     required this.appsMap,
     this.showAuthor = true,
+    this.trailingPadding = 24,
   });
 
   final AppStack stack;
@@ -274,19 +279,31 @@ class StackCard extends ConsumerWidget {
   final Map<String, App> appsMap;
   final bool showAuthor;
 
-  /// Renders one 32×32 icon in the grid, or an empty placeholder tile.
+  /// Right padding between cards in horizontal discover lists. Use `0` in
+  /// profile browse rows where [ListView] separators handle spacing.
+  final double trailingPadding;
+
+  static const double gridExtent = _gridExtent;
+
+  static const double _iconSize = 32;
+  static const double _gridGap = 6;
+  static const double _gridPadding = 8;
+  static const double _gridExtent =
+      _gridPadding * 2 + _iconSize * 2 + _gridGap;
+
+  /// Renders one icon in the grid, or an empty placeholder tile.
   Widget _gridIcon(App? app, LabColors c) {
     if (app != null) {
       return AppPic(
         iconUrl: firstValidHttpUrl(app.icons),
         name: app.name,
         identifier: app.identifier,
-        size: 34,
+        size: _iconSize,
       );
     }
     return Container(
-      width: 34,
-      height: 34,
+      width: _iconSize,
+      height: _iconSize,
       decoration: BoxDecoration(
         color: c.white8,
         borderRadius: BorderRadius.circular(LabRadius.r8),
@@ -333,31 +350,23 @@ class StackCard extends ConsumerWidget {
         kind: stack.event.kind,
       ),
       behavior: HitTestBehavior.opaque,
-      // Right-only padding: inter-card gap matching app-column gap (24px).
-      // No left/top/bottom so the icon grid starts flush at the ListView's
-      // left-edge (14px from screen), matching the section-title exactly.
       child: Padding(
-        padding: const EdgeInsets.only(right: 24),
+        padding: EdgeInsets.only(right: trailingPadding),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 2×2 icon grid ─────────────────────────────────────────────
-            // container: 95×95, rad16, medium stroke (1.6 centered), padding 8
-            // icons: 34×34, thin stroke (0.33), rad8
-            // With strokeAlignCenter, Flutter only inflates padding by width/2:
-            //   content area = 95 - 2*(0.8+8) = 77.4px  |  grid = 2×34+8 = 76px  ✓
             Container(
-              width: 95,
-              height: 95,
+              width: _gridExtent,
+              height: _gridExtent,
               decoration: BoxDecoration(
-                color: c.white8,
-                borderRadius: BorderRadius.circular(LabRadius.r18),
+                color: c.gray33,
+                borderRadius: BorderRadius.circular(LabRadius.r16),
                 border: LabBorder.all(
                   color: c.white16,
-                  width: LabStroke.medium,
+                  width: 1.4,
                 ),
               ),
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(_gridPadding),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -365,16 +374,16 @@ class StackCard extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _gridIcon(gridApps[0], c),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: _gridGap),
                       _gridIcon(gridApps[1], c),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: _gridGap),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _gridIcon(gridApps[2], c),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: _gridGap),
                       _gridIcon(gridApps[3], c),
                     ],
                   ),
@@ -384,49 +393,61 @@ class StackCard extends ConsumerWidget {
 
             const SizedBox(width: 16),
 
-            // ── Text column — same height as icon grid, content centred ─────
             Expanded(
               child: SizedBox(
-                height: 95,
+                height: _gridExtent,
                 child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    stack.name ?? stack.identifier,
-                    style: LabTextStyles.bold17.copyWith(color: c.white),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: LabTextStyles.reg13.copyWith(color: c.white66),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  if (showAuthor)
-                    Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ProfilePic(profile: author, size: 24),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ProfileNameWidget(
-                            pubkey: stack.event.pubkey,
-                            profile: author,
-                            isLoading: isAuthorLoading,
-                            style: LabTextStyles.reg13.copyWith(color: c.white33),
-                            skeletonWidth: 60,
+                        Text(
+                          stack.name ?? stack.identifier,
+                          style:
+                              LabTextStyles.semibold17.copyWith(color: c.white),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          description.isNotEmpty
+                              ? description
+                              : 'No description',
+                          style: LabTextStyles.reg13.copyWith(
+                            color: description.isNotEmpty
+                                ? c.white66
+                                : c.white33,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                ],
-              ),
+                    if (showAuthor)
+                      GestureDetector(
+                        onTap: () => pushUser(context, stack.event.pubkey),
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          children: [
+                            ProfilePic(profile: author, size: 24),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ProfileNameWidget(
+                                pubkey: stack.event.pubkey,
+                                profile: author,
+                                isLoading: isAuthorLoading,
+                                style: LabTextStyles.reg13
+                                    .copyWith(color: c.white33),
+                                skeletonWidth: 60,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],

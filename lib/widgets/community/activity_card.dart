@@ -3,12 +3,14 @@ import 'dart:math' as math;
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/color.dart';
 import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/utils/nostr_query_id.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/app_pic.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
@@ -268,14 +270,14 @@ class ActivityCommentCard extends ConsumerWidget {
     final c = Theme.of(context).extension<LabColors>()!;
     final ev = comment.event;
 
-    final rootCoord = _activityRootCoord(ev);
-    final parentCoord = _activityParentCoord(ev);
+    final rootQueryId = normalizeNostrQueryId(_activityRootCoord(ev));
+    final parentQueryId = normalizeNostrQueryId(_activityParentCoord(ev));
     final nested = activityCommentIsNestedReply(ev);
 
-    final rootState = rootCoord != null
+    final rootState = rootQueryId != null
         ? ref.watch(
             queryKinds(
-              ids: {rootCoord},
+              ids: {rootQueryId},
               limit: 1,
               source: _kActivityRootSource,
               subscriptionPrefix: 'act-r-${comment.id.hashCode}',
@@ -295,12 +297,13 @@ class ActivityCommentCard extends ConsumerWidget {
     final parentPk = nested ? ev.getFirstTagValue('p') : null;
     final parentKind = nested ? comment.parentKind : null;
 
-    final fetchParentQuote = nested && parentKind == 1111 && parentCoord != null;
+    final fetchParentQuote =
+        nested && parentKind == 1111 && parentQueryId != null;
 
     final parentCommentState = fetchParentQuote
         ? ref.watch(
             query<Comment>(
-              ids: {parentCoord},
+              ids: {parentQueryId},
               limit: 1,
               source: _kActivityRootSource,
               subscriptionPrefix: 'act-p-${comment.id.hashCode}',
@@ -346,12 +349,12 @@ class ActivityCommentCard extends ConsumerWidget {
         : null;
 
     late final _RootOneliner oneliner;
-    final bool rootMissingAfterLoad = rootCoord != null &&
+    final bool rootMissingAfterLoad = rootQueryId != null &&
         rootState != null &&
         rootState is! StorageLoading &&
         rootModel == null;
 
-    if (rootMissingAfterLoad || rootCoord == null) {
+    if (rootMissingAfterLoad || rootQueryId == null) {
       final pending = rootLoading;
       final k = comment.rootKind;
       if (pending) {
@@ -388,7 +391,7 @@ class ActivityCommentCard extends ConsumerWidget {
     final showQuote = nested && (parentCommentLoading || parentComment != null);
 
     final nameColor = profileTextColor(hexToColor(comment.event.pubkey));
-    final contentWidget = NoteParser.parse(
+    final contentWidget = NoteParser.parseSafe(
       context,
       comment.content,
       emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
@@ -400,8 +403,16 @@ class ActivityCommentCard extends ConsumerWidget {
       comment: comment,
       rootModel: rootModel,
       rootLoading: rootLoading,
-      rootMissing: rootMissingAfterLoad || rootCoord == null,
+      rootMissing: rootMissingAfterLoad || rootQueryId == null,
     );
+
+    final rootHref = rootModel != null
+        ? ThreadRootContext.hrefForModel(rootModel)
+        : null;
+    final effectiveOnRootTap = onRootTap ??
+        (rootHref != null && !rootLoading && !rootMissingAfterLoad
+            ? () => context.push(rootHref)
+            : null);
 
     return GestureDetector(
       onTap: onCardTap,
@@ -420,7 +431,7 @@ class ActivityCommentCard extends ConsumerWidget {
                     rootModel: rootModel,
                     rootLoading: rootLoading,
                     oneliner: oneliner,
-                    rootMissing: rootMissingAfterLoad || rootCoord == null,
+                    rootMissing: rootMissingAfterLoad || rootQueryId == null,
                   ),
                 ),
               ),
@@ -465,7 +476,7 @@ class ActivityCommentCard extends ConsumerWidget {
                   alignment: Alignment.centerLeft,
                   child: _RootLabelRow(
                     oneliner: oneliner,
-                    onTap: onRootTap,
+                    onTap: effectiveOnRootTap,
                     muted: rootLoading || (rootMissingAfterLoad && !rootLoading),
                   ),
                 ),

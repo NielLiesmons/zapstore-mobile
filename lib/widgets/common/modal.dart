@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/text_styles.dart';
@@ -14,7 +15,7 @@ import 'package:zapstore/widgets/social/thread_root.dart' show kCommentModalBott
 //   • top radius:    32px
 //   • barrier:       65% black (matches webapp .bg-overlay)
 //   • No drag handle
-//   • Dismissible by tapping the barrier
+//   • Dismissible by tapping the barrier or swiping the sheet down
 //
 // Modal-in-modal (matches .comment-sheet.child-modal-open CSS):
 //   When [nestedOpen] is true the surface:
@@ -37,12 +38,12 @@ const double kModalInset = 14;
 
 /// Pixels of tappable overlay left visible above the modal when the keyboard
 /// is open, so the user can still dismiss by tapping the barrier.
-const _kKeyboardTopZone = 70.0;
+const double _keyboardTopDismissZone = 90.0;
 
 /// Opens a bottom-sheet modal matching webapp's Modal.svelte.
 ///
-/// - No drag handle
-/// - Dismissible by tapping the barrier
+/// - No drag handle (swipe-down on the sheet still dismisses when [enableDrag] is true)
+/// - Dismissible by tapping the barrier or swiping down
 /// - [title] and [description] rendered inside the scrollable area at the top
 /// - [footer] rendered pinned BELOW the scrollable content (use for action bars)
 /// - [fillHeight] makes the sheet take [maxHeightFactor] of screen height
@@ -53,6 +54,7 @@ Future<T?> showModal<T>(
   String? description,
   WidgetBuilder? footer,
   bool isDismissible = true,
+  bool enableDrag = true,
   bool fillHeight = false,
   double maxHeightFactor = 0.75,
 
@@ -66,7 +68,7 @@ Future<T?> showModal<T>(
     context: context,
     isScrollControlled: true,
     isDismissible: isDismissible,
-    enableDrag: false,
+    enableDrag: enableDrag,
     useSafeArea: false,
     backgroundColor: Colors.transparent,
     barrierColor: nestedModal ? Colors.transparent : _kBarrierColor,
@@ -209,13 +211,23 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
     // then apply the caller's maxHeightFactor against the remaining space.
     final topPad = MediaQuery.paddingOf(context).top;
     final keyboardH = MediaQuery.viewInsetsOf(context).bottom;
+    final availableBodyH = screenH - topPad;
+    final restingMaxH = availableBodyH * widget.maxHeightFactor;
 
-    // When the keyboard is open we expand to almost full height, leaving only
-    // _kKeyboardTopZone px of visible barrier so the user can still tap to
-    // dismiss. Without the keyboard we cap at the caller's maxHeightFactor.
-    final maxH = keyboardH > 0
-        ? screenH - topPad - _kKeyboardTopZone
-        : (screenH - topPad) * widget.maxHeightFactor;
+    // Resting: honour [maxHeightFactor] and, when [fillHeight], expand to that
+    // height (not just cap content intrinsic size). Keyboard: shrink the sheet
+    // and reserve a generous tap-to-dismiss band above it.
+    final double effectiveMaxH;
+    if (keyboardH > 0) {
+      final dismissZone = _keyboardTopDismissZone;
+      effectiveMaxH = (screenH - keyboardH - topPad - dismissZone)
+          .clamp(160.0, restingMaxH);
+    } else {
+      effectiveMaxH = restingMaxH;
+    }
+
+    final minH =
+        widget.fillHeight && keyboardH == 0 ? effectiveMaxH : 0.0;
 
     // ── Scroll-driven top-edge fade ────────────────────────────────────────
     // NotificationListener catches scroll events from the primary scrollable
@@ -237,6 +249,7 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _TitleBlock(widget.title!, widget.description, c),
+                const SizedBox(height: kModalInset),
                 widget.child,
               ],
             ),
@@ -318,7 +331,10 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
     );
 
     Widget sheet = ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxH - keyboardH),
+      constraints: BoxConstraints(
+        minHeight: minH,
+        maxHeight: effectiveMaxH,
+      ),
       child: ClipRRect(
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(32)),
@@ -409,11 +425,11 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(
+      padding: const EdgeInsets.fromLTRB(
         kModalInset,
-        description != null ? kModalInset + 6 : kModalInset + 14,
+        kModalInset + 6,
         kModalInset,
-        description != null ? kModalInset : 0,
+        0,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -611,12 +627,13 @@ Future<T?> showAppSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
   bool isDismissible = true,
-  bool enableDrag = false,
+  bool enableDrag = true,
   bool showDragHandle = false,
   double maxHeightFactor = 0.75,
 }) =>
     showModal<T>(context,
         isDismissible: isDismissible,
+        enableDrag: enableDrag,
         maxHeightFactor: maxHeightFactor,
         builder: builder);
 

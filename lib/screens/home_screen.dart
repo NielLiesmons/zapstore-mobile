@@ -17,6 +17,10 @@ import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/profile_name_widget.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 
+import '../providers/comment_activity_feed_provider.dart';
+import '../widgets/community/comment_activity_feed.dart';
+import '../widgets/community/community_feed_switcher.dart';
+import '../widgets/common/relay_loading_bar.dart';
 import '../widgets/app_stack_container.dart';
 import '../widgets/common/dropdown_menu.dart';
 import '../widgets/common/label.dart';
@@ -71,6 +75,19 @@ const double _kInboxTailWidthStep = 24;
 
 /// Placeholder height while the inbox preview waits out the loading shimmer delay.
 const double _kInboxPreviewBlankHeight = 88;
+
+class _InboxPreviewChevron extends StatelessWidget {
+  const _InboxPreviewChevron();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
+    );
+  }
+}
 
 const List<String> _kDummyRecentSearches = [
   'Damus',
@@ -378,7 +395,7 @@ class _InboxStackPreview extends HookConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
+                  const _InboxPreviewChevron(),
                 ],
               ),
             ),
@@ -417,7 +434,7 @@ class _InboxStackPreview extends HookConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
+                  const _InboxPreviewChevron(),
                 ],
               ),
             ),
@@ -449,11 +466,11 @@ class _InboxStackPreview extends HookConsumerWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'No mentions yet',
+                      'No comments yet',
                       style: LabTextStyles.reg13.copyWith(color: c.white66),
                     ),
                   ),
-                  LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
+                  const _InboxPreviewChevron(),
                 ],
               ),
             ),
@@ -485,57 +502,68 @@ class _InboxStackPreview extends HookConsumerWidget {
           color: c.gray66,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                ProfilePic(pubkey: authorPk, size: 36),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      RichText(
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        text: TextSpan(
-                          style: LabTextStyles.reg13,
-                          children: [
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.middle,
-                              child: ProfileNameWidget(
-                                pubkey: authorPk,
-                                profile: author,
-                                isLoading: authorLoading,
-                                style: LabTextStyles.semibold13.copyWith(
-                                  color: nameColor,
-                                ),
-                                skeletonWidth: 72,
-                              ),
-                            ),
-                            TextSpan(
-                              text: ' · mentioned you',
-                              style: LabTextStyles.reg13.copyWith(
-                                color: c.white33,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (body.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          body,
-                          style: LabTextStyles.reg13.copyWith(color: c.white66),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ProfilePic(
+                      pubkey: authorPk,
+                      profile: author,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        RichText(
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
+                          text: TextSpan(
+                            style: LabTextStyles.reg13,
+                            children: [
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: ProfileNameWidget(
+                                  pubkey: authorPk,
+                                  profile: author,
+                                  isLoading: authorLoading,
+                                  style: LabTextStyles.semibold13.copyWith(
+                                    color: nameColor,
+                                  ),
+                                  skeletonWidth: 72,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' commented',
+                                style: LabTextStyles.reg13.copyWith(
+                                  color: c.white33,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        if (body.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            body,
+                            style: LabTextStyles.reg13.copyWith(
+                              color: c.white66,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                LabIcon(LabIcons.chevronRight, size: 14, color: c.white33),
-              ],
+                  const SizedBox(width: 8),
+                  const _InboxPreviewChevron(),
+                ],
+              ),
             ),
           ),
         ),
@@ -628,37 +656,133 @@ class _ForumSection extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedCategory = useState<String?>(null);
     final sortOrder = useState(_SortOrder.latest);
+    final feedMode = useState(CommunityFeedMode.forum);
+    final visited = useState(<CommunityFeedMode>{CommunityFeedMode.forum});
+
+    void selectMode(CommunityFeedMode mode) {
+      feedMode.value = mode;
+      visited.value = {...visited.value, mode};
+    }
+
+    final activitySubscribed = visited.value.contains(CommunityFeedMode.activity);
+
+    final headerLoading = feedMode.value == CommunityFeedMode.forum
+        ? isSyncing
+        : activitySubscribed &&
+            ref.watch(communityActivityCommentsProvider) is StorageLoading;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(
-          title: 'Forum',
-          linkText: 'Our Community',
-          onLinkTap: () => context.push('/community'),
-          bottomPadding: 17,
-          isLoading: isSyncing,
+        CommunityFeedHeader(
+          mode: feedMode.value,
+          onModeChanged: selectMode,
+          isLoading: headerLoading,
         ),
 
-        _ForumFilterRow(
-          selectedCategory: selectedCategory.value,
-          sortOrder: sortOrder.value,
-          onCategoryTap: (cat) {
-            selectedCategory.value =
-                selectedCategory.value == cat ? null : cat;
-          },
-          onSortOrderChange: (order) => sortOrder.value = order,
-        ),
+        if (feedMode.value == CommunityFeedMode.forum)
+          _ForumFilterRow(
+            selectedCategory: selectedCategory.value,
+            sortOrder: sortOrder.value,
+            onCategoryTap: (cat) {
+              selectedCategory.value =
+                  selectedCategory.value == cat ? null : cat;
+            },
+            onSortOrderChange: (order) => sortOrder.value = order,
+          ),
 
-        if (showSkeleton)
-          ShimmerTheme(
-            child: Column(
-              children: List.generate(5, (_) => const ForumPostCardSkeleton()),
+        if (feedMode.value == CommunityFeedMode.activity && activitySubscribed)
+          _CommunityActivitySyncBar(),
+
+        if (visited.value.contains(CommunityFeedMode.forum))
+          Offstage(
+            offstage: feedMode.value != CommunityFeedMode.forum,
+            child: _KeepAliveFeed(
+              child: showSkeleton
+                  ? ShimmerTheme(
+                      child: Column(
+                        children: List.generate(
+                          5,
+                          (_) => const ForumPostCardSkeleton(),
+                        ),
+                      ),
+                    )
+                  : ForumFeedContainer(scrollController: scrollController),
             ),
-          )
-        else
-          ForumFeedContainer(scrollController: scrollController),
+          ),
+
+        if (visited.value.contains(CommunityFeedMode.activity))
+          Offstage(
+            offstage: feedMode.value != CommunityFeedMode.activity,
+            child: _KeepAliveFeed(
+              child: _CommunityActivityFeedPane(
+                scrollController: scrollController,
+              ),
+            ),
+          ),
       ],
+    );
+  }
+}
+
+class _KeepAliveFeed extends StatefulWidget {
+  const _KeepAliveFeed({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveFeed> createState() => _KeepAliveFeedState();
+}
+
+class _KeepAliveFeedState extends State<_KeepAliveFeed>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
+class _CommunityActivityFeedPane extends ConsumerWidget {
+  const _CommunityActivityFeedPane({required this.scrollController});
+
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activityState = ref.watch(communityActivityCommentsProvider);
+    final activityVisible = ref.watch(communityActivityVisibleLimitProvider);
+
+    return CommentActivityFeed(
+      scrollController: scrollController,
+      commentsState: activityState,
+      visibleLimit: activityVisible,
+      onLoadMore: () => ref
+          .read(communityActivityVisibleLimitProvider.notifier)
+          .update(
+            (v) => v + kActivityFeedVisibleStep > kActivityFeedMaxVisible
+                ? kActivityFeedMaxVisible
+                : v + kActivityFeedVisibleStep,
+          ),
+    );
+  }
+}
+
+class _CommunityActivitySyncBar extends ConsumerWidget {
+  const _CommunityActivitySyncBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activityState = ref.watch(communityActivityCommentsProvider);
+    final syncing =
+        activityState is StorageLoading && activityState.models.isNotEmpty;
+    if (!syncing) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: RelayLoadingBar(loading: syncing),
     );
   }
 }

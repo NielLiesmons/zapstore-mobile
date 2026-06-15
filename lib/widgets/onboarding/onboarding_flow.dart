@@ -8,7 +8,6 @@ import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/services/profile_pow_miner.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/key_generator.dart';
-import 'package:zapstore/widgets/onboarding/key_explanation_modal.dart';
 import 'package:zapstore/widgets/onboarding/new_profile_modal.dart';
 import 'package:zapstore/widgets/onboarding/pow_resume_modal.dart';
 import 'package:zapstore/widgets/onboarding/spin_key_modal.dart';
@@ -29,49 +28,36 @@ void launchProfileOnboarding(BuildContext context, WidgetRef ref) {
     miner: miner,
     nsec: nsec,
     onContinue: (name) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        showSpinKeyModal(
-          context,
-          profileName: name,
-          nsec: nsec,
-          miner: miner,
-          onSpinComplete: (completedNsec) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!context.mounted) return;
-              showKeyExplanationModal(
+      if (!context.mounted) return;
+      showSpinKeyModal(
+        context,
+        profileName: name,
+        nsec: nsec,
+        miner: miner,
+        onSpinComplete: (completedNsec) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) return;
+            miner.stop();
+            final resumeSnapshot = miner.snapshot.value;
+            showPowResumeModal(
+              context,
+              profileName: name,
+              snapshot: resumeSnapshot,
+              onPublish: () => _finishNewProfileOnboarding(
                 context,
-                profileName: name,
+                ref,
+                displayName: name,
                 nsec: completedNsec,
                 miner: miner,
-                onContinue: () {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!context.mounted) return;
-                    miner.stop();
-                    final resumeSnapshot = miner.snapshot.value;
-                    showPowResumeModal(
-                      context,
-                      profileName: name,
-                      snapshot: resumeSnapshot,
-                      onPublish: () => _finishNewProfileOnboarding(
-                        context,
-                        ref,
-                        displayName: name,
-                        nsec: completedNsec,
-                        miner: miner,
-                      ),
-                    );
-                  });
-                },
-              );
-            });
-          },
-          onUseExistingKey: () {
-            cancelForExistingKey();
-            showUseExistingKeyModal(context);
-          },
-        );
-      });
+              ),
+            );
+          });
+        },
+        onUseExistingKey: () {
+          cancelForExistingKey();
+          showUseExistingKeyModal(context);
+        },
+      );
     },
     onUseExistingKey: () {
       cancelForExistingKey();

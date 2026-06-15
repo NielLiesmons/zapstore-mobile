@@ -4,6 +4,7 @@ import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/color.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
+import 'package:zapstore/widgets/common/time_utils.dart';
 import 'package:zapstore/widgets/social/bubble_swiper.dart';
 
 /// Chat-style message bubble matching webapp MessageBubble.svelte.
@@ -270,34 +271,8 @@ class _BubbleHeader extends StatelessWidget {
     return 'anon';
   }
 
-  /// Webapp-matching timestamp format (Timestamp.svelte):
-  ///   < 1 min    → "Just Now"
-  ///   today      → "Today HH:MM"
-  ///   yesterday  → "Yesterday"
-  ///   older      → "Jan 21"
   static String _formatTimestamp(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-
-    if (diff.inSeconds < 60) return 'Just Now';
-
-    final today = DateTime(now.year, now.month, now.day);
-    final dtDay = DateTime(dt.year, dt.month, dt.day);
-
-    if (dtDay == today) {
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return 'Today $h:$m';
-    }
-
-    final yesterday = today.subtract(const Duration(days: 1));
-    if (dtDay == yesterday) return 'Yesterday';
-
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[dt.month - 1]} ${dt.day}';
+    return TimeUtils.formatTimestamp(dt);
   }
 }
 

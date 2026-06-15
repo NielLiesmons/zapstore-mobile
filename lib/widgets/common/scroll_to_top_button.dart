@@ -58,26 +58,31 @@ class ScrollToTopButton extends StatelessWidget {
                 duration: const Duration(milliseconds: 350),
                 curve: Curves.easeOutCubic,
               ),
-              child: ClipOval(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: Container(
-                    width: kDetailActionsButtonSize,
-                    height: kDetailActionsButtonSize,
-                    decoration: BoxDecoration(
-                      color: c.gray66,
-                      shape: BoxShape.circle,
-                      border: LabBorder.all(
-                        color: c.white16,
-                        width: LabStroke.thin,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: detailActionsButtonShadow(c),
+                ),
+                child: ClipOval(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                    child: Container(
+                      width: kDetailActionsButtonSize,
+                      height: kDetailActionsButtonSize,
+                      decoration: BoxDecoration(
+                        color: c.gray66,
+                        shape: BoxShape.circle,
+                        border: LabBorder.all(
+                          color: c.white16,
+                          width: LabStroke.thin,
+                        ),
                       ),
-                      boxShadow: detailActionsButtonShadow(),
-                    ),
-                    child: Center(
-                      child: LabIcon(
-                        LabIcons.arrowUp,
-                        size: 18,
-                        color: c.white33,
+                      child: Center(
+                        child: LabIcon(
+                          LabIcons.arrowUp,
+                          size: 18,
+                          color: c.white33,
+                        ),
                       ),
                     ),
                   ),

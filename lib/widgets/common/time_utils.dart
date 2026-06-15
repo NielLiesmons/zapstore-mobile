@@ -27,10 +27,9 @@ class CurrentTimeNotifier extends StateNotifier<DateTime> {
 }
 
 class TimeUtils {
-  /// Formats a timestamp to match webapp's Timestamp.svelte:
+  /// Formats a timestamp for compact UI labels:
   ///   < 60s        → "Just Now"
-  ///   same day     → "Today 14:23"
-  ///   yesterday    → "Yesterday"
+  ///   same day     → "14:23"
   ///   older        → "Jan 21"
   static String formatTimestamp(DateTime timestamp) {
     return formatTimestampRelativeTo(timestamp, DateTime.now());
@@ -51,14 +50,8 @@ class TimeUtils {
     if (isToday) {
       final h = timestamp.hour.toString().padLeft(2, '0');
       final m = timestamp.minute.toString().padLeft(2, '0');
-      return 'Today $h:$m';
+      return '$h:$m';
     }
-
-    final yesterday = currentTime.subtract(const Duration(days: 1));
-    final isYesterday = timestamp.year == yesterday.year &&
-        timestamp.month == yesterday.month &&
-        timestamp.day == yesterday.day;
-    if (isYesterday) return 'Yesterday';
 
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

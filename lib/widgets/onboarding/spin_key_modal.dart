@@ -18,7 +18,6 @@ Future<void> showSpinKeyModal(
 }) {
   return showModal<void>(
     context,
-    title: 'Hey $profileName!',
     fillHeight: false,
     builder: (ctx) => _SpinKeyModalContent(
       profileName: profileName,
@@ -29,6 +28,8 @@ Future<void> showSpinKeyModal(
     ),
   );
 }
+
+enum _SpinKeyModalPhase { intro, revealed }
 
 class _SpinKeyModalContent extends HookWidget {
   const _SpinKeyModalContent({
@@ -48,7 +49,7 @@ class _SpinKeyModalContent extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final slotKey = useMemoized(() => GlobalKey<SpinKeySlotMachineState>());
+    final phase = useState(_SpinKeyModalPhase.intro);
     final powSnapshot = useState(miner.snapshot.value);
 
     useEffect(() {
@@ -57,86 +58,264 @@ class _SpinKeyModalContent extends HookWidget {
       return () => miner.snapshot.removeListener(listener);
     }, [miner]);
 
-    void onNsecReady(String key) {
-      // Only restart PoW when the user picks a new key ("Spin again").
-      if (key == nsec) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        miner.start(displayName: profileName, nsec: key);
-      });
-    }
+    final isRevealed = phase.value == _SpinKeyModalPhase.revealed;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text.rich(
-            TextSpan(
-              style: LabTextStyles.reg15.copyWith(color: c.white66),
-              children: [
-                const TextSpan(text: 'Spin up a '),
-                WidgetSpan(
-                  alignment: PlaceholderAlignment.baseline,
-                  baseline: TextBaseline.alphabetic,
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onUseExistingKey?.call();
-                    },
-                    child: Text(
-                      'secret key',
-                      style: LabTextStyles.reg15.copyWith(
-                        color: c.white66,
-                        decoration: TextDecoration.underline,
-                        decorationColor: c.white33,
-                      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOutCubic,
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.hardEdge,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.06),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: isRevealed
+                  ? _RevealedHeader(
+                      key: const ValueKey('revealed-header'),
+                      colors: c,
+                    )
+                  : _IntroHeader(
+                      key: const ValueKey('intro-header'),
+                      profileName: profileName,
+                      colors: c,
+                      onUseExistingKey: () {
+                        miner.stop();
+                        Navigator.of(context).pop();
+                        onUseExistingKey?.call();
+                      },
+                    ),
+            ),
+            const SizedBox(height: 16),
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 350),
+              opacity: isRevealed ? 0 : 1,
+              child: IgnorePointer(
+                ignoring: isRevealed,
+                child: PowStatusBanner(snapshot: powSnapshot.value),
+              ),
+            ),
+            SizedBox(height: isRevealed ? 0 : 16),
+            SpinKeySlotMachine(
+              initialNsec: nsec,
+              revealFinale: isRevealed,
+              onSettled: (_) => phase.value = _SpinKeyModalPhase.revealed,
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
+                  child: child,
+                ),
+              ),
+              child: isRevealed
+                  ? _RevealedFooter(
+                      key: const ValueKey('revealed-footer'),
+                      profileName: profileName,
+                      colors: c,
+                      powSnapshot: powSnapshot.value,
+                      onContinue: () {
+                        Navigator.of(context).pop();
+                        onSpinComplete?.call(nsec);
+                      },
+                    )
+                  : _IntroFooter(
+                      key: const ValueKey('intro-footer'),
+                      colors: c,
+                      onUseExistingKey: () {
+                        miner.stop();
+                        Navigator.of(context).pop();
+                        onUseExistingKey?.call();
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IntroHeader extends StatelessWidget {
+  const _IntroHeader({
+    super.key,
+    required this.profileName,
+    required this.colors,
+    required this.onUseExistingKey,
+  });
+
+  final String profileName;
+  final LabColors colors;
+  final VoidCallback onUseExistingKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Hey $profileName!',
+          style: LabTextStyles.semibold23.copyWith(color: c.white),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text.rich(
+          TextSpan(
+            style: LabTextStyles.reg15.copyWith(color: c.white66),
+            children: [
+              const TextSpan(text: 'Spin up a '),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: GestureDetector(
+                  onTap: onUseExistingKey,
+                  child: Text(
+                    'secret key',
+                    style: LabTextStyles.reg15.copyWith(
+                      color: c.white66,
+                      decoration: TextDecoration.underline,
+                      decorationColor: c.white33,
                     ),
                   ),
                 ),
-                const TextSpan(
-                  text: ' to secure your profile and publications',
-                ),
-              ],
+              ),
+              const TextSpan(
+                text: ' to secure your profile and publications',
+              ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+}
+
+class _RevealedHeader extends StatelessWidget {
+  const _RevealedHeader({super.key, required this.colors});
+
+  final LabColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Great!',
+          style: LabTextStyles.semibold23.copyWith(color: c.white),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'You now have a secret key to secure your profile and publications.',
+          style: LabTextStyles.reg15.copyWith(color: c.white66),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+class _IntroFooter extends StatelessWidget {
+  const _IntroFooter({
+    super.key,
+    required this.colors,
+    required this.onUseExistingKey,
+  });
+
+  final LabColors colors;
+  final VoidCallback onUseExistingKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 24),
+        Container(height: 0.33, color: c.white11),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: LabButton.secondary(
+            onTap: onUseExistingKey,
+            child: Text(
+              'I already have a secret key',
+              style: LabTextStyles.med15.copyWith(color: c.white66),
             ),
-            textAlign: TextAlign.center,
-            maxLines: 3,
           ),
-          const SizedBox(height: 16),
-          PowStatusBanner(snapshot: powSnapshot.value),
-          const SizedBox(height: 16),
-          SpinKeySlotMachine(
-            key: slotKey,
-            initialNsec: nsec,
-            onNsecReady: onNsecReady,
-            onSpinComplete: (nsec) {
-              Navigator.of(context).pop();
-              onSpinComplete?.call(nsec);
-            },
-          ),
-          const SizedBox(height: 12),
-          LabButton.secondary(
-            text: 'Spin again (new key)',
-            onTap: () => slotKey.currentState?.regenerateKey(),
-          ),
-          const SizedBox(height: 24),
-          Container(height: 0.33, color: c.white11),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: LabButton.secondary(
-              text: 'I already have a key',
-              onTap: () {
-                miner.stop();
-                Navigator.of(context).pop();
-                onUseExistingKey?.call();
-              },
-            ),
-          ),
-          const SizedBox(height: 14),
-        ],
-      ),
+        ),
+        const SizedBox(height: 14),
+      ],
+    );
+  }
+}
+
+class _RevealedFooter extends StatelessWidget {
+  const _RevealedFooter({
+    super.key,
+    required this.profileName,
+    required this.colors,
+    required this.powSnapshot,
+    required this.onContinue,
+  });
+
+  final String profileName;
+  final LabColors colors;
+  final ProfilePowSnapshot powSnapshot;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 20),
+        Text(
+          'This key controls $profileName on Nostr. Back it up somewhere safe — '
+          'anyone with it can post as you.',
+          style: LabTextStyles.reg15.copyWith(color: c.white66),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        PowStatusBanner(snapshot: powSnapshot),
+        const SizedBox(height: 16),
+        LabButton.primary(
+          text: 'See proof of work summary',
+          onTap: onContinue,
+        ),
+        const SizedBox(height: 14),
+      ],
     );
   }
 }

@@ -28,7 +28,7 @@ class ZapButton extends HookConsumerWidget {
     final canZap = author != null && hasLud16;
 
     // Determine button text based on app signing
-    final buttonText = app.isRelaySigned ? 'Zap' : 'Zap this app';
+    final buttonText = app.isRelaySigned ? 'Tip' : 'Tip this app';
 
     return SizedBox(
       height: 36,
@@ -248,7 +248,7 @@ class ZapAmountDialog extends HookConsumerWidget {
       titleIcon: const Text('⚡️'),
       titleIconColor: Colors.orange,
       title: Text(
-        isRelaySigned ? 'Zap the relay' : 'Zap ${app.name}',
+        isRelaySigned ? 'Tip the relay' : 'Tip ${app.name}',
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       content: Padding(
@@ -310,7 +310,7 @@ class ZapAmountDialog extends HookConsumerWidget {
                               ),
                             const TextSpan(
                               text:
-                                  ', not directly published by a developer. Your zap will help support the service.\nIf you know the developer, ask them to self-publish to earn sats!',
+                                  ', not directly published by a developer. Your tip will help support the service.\nIf you know the developer, ask them to self-publish to earn sats!',
                             ),
                           ],
                         ),
@@ -325,7 +325,7 @@ class ZapAmountDialog extends HookConsumerWidget {
             if (pubkey == null) ...[
               const SignInPrompt(
                 message:
-                    'Zapping anonymously. Sign in to zap with your identity.',
+                    'Tipping anonymously. Sign in to tip with your identity.',
               ),
               const SizedBox(height: 12),
             ],
@@ -462,7 +462,7 @@ class ZapAmountDialog extends HookConsumerWidget {
                             refAsRef,
                           );
                           if (toastContext != null && toastContext.mounted) {
-                            toastContext.showInfo('⚡ Zap sent! $amount sats');
+                            toastContext.showInfo('⚡ Tip sent! $amount sats');
                           }
                         } else {
                           final invoice = await signedZapRequest.getInvoice();
@@ -470,7 +470,7 @@ class ZapAmountDialog extends HookConsumerWidget {
                             toastContext.showInfo(
                               'Lightning invoice ready',
                               description:
-                                  'Copy the invoice and pay with your Lightning wallet. Setup NWC to zap directly from the app.',
+                                  'Copy the invoice and pay with your Lightning wallet. Setup NWC to tip directly from the app.',
                               actions: [
                                 (
                                   'Copy Invoice',
@@ -481,7 +481,7 @@ class ZapAmountDialog extends HookConsumerWidget {
                                   },
                                 ),
                                 (
-                                  'Zap with NWC',
+                                  'Tip with NWC',
                                   () async {
                                     final navContext = rootNavigator.context;
                                     if (navContext.mounted) {
@@ -502,7 +502,7 @@ class ZapAmountDialog extends HookConsumerWidget {
                       } catch (e) {
                         if (toastContext != null && toastContext.mounted) {
                           toastContext.showError(
-                            'Zap failed',
+                            'Tip failed',
                             technicalDetails: '$e',
                           );
                         }
@@ -510,7 +510,7 @@ class ZapAmountDialog extends HookConsumerWidget {
                     }());
                   } catch (e) {
                     if (context.mounted) {
-                      context.showError('Zap failed', technicalDetails: '$e');
+                      context.showError('Tip failed', technicalDetails: '$e');
                       Navigator.of(context).pop(false);
                     }
                   }
@@ -631,12 +631,12 @@ class NWCZapDialog extends HookConsumerWidget {
     return BaseDialog(
       titleIcon: const Text('⚡️'),
       titleIconColor: Colors.orange,
-      title: const BaseDialogTitle('Zap with NWC'),
+      title: const BaseDialogTitle('Tip with NWC'),
       maxWidth: double.maxFinite,
       content: BaseDialogContent(
         children: [
           Text(
-            'Enter your NWC connection string to zap $amount sats:',
+            'Enter your NWC connection string to tip $amount sats:',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -707,16 +707,16 @@ class NWCZapDialog extends HookConsumerWidget {
                 refAsRef.invalidate(localSettingsProvider);
                 await _executeZapPayment(signedZapRequest, nwcString, refAsRef);
                 if (toastContext != null && toastContext.mounted) {
-                  toastContext.showInfo('⚡ Zap sent! $amount sats');
+                  toastContext.showInfo('⚡ Tip sent! $amount sats');
                 }
               } catch (e) {
                 if (toastContext != null && toastContext.mounted) {
-                  toastContext.showError('Zap failed', technicalDetails: '$e');
+                  toastContext.showError('Tip failed', technicalDetails: '$e');
                 }
               }
             }());
           },
-          child: Text('Zap $amount sats'),
+          child: Text('Tip $amount sats'),
         ),
       ],
     );

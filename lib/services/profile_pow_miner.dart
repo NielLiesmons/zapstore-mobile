@@ -73,6 +73,8 @@ class ProfilePowMiner {
   StreamSubscription<Object?>? _subscription;
   DateTime? _startedAt;
   int? _createdAtSeconds;
+  DateTime? _lastUiEmit;
+  ProfilePowProgress? _pendingProgress;
 
   void start({required String displayName, required String nsec}) {
     stop();
@@ -82,6 +84,8 @@ class ProfilePowMiner {
     _createdAtSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
 
     _startedAt = DateTime.now();
+    _lastUiEmit = null;
+    _pendingProgress = null;
     snapshot.value = ProfilePowSnapshot(
       isRunning: true,
       targetBits: targetBits,
@@ -108,11 +112,26 @@ class ProfilePowMiner {
   }
 
   void _onMessage(Object? message) {
+    if (message is! ProfilePowProgress) return;
+    _pendingProgress = message;
+
+    final now = DateTime.now();
+    final last = _lastUiEmit;
+    if (last != null &&
+        now.difference(last) < const Duration(milliseconds: 120) &&
+        !message.meetsMinimum) {
+      return;
+    }
+    _flushPendingProgress(now);
+  }
+
+  void _flushPendingProgress(DateTime now) {
     final started = _startedAt;
     final createdAt = _createdAtSeconds;
-    if (started == null || createdAt == null) return;
+    final message = _pendingProgress;
+    if (started == null || createdAt == null || message == null) return;
 
-    if (message is! ProfilePowProgress) return;
+    _lastUiEmit = now;
 
     ProfilePowResult? best = snapshot.value.best;
     if (message.bestNonce != null && message.bestBits > 0) {
@@ -131,7 +150,7 @@ class ProfilePowMiner {
       attempts: message.attempts,
       bestBits: message.bestBits,
       meetsMinimum: message.meetsMinimum,
-      elapsed: DateTime.now().difference(started),
+      elapsed: now.difference(started),
       best: best,
     );
   }
@@ -144,6 +163,7 @@ class ProfilePowMiner {
     _isolate?.kill(priority: Isolate.immediate);
     _isolate = null;
     if (snapshot.value.isRunning) {
+      _flushPendingProgress(DateTime.now());
       snapshot.value = snapshot.value.copyWith(isRunning: false);
     }
   }

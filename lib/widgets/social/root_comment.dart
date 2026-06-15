@@ -4,6 +4,7 @@ import 'package:models/models.dart';
 import 'package:zapstore/services/nostr_comment_service.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/l_connector.dart';
 import 'package:zapstore/widgets/common/modal.dart';
@@ -79,14 +80,12 @@ class RootComment extends ConsumerWidget {
       ),
     );
     final author = authorState.models.firstOrNull;
-    final directReplies = comment.replies.toList();
-
     // BFS to count and collect ALL descendants (full subtree), not just direct
     // replies. Mirrors _ThreadBody._collectSubtree used in the thread modal.
     final allDescendants = <Comment>[];
-    {
+    try {
+      final queue = <Comment>[...comment.replies.toList()];
       final seen = <String>{};
-      final queue = <Comment>[...directReplies];
       while (queue.isNotEmpty) {
         final c = queue.removeAt(0);
         if (seen.add(c.id)) {
@@ -94,6 +93,8 @@ class RootComment extends ConsumerWidget {
           queue.addAll(c.replies.toList());
         }
       }
+    } catch (_) {
+      // Degrade gracefully if reply relationships are unavailable.
     }
 
     // Unique replier pubkeys (up to 3 for avatar stack) — drawn from the full
@@ -138,7 +139,7 @@ class RootComment extends ConsumerWidget {
             ))
         .toList();
 
-    final contentWidget = NoteParser.parse(
+    final contentWidget = NoteParser.parseSafe(
       context,
       comment.content,
       emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
@@ -156,6 +157,8 @@ class RootComment extends ConsumerWidget {
             content: contentWidget,
             timestamp: comment.createdAt,
             topPadding: 0,
+            onAvatarTap: () => pushUser(context, comment.event.pubkey),
+            onNameTap: () => pushUser(context, comment.event.pubkey),
             onReply: onReply ??
                 () => showThreadModal(
                       context,
@@ -238,7 +241,7 @@ void showThreadModal(
   showModal<void>(
     context,
     fillHeight: true,
-    maxHeightFactor: 0.75,
+    maxHeightFactor: kThreadModalMaxHeightFactor,
     footer: (ctx) => ListenableBuilder(
       listenable: controller,
       builder: (_, __) => _ThreadFooter(
@@ -313,15 +316,19 @@ class _ThreadBody extends ConsumerWidget {
   static List<Comment> _collectSubtree(Comment root) {
     final result = <Comment>[];
     final seen = <String>{};
-    final queue = <Comment>[...root.replies.toList()];
-    while (queue.isNotEmpty) {
-      final c = queue.removeAt(0);
-      if (seen.add(c.id)) {
-        result.add(c);
-        queue.addAll(c.replies.toList());
+    try {
+      final queue = <Comment>[...root.replies.toList()];
+      while (queue.isNotEmpty) {
+        final c = queue.removeAt(0);
+        if (seen.add(c.id)) {
+          result.add(c);
+          queue.addAll(c.replies.toList());
+        }
       }
+      result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    } catch (_) {
+      // Relationship load can fail on partial/corrupt cache — degrade to empty.
     }
-    result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return result;
   }
 
@@ -363,7 +370,7 @@ class _ThreadBody extends ConsumerWidget {
               rootContext: resolvedRoot,
               version: version,
               author: author,
-              content: NoteParser.parse(
+              content: NoteParser.parseSafe(
                 context,
                 comment.content,
                 emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
@@ -475,10 +482,14 @@ class _ThreadRootUnified extends StatelessWidget {
                     color: c.white16,
                   ),
                 ],
-                ProfilePic(
-                  profile: author,
-                  pubkey: comment.event.pubkey,
-                  size: 36,
+                GestureDetector(
+                  onTap: () => pushUser(context, comment.event.pubkey),
+                  behavior: HitTestBehavior.opaque,
+                  child: ProfilePic(
+                    profile: author,
+                    pubkey: comment.event.pubkey,
+                    size: 36,
+                  ),
                 ),
               ],
             ),
@@ -496,6 +507,7 @@ class _ThreadRootUnified extends StatelessWidget {
                   content: content,
                   timestamp: comment.createdAt,
                   showAvatar: false,
+                  onAuthorTap: () => pushUser(context, comment.event.pubkey),
                   headerActions: onOptions != null
                       ? ThreadRootOptionsButton(onTap: onOptions)
                       : null,
@@ -682,7 +694,7 @@ class _ThreadReply extends ConsumerWidget {
     final quotedComment = isNestedReply ? byId[parentId] : null;
 
     // Build bubble content: optional QuotedMessage prepended.
-    Widget bubbleContent = NoteParser.parse(
+    Widget bubbleContent = NoteParser.parseSafe(
       context,
       reply.content,
       emojiTags: NoteParser.extractEmojiTags(reply.event.tags),
@@ -706,6 +718,8 @@ class _ThreadReply extends ConsumerWidget {
       timestamp: reply.createdAt,
       isLight: true,
       inThreadModal: true,
+      onAvatarTap: () => pushUser(context, reply.event.pubkey),
+      onNameTap: () => pushUser(context, reply.event.pubkey),
       onReply: () => controller.expand(replyTo: reply, replyAuthor: profile),
       onActions: onActions,
     );

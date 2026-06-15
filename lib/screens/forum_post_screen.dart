@@ -8,6 +8,7 @@ import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/services/nostr_comment_service.dart';
 import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/theme.dart';
+import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/comments_section.dart';
 import 'package:zapstore/widgets/common/detail_page_chrome.dart';
@@ -160,6 +161,7 @@ class _ForumPostContent extends HookConsumerWidget {
                         size: kDetailAuthorAvatarSize,
                       ),
                       title: publisherName,
+                      onAuthorTap: () => pushUser(context, post.pubkey),
                       timestamp: Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: TimeAgoText(

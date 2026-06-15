@@ -16,6 +16,8 @@ All behavioral authority lives in `spec/guidelines/`. If this file conflicts, gu
 | Feature specs | `spec/features/` |
 | Active work | `spec/work/` |
 | Decisions & learnings | `spec/knowledge/` |
+| Kind-badge emoji (from webapp) | `assets/images/emoji/` — sync via `tool/sync_webapp_emoji.sh` |
+| Optional local webapp workspace | Copy `zapstore.local.code-workspace.example` → `zapstore.local.code-workspace` |
 
 Guidelines are symlinked into `.cursor/rules/` and auto-load.
 

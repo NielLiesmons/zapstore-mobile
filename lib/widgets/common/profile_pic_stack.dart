@@ -22,6 +22,7 @@ class ProfilePicStack extends StatelessWidget {
     this.pillTextColor,
     this.showPillBackground = true,
     this.overlap = 8.0,
+    this.textLeadingPadding,
     this.onTap,
   });
 
@@ -40,6 +41,9 @@ class ProfilePicStack extends StatelessWidget {
   /// When false, [text] / [suffix] render without the white8 pill background.
   final bool showPillBackground;
   final double overlap;
+
+  /// Gap between the avatar stack and [text] (defaults: 16 pill / 8 plain).
+  final double? textLeadingPadding;
   final VoidCallback? onTap;
 
   @override
@@ -88,6 +92,8 @@ class ProfilePicStack extends StatelessWidget {
 
     final hasPill = text.isNotEmpty || suffix.isNotEmpty;
     final effectivePillHeight = pillHeight ?? avatarSize;
+    final leadingPad = textLeadingPadding ??
+        (showPillBackground ? 16.0 : 8.0);
 
     // Single-digit count-only: render as a perfect circle (width == height).
     final isSingleDigit = text.isEmpty && suffix.length == 1;
@@ -109,7 +115,7 @@ class ProfilePicStack extends StatelessWidget {
                       padding: isSingleDigit
                           ? EdgeInsets.zero
                           : text.isNotEmpty
-                              ? const EdgeInsets.only(left: 16, right: 12)
+                              ? EdgeInsets.only(left: leadingPad, right: 12)
                               : const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
                         color: c.white8,
@@ -123,7 +129,7 @@ class ProfilePicStack extends StatelessWidget {
                     )
                   : Padding(
                       padding: text.isNotEmpty
-                          ? const EdgeInsets.only(left: 8)
+                          ? EdgeInsets.only(left: leadingPad)
                           : EdgeInsets.zero,
                       child: _PillLabelRow(
                         text: text,

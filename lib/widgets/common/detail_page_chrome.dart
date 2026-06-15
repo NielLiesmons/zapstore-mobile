@@ -17,6 +17,9 @@ const double kDetailCommunityAvatarSize = 22;
 /// Floating actions button — same footprint as [kDetailAuthorAvatarSize].
 const double kDetailActionsButtonSize = 44;
 
+/// Actions button width + gap before scroll content (meta row timestamp, etc.).
+const double kDetailActionsButtonGutter = kDetailActionsButtonSize + 14;
+
 /// Short npub-style label for unknown authors.
 String detailShortPubkey(String pubkey) {
   if (pubkey.length <= 12) return pubkey;
@@ -27,13 +30,12 @@ String detailShortPubkey(String pubkey) {
 // Floating round actions button (top-right, highest z-index)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Drop shadow shared by detail floating action controls.
-List<BoxShadow> detailActionsButtonShadow() => [
+/// Drop shadow shared by floating actions + scroll-to-top controls.
+List<BoxShadow> detailActionsButtonShadow(LabColors c) => [
       BoxShadow(
-        color: Colors.black.withValues(alpha: 0.42),
-        blurRadius: 16,
-        spreadRadius: -2,
-        offset: const Offset(0, 6),
+        color: c.black.withValues(alpha: 0.5),
+        blurRadius: 24,
+        offset: const Offset(0, 8),
       ),
     ];
 
@@ -48,12 +50,14 @@ class DetailAuthorMetaRow extends StatelessWidget {
     required this.title,
     this.timestamp,
     this.trailing,
+    this.onAuthorTap,
   });
 
   final Widget leading;
   final String title;
   final Widget? timestamp;
   final Widget? trailing;
+  final VoidCallback? onAuthorTap;
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +76,15 @@ class DetailAuthorMetaRow extends StatelessWidget {
                 child: SizedBox(
                   width: kDetailAuthorAvatarSize,
                   height: kDetailAuthorAvatarSize,
-                  child: Center(child: leading),
+                  child: Center(
+                    child: onAuthorTap != null
+                        ? GestureDetector(
+                            onTap: onAuthorTap,
+                            behavior: HitTestBehavior.opaque,
+                            child: leading,
+                          )
+                        : leading,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -84,19 +96,28 @@ class DetailAuthorMetaRow extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            style:
-                                LabTextStyles.med15.copyWith(color: c.white66),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
+                        Expanded(
+                          child: onAuthorTap != null
+                              ? GestureDetector(
+                                  onTap: onAuthorTap,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Text(
+                                    title,
+                                    style: LabTextStyles.med15
+                                        .copyWith(color: c.white66),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                )
+                              : Text(
+                                  title,
+                                  style: LabTextStyles.med15
+                                      .copyWith(color: c.white66),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
                         ),
-                        if (timestamp != null) ...[
-                          const SizedBox(width: 8),
-                          timestamp!,
-                        ],
+                        if (timestamp != null) timestamp!,
                       ],
                     ),
                     if (trailing != null) ...[
@@ -106,7 +127,7 @@ class DetailAuthorMetaRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: kDetailActionsButtonSize),
+              const SizedBox(width: kDetailActionsButtonGutter),
             ],
           ),
         ),
@@ -193,6 +214,7 @@ class DetailCommunityMenu extends HookWidget {
             text: label,
             pillTextColor: c.white33,
             showPillBackground: false,
+            textLeadingPadding: 12,
             onTap: () {
               if (overlayController.isShowing) {
                 overlayController.hide();
@@ -242,9 +264,11 @@ class DetailActionsButtonOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
     final c = Theme.of(context).extension<LabColors>()!;
-    final maxLabelWidth =
-        MediaQuery.sizeOf(context).width - 28 - kDetailActionsButtonSize -
-            _labelLeftPad - _dividerWidth;
+    final maxPillWidth = MediaQuery.sizeOf(context).width - 28;
+    final maxLabelTextWidth = maxPillWidth -
+        kDetailActionsButtonSize -
+        _labelLeftPad -
+        _dividerWidth;
 
     return Positioned(
       top: topPad + 20,
@@ -256,10 +280,13 @@ class DetailActionsButtonOverlay extends StatelessWidget {
               scrollController.hasClients ? scrollController.offset : 0.0;
           final t =
               ((offset - expandStartOffset) / 28.0).clamp(0.0, 1.0);
-          final labelW = _labelWidth(context, maxLabelWidth);
+          final labelW = _labelWidth(context, maxLabelTextWidth)
+              .clamp(0.0, maxLabelTextWidth);
           final expandedExtra = _labelLeftPad + labelW + _dividerWidth;
-          final pillWidth =
-              kDetailActionsButtonSize + expandedExtra * t;
+          final pillWidth = (kDetailActionsButtonSize + expandedExtra * t)
+              .clamp(kDetailActionsButtonSize, maxPillWidth);
+          final labelAreaWidth =
+              (pillWidth - kDetailActionsButtonSize).clamp(0.0, double.infinity);
           final radius = kDetailActionsButtonSize / 2;
           final labelStyle = LabTextStyles.med15.copyWith(color: c.white66);
 
@@ -268,41 +295,42 @@ class DetailActionsButtonOverlay extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(radius),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
-                clipBehavior: Clip.hardEdge,
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: Container(
-                    width: pillWidth,
-                    height: kDetailActionsButtonSize,
-                    decoration: BoxDecoration(
-                      color: c.gray66,
-                      borderRadius: BorderRadius.circular(radius),
-                      border: LabBorder.all(
-                        color: c.white16,
-                        width: LabStroke.thin,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(radius),
+                  boxShadow: detailActionsButtonShadow(c),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radius),
+                  clipBehavior: Clip.hardEdge,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                    child: Container(
+                      width: pillWidth,
+                      height: kDetailActionsButtonSize,
+                      decoration: BoxDecoration(
+                        color: c.gray66,
+                        borderRadius: BorderRadius.circular(radius),
+                        border: LabBorder.all(
+                          color: c.white16,
+                          width: LabStroke.thin,
+                        ),
                       ),
-                      boxShadow: detailActionsButtonShadow(),
-                    ),
-                    child: Stack(
-                      clipBehavior: Clip.hardEdge,
-                      children: [
-                        Positioned(
-                          left: 0,
-                          right: kDetailActionsButtonSize,
-                          top: 0,
-                          bottom: 0,
-                          child: ClipRect(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Opacity(
-                                opacity: t,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Padding(
+                      child: Stack(
+                        clipBehavior: Clip.hardEdge,
+                        children: [
+                        if (labelAreaWidth > 0)
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: labelAreaWidth,
+                            child: Opacity(
+                              opacity: t,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Padding(
                                       padding: const EdgeInsets.only(
                                         left: _labelLeftPad,
                                       ),
@@ -316,16 +344,17 @@ class DetailActionsButtonOverlay extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                    ColoredBox(
-                                      color: c.white16,
-                                      child: const SizedBox(width: _dividerWidth),
+                                  ),
+                                  ColoredBox(
+                                    color: c.white16,
+                                    child: const SizedBox(
+                                      width: _dividerWidth,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ),
                         Positioned(
                           right: 0,
                           top: 0,
@@ -339,7 +368,8 @@ class DetailActionsButtonOverlay extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

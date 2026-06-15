@@ -16,6 +16,7 @@ class ActiveProfileCard extends HookWidget {
     super.key,
     this.profile,
     required this.pubkey,
+    this.fullWidth = false,
     this.onViewProfile,
     this.onEditProfile,
     this.onShareProfile,
@@ -23,6 +24,7 @@ class ActiveProfileCard extends HookWidget {
 
   final Profile? profile;
   final String pubkey;
+  final bool fullWidth;
   final VoidCallback? onViewProfile;
   final VoidCallback? onEditProfile;
   final VoidCallback? onShareProfile;
@@ -45,7 +47,7 @@ class ActiveProfileCard extends HookWidget {
         scale: pressed.value ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 100),
         child: Container(
-          width: 272,
+          width: fullWidth ? double.infinity : 272,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: c.gray66,

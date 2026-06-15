@@ -98,6 +98,7 @@ class _NewProfileModalContentState extends State<_NewProfileModalContent> {
     if (name.isEmpty) return;
     final onContinue = widget.onContinue;
     Navigator.of(context).pop();
+    // Next modal must open after this sheet is gone — otherwise it stacks behind.
     WidgetsBinding.instance.addPostFrameCallback((_) => onContinue(name));
   }
 

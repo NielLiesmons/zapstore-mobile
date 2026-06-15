@@ -180,6 +180,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
+      // ── Community (legacy — home feed switcher replaces this screen) ───
+      GoRoute(
+        path: '/community',
+        redirect: (context, state) => '/',
+      ),
+
       // ── Updates (slides in from right) ─────────────────────────────────
       GoRoute(
         path: '/updates',

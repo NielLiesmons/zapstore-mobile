@@ -3,18 +3,21 @@ import 'dart:math' as math;
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/color.dart';
 import 'package:zapstore/utils/icons.dart';
+import 'package:zapstore/utils/nostr_query_id.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/app_pic.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/shimmer.dart';
 import 'package:zapstore/widgets/common/time_utils.dart';
+import 'package:zapstore/providers/inbox_seen_provider.dart';
 import 'package:zapstore/widgets/social/bubble_swiper.dart';
 import 'package:zapstore/widgets/social/quoted_message.dart';
 import 'package:zapstore/widgets/social/thread_root.dart';
@@ -74,60 +77,6 @@ bool commentCardIsNestedReply(EventBase<Model<dynamic>> event) {
   final root = _commentCardRootCoord(event);
   if (root != null && parent == root) return false;
   return true;
-}
-
-/// Matches [RequestFilter] id validation — must be 64-char hex or `kind:pubkey:d`.
-final RegExp _kReplaceableQueryCoord =
-    RegExp(r'^\d+:[0-9a-f]{64}:');
-
-/// Normalizes tag values for [queryKinds] / [query] `ids` filters.
-///
-/// [RequestFilter] throws `Bad ids input` for values that are not hex event ids
-/// or replaceable coordinates (e.g. bare bech32, relay hints). Returns `null`
-/// when the value cannot be queried safely.
-String? _normalizeNostrQueryId(String? raw) {
-  if (raw == null) return null;
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) return null;
-
-  var id = trimmed;
-  if (id.startsWith('nostr:') ||
-      id.startsWith('note') ||
-      id.startsWith('nevent') ||
-      id.startsWith('naddr')) {
-    try {
-      id = Utils.decodeShareableToString(id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  if (id.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(id)) {
-    return id.toLowerCase();
-  }
-  if (_kReplaceableQueryCoord.hasMatch(id)) return id;
-  return null;
-}
-
-/// Normalizes hex / npub author pubkeys for [query] `authors` filters.
-String? _normalizeAuthorPubkey(String? raw) {
-  if (raw == null) return null;
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) return null;
-
-  try {
-    final hex = Utils.decodeShareableToString(trimmed);
-    if (hex.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(hex)) {
-      return hex.toLowerCase();
-    }
-  } catch (_) {
-    // Fall through — may already be raw hex.
-  }
-
-  if (trimmed.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-  return null;
 }
 
 String _truncateOneliner(String raw, [int max = 80]) {
@@ -318,6 +267,7 @@ class CommentCard extends ConsumerWidget {
   const CommentCard({
     super.key,
     required this.comment,
+    this.inboxOwnerPubkey,
     this.onRootTap,
     this.onCardTap,
     this.onReply,
@@ -325,6 +275,9 @@ class CommentCard extends ConsumerWidget {
   });
 
   final Comment comment;
+
+  /// When set (inbox feed), shows a blurple unread dot until [event id] is seen.
+  final String? inboxOwnerPubkey;
 
   /// Tap on the root label row (navigate to app/stack/forum).
   final VoidCallback? onRootTap;
@@ -344,9 +297,9 @@ class CommentCard extends ConsumerWidget {
     final ev = comment.event;
 
     final rootCoordRaw = _commentCardRootCoord(ev);
-    final rootQueryId = _normalizeNostrQueryId(rootCoordRaw);
+    final rootQueryId = normalizeNostrQueryId(rootCoordRaw);
     final parentCoordRaw = _commentCardParentCoord(ev);
-    final parentQueryId = _normalizeNostrQueryId(parentCoordRaw);
+    final parentQueryId = normalizeNostrQueryId(parentCoordRaw);
     final nested = commentCardIsNestedReply(ev);
 
     final rootState = rootQueryId != null
@@ -369,9 +322,9 @@ class CommentCard extends ConsumerWidget {
     final rootLoading =
         rootState != null && rootState is StorageLoading && rootModel == null;
 
-    final authorPubkey = _normalizeAuthorPubkey(comment.event.pubkey);
+    final authorPubkey = normalizeAuthorPubkey(comment.event.pubkey);
     final parentPkRaw = nested ? ev.getFirstTagValue('p') : null;
-    final parentPubkey = _normalizeAuthorPubkey(parentPkRaw);
+    final parentPubkey = normalizeAuthorPubkey(parentPkRaw);
     final parentKind = nested ? comment.parentKind : null;
 
     final fetchParentQuote =
@@ -469,8 +422,12 @@ class CommentCard extends ConsumerWidget {
 
     final showQuote = nested && (parentCommentLoading || parentComment != null);
 
+    final inboxPk = inboxOwnerPubkey;
+    final showUnreadDot = inboxPk != null &&
+        !ref.watch(inboxSeenProvider(inboxPk)).contains(comment.event.id);
+
     final nameColor = profileTextColor(hexToColor(comment.event.pubkey));
-    final contentWidget = NoteParser.parse(
+    final contentWidget = NoteParser.parseSafe(
       context,
       comment.content,
       emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
@@ -537,96 +494,113 @@ class CommentCard extends ConsumerWidget {
       ),
     );
 
-    // [ForumPostCard] recipe: [IntrinsicHeight] + stretch [Row]. Left [Stack] keeps
-    // one non-positioned badge child for the intrinsic pass; connector + avatar are
-    // [Positioned] to fill the stretched rail. Do not use [Expanded] in the left
-    // column here — [ListView] rows are height-unbounded and that pattern crashes.
-    return GestureDetector(
-      onTap: onCardTap,
-      behavior: HitTestBehavior.opaque,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: kCommentCardLeftColWidth,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      height: kCommentCardBadgeSize,
-                      child: Center(
-                        child: _RootBadge(
-                          rootModel: rootModel,
-                          rootLoading: rootLoading,
-                          oneliner: oneliner,
-                          rootMissing:
-                              rootMissingAfterLoad || rootQueryId == null,
+    final rootHref = rootModel != null
+        ? ThreadRootContext.hrefForModel(rootModel)
+        : ThreadRootContext.hrefForRootCoord(
+            rootQueryId,
+            kind: comment.rootKind,
+          );
+    final effectiveOnRootTap = onRootTap ??
+        (rootHref != null && !rootLoading
+            ? () => context.push(rootHref)
+            : null);
+
+    // Badge + label sit in a fixed-height top row (root tap navigates — not card tap).
+    // [IntrinsicHeight] wraps only the avatar rail + bubble so the intrinsic pass
+    // measures bubble height — not the 28px badge band (that mismatch caused
+    // ~192px [RenderFlex] overflows).
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          onTap: effectiveOnRootTap,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: kCommentCardLeftColWidth,
+                height: kCommentCardBadgeSize,
+                child: Center(
+                  child: _RootBadge(
+                    rootModel: rootModel,
+                    rootLoading: rootLoading,
+                    oneliner: oneliner,
+                    rootMissing: rootMissingAfterLoad || rootQueryId == null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: kCommentCardColGap),
+              Expanded(
+                child: SizedBox(
+                  height: kCommentCardBadgeSize,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _RootLabelRow(
+                      oneliner: oneliner,
+                      onTap: effectiveOnRootTap,
+                      muted: rootLoading ||
+                          (rootMissingAfterLoad && rootHref == null),
+                      showUnreadDot: showUnreadDot,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: onCardTap,
+          behavior: HitTestBehavior.opaque,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: kCommentCardLeftColWidth,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        top: 0,
+                        bottom: kCommentCardAvatarSize,
+                        left: (kCommentCardLeftColWidth - 2) / 2,
+                        width: 2,
+                        child: CustomPaint(
+                          painter: _CommentCardConnectorPainter(
+                            color: c.white16,
+                            nested: nested,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    top: kCommentCardBadgeSize,
-                    bottom: kCommentCardAvatarSize,
-                    left: (kCommentCardLeftColWidth - 2) / 2,
-                    width: 2,
-                    child: CustomPaint(
-                      painter: _CommentCardConnectorPainter(
-                        color: c.white16,
-                        nested: nested,
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: ProfilePic(
+                          profile: author,
+                          pubkey: comment.event.pubkey,
+                          size: kCommentCardAvatarSize,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    height: kCommentCardAvatarSize,
-                    child: Center(
-                      child: ProfilePic(
-                        profile: author,
-                        pubkey: comment.event.pubkey,
-                        size: kCommentCardAvatarSize,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: kCommentCardColGap),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: kCommentCardBadgeSize,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _RootLabelRow(
-                        oneliner: oneliner,
-                        onTap: onRootTap,
-                        muted: rootLoading ||
-                            (rootMissingAfterLoad && !rootLoading),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  BubbleSwiper(
+                ),
+                const SizedBox(width: kCommentCardColGap),
+                Expanded(
+                  child: BubbleSwiper(
                     c: c,
                     replyIconInset: 8,
                     onReply: onReply,
                     onActions: onActions,
                     child: bubble,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -636,11 +610,13 @@ class _RootLabelRow extends StatelessWidget {
     required this.oneliner,
     this.onTap,
     this.muted = false,
+    this.showUnreadDot = false,
   });
 
   final _RootOneliner oneliner;
   final VoidCallback? onTap;
   final bool muted;
+  final bool showUnreadDot;
 
   @override
   Widget build(BuildContext context) {
@@ -648,7 +624,7 @@ class _RootLabelRow extends StatelessWidget {
     final color = muted ? c.white33 : c.white66;
 
     final isStack = oneliner.kind == _RootKind.stack;
-    final textWidget = isStack
+    final label = isStack
         ? RichText(
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -670,14 +646,30 @@ class _RootLabelRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           );
 
-    if (onTap != null && !muted) {
-      return GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: textWidget,
-      );
-    }
-    return textWidget;
+    final labelMain = onTap != null && !muted
+        ? GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: label,
+          )
+        : label;
+
+    return Row(
+      children: [
+        Expanded(child: labelMain),
+        if (showUnreadDot) ...[
+          const SizedBox(width: 8),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: c.blurpleColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 

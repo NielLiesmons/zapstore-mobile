@@ -395,7 +395,6 @@ class _ActionRow extends StatelessWidget {
                   iconSize: 16,
                   onTap: onTipTap,
                   colors: c,
-                  useGoldIcon: true,
                 ),
                 const SizedBox(width: 8),
               ],
@@ -444,7 +443,6 @@ class _ActionBtn extends StatefulWidget {
     required this.colors,
     this.onTap,
     this.thick = false,
-    this.useGoldIcon = false,
   });
 
   final String icon;
@@ -452,7 +450,6 @@ class _ActionBtn extends StatefulWidget {
   final LabColors colors;
   final VoidCallback? onTap;
   final bool thick;
-  final bool useGoldIcon;
 
   @override
   State<_ActionBtn> createState() => _ActionBtnState();
@@ -483,17 +480,12 @@ class _ActionBtnState extends State<_ActionBtn> {
             color: c.white8,
             borderRadius: BorderRadius.circular(7),
           ),
-          child: widget.useGoldIcon
-              ? ShaderMask(
-                  shaderCallback: (bounds) =>
-                      widget.colors.gold.createShader(bounds),
-                  blendMode: BlendMode.srcIn,
-                  child: LabIcon(widget.icon,
-                      size: widget.iconSize, color: widget.colors.white,
-                      thick: widget.thick),
-                )
-              : LabIcon(widget.icon, size: widget.iconSize, color: c.white33,
-                  thick: widget.thick),
+          child: LabIcon(
+            widget.icon,
+            size: widget.iconSize,
+            color: c.white33,
+            thick: widget.thick,
+          ),
         ),
       ),
     );

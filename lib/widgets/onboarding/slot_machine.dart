@@ -1,373 +1,76 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/key_generator.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SlotMachine
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Matches webapp SpinKeyModal slot machine layout:
-//   • 3 rows × 4 slots, each row 88px tall with top/bottom fade gradients
-//   • Draggable blurple handle on the right that triggers the spin
-//   • 12 reels scroll nsec bech32 char chunks; dashes while unspun
-//   • Staggered spin → settle to final value
-//   • [onSpinComplete] fires after the last slot settles + [completeDelay]
+// Port of zaplab_design `LabSlotMachine` (Nsec mode) — layout + motion source of truth.
 
 const _bech32Chars = 'QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L';
 
-// Layout constants (matching webapp exactly)
 const _totalHeight = 296.0;
+const _rowGap = 16.0;
+const _diskWidth = 56.0;
 const _diskHeight = 88.0;
-const _slotTop = (_totalHeight - _diskHeight) / 2; // 104
-const _centerY = _slotTop + _diskHeight / 2; // 148
-const _handleMin = 40.0;
-const _handleMax = 256.0;
+const _cellHeight = 56.0;
+const _cellInset = (_diskHeight - _cellHeight) / 2;
 
-/// Height of each nsec chunk cell — matches the settled display box.
-const _reelCellHeight = 56.0;
+const _handleMin = 18.0;
+const _handleMax = 234.0;
+const _handleCenterY = _totalHeight / 2;
+const _slotHeight = 88.0;
+const _slotTop = (_totalHeight - _slotHeight) / 2;
 
-/// Vertical inset that centres a [_reelCellHeight] cell inside [_diskHeight].
-const _reelCellInset = (_diskHeight - _reelCellHeight) / 2;
+const _spinDurationMs = 3800;
+const _spinStaggerMs = 220;
+const _spinSequenceLength = 28;
+const _finaleAnimMs = 520;
+const _defaultSettleDelay = Duration(milliseconds: 1200);
 
-/// [_offset] at which cell 0 is centred in the disk window.
-const _centeredOffset = 0.0;
+/// Opacity for nsec symbols in the center viewing window.
+const _nsecTextOpacity = 0.8;
 
-/// Cell 0 top (px) once it has fully left below the disk window.
-const _recycleCellTop = _diskHeight;
+int _chunkSizeForSlot(int slotIndex) => slotIndex < 9 ? 5 : 6;
 
-/// Spin begins with cell 0 fully above the window (enters from the top).
-const _spinStartOffset = -_reelCellInset - _reelCellHeight;
+String _placeholderForSlot(int slotIndex) =>
+    '-' * _chunkSizeForSlot(slotIndex);
 
-/// Minimum tiles kept in the reel queue while spinning.
-const _minReelItems = 3;
-
-/// Cells that scroll past after fast spin before the target lands.
-const _cellsBeforeLand = 4;
-
-/// Deceleration phase after fast spin (per reel).
-const _stopDurationMs = 900;
-
-/// End wobble duration (per reel).
-const _wobbleMs = 280;
-
-// Slot placeholder strings (dashes) before spinning
-List<String> _emptyParts() =>
-    List.generate(12, (i) => i < 9 ? '-----' : '------');
-
-String _randomChunk(int length) {
+String _randomChunkForSlot(int slotIndex) {
   final rng = Random();
+  final size = _chunkSizeForSlot(slotIndex);
   return String.fromCharCodes(
-    List.generate(length, (_) => _bech32Chars.codeUnitAt(rng.nextInt(32))),
+    List.generate(
+      size,
+      (_) => _bech32Chars.codeUnitAt(rng.nextInt(_bech32Chars.length)),
+    ),
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Single scrolling reel column
-// ─────────────────────────────────────────────────────────────────────────────
-
-enum _ReelPhase { idle, spinning, stopping, wobble, settled }
-
-class _SlotReel extends StatefulWidget {
-  const _SlotReel({
-    super.key,
-    required this.charLen,
-    required this.target,
-    required this.spinEpoch,
-    required this.spinDelayMs,
-    required this.resetEpoch,
-  });
-
-  final int charLen;
-  final String target;
-  final int spinEpoch;
-  final int spinDelayMs;
-  final int resetEpoch;
-
+/// Gentle ramp → long slowdown → overshoot past target, then elastic settle.
+class _SlotSpinCurve extends Curve {
   @override
-  State<_SlotReel> createState() => _SlotReelState();
-}
-
-class _SlotReelState extends State<_SlotReel> with TickerProviderStateMixin {
-  _ReelPhase _phase = _ReelPhase.idle;
-  final List<String> _items = [];
-  double _offset = 0;
-  double _velocity = 0;
-  double _wobbleOffset = 0;
-  Ticker? _ticker;
-  Duration _lastTick = Duration.zero;
-  Duration _wobbleStart = Duration.zero;
-  int _lastSpinEpoch = 0;
-  int _lastResetEpoch = 0;
-  Timer? _spinStopTimer;
-
-  static const _spinDuration = Duration(milliseconds: 2000);
-  static const _pixelsPerSecond = 420.0;
-  static const _wobbleAmplitude = 7.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _seedIdle();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SlotReel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.resetEpoch != _lastResetEpoch) {
-      _lastResetEpoch = widget.resetEpoch;
-      _stopMotion();
-      _seedIdle();
-      setState(() {});
+  double transform(double t) {
+    // 0–48%: slow elastic take-off from rest
+    if (t < 0.48) {
+      final rampT = t / 0.48;
+      return pow(rampT, 2.6) * 0.34;
     }
-    if (widget.spinEpoch != _lastSpinEpoch && widget.spinEpoch > 0) {
-      _lastSpinEpoch = widget.spinEpoch;
-      _scheduleSpin();
+    // 48–76%: steady spin
+    if (t < 0.76) {
+      final midT = (t - 0.48) / 0.28;
+      return 0.34 + 0.46 * midT;
     }
-    if (widget.target != oldWidget.target &&
-        (_phase == _ReelPhase.settled || _phase == _ReelPhase.idle)) {
-      _seedIdle();
-      setState(() {});
+    // 76–86%: heavy deceleration into the target lane
+    if (t < 0.86) {
+      final slowT = (t - 0.76) / 0.10;
+      return 0.80 + 0.16 * (1 - pow(1 - slowT, 5));
     }
-  }
-
-  @override
-  void dispose() {
-    _stopMotion();
-    super.dispose();
-  }
-
-  void _seedIdle() {
-    _phase = _ReelPhase.idle;
-    _velocity = 0;
-    _wobbleOffset = 0;
-    _items
-      ..clear()
-      ..add(widget.target);
-    _offset = _centeredOffset;
-  }
-
-  void _stopMotion() {
-    _spinStopTimer?.cancel();
-    _spinStopTimer = null;
-    _ticker?.stop();
-    _ticker?.dispose();
-    _ticker = null;
-    _lastTick = Duration.zero;
-    _wobbleStart = Duration.zero;
-  }
-
-  void _scheduleSpin() {
-    _stopMotion();
-    _seedIdle();
-    Future.delayed(Duration(milliseconds: widget.spinDelayMs), () {
-      if (!mounted || widget.spinEpoch != _lastSpinEpoch) return;
-      _startSpinning();
-    });
-  }
-
-  void _startSpinning() {
-    setState(() {
-      _phase = _ReelPhase.spinning;
-      _velocity = _pixelsPerSecond;
-      _wobbleOffset = 0;
-      _items
-        ..clear()
-        ..addAll(
-          List.generate(
-            _minReelItems + 2,
-            (_) => _randomChunk(widget.charLen),
-          ),
-        );
-      _offset = _spinStartOffset;
-    });
-
-    _lastTick = Duration.zero;
-    _ticker = createTicker(_onTick)..start();
-
-    _spinStopTimer = Timer(_spinDuration, () {
-      if (!mounted) return;
-      _beginStopping();
-    });
-  }
-
-  void _beginStopping() {
-    setState(() {
-      _phase = _ReelPhase.stopping;
-      final subCell = _offset % _reelCellHeight;
-      // Short landing strip — target is always last (appending to the long spin
-      // queue never reached the target in time).
-      _items
-        ..clear()
-        ..addAll(
-          List.generate(
-            _cellsBeforeLand - 1,
-            (_) => _randomChunk(widget.charLen),
-          ),
-        )
-        ..add(widget.target);
-      // Keep sub-cell scroll phase but place cell 0 above the window again.
-      _offset = _spinStartOffset + subCell;
-    });
-  }
-
-  /// Cell [index] top edge in the clipped disk (px).
-  double _cellTop(int index) =>
-      _reelCellInset + _offset + index * _reelCellHeight;
-
-  void _recycleForward() {
-    // Recycle only after cell 0 has fully left below the window — not at one
-    // cell height (that snapped each new symbol into the centre band).
-    while (_cellTop(0) >= _recycleCellTop && _items.length > 1) {
-      _offset -= _reelCellHeight;
-      _items.removeAt(0);
-      if (_phase == _ReelPhase.spinning) {
-        _items.add(_randomChunk(widget.charLen));
-      }
-    }
-  }
-
-  void _startWobble(Duration elapsed) {
-    _phase = _ReelPhase.wobble;
-    _wobbleStart = elapsed;
-    _velocity = 0;
-    _offset = _centeredOffset;
-    _items
-      ..clear()
-      ..add(widget.target);
-  }
-
-  void _finishSettle() {
-    _phase = _ReelPhase.settled;
-    _wobbleOffset = 0;
-    _offset = _centeredOffset;
-    _velocity = 0;
-    _items
-      ..clear()
-      ..add(widget.target);
-    _ticker?.stop();
-  }
-
-  void _onTick(Duration elapsed) {
-    if (_phase == _ReelPhase.idle || _phase == _ReelPhase.settled) return;
-    if (_lastTick == Duration.zero) {
-      _lastTick = elapsed;
-      return;
-    }
-    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
-    _lastTick = elapsed;
-    if (dt <= 0) return;
-
-    setState(() {
-      switch (_phase) {
-        case _ReelPhase.spinning:
-          _offset += _velocity * dt;
-          _recycleForward();
-        case _ReelPhase.stopping:
-          final onlyTarget =
-              _items.length == 1 && _items.first == widget.target;
-          if (onlyTarget) {
-            _velocity = 0;
-            final t = (1 - exp(-dt * 10)).clamp(0.0, 1.0);
-            _offset = _offset + (_centeredOffset - _offset) * t;
-            if (_offset.abs() < 0.35) {
-              _startWobble(elapsed);
-            }
-          } else {
-            _velocity = max(70, _velocity * exp(-dt * 3.2));
-            _offset += _velocity * dt;
-            _recycleForward();
-          }
-        case _ReelPhase.wobble:
-          final t = (elapsed - _wobbleStart).inMicroseconds /
-              (_wobbleMs * 1000.0);
-          if (t >= 1) {
-            _finishSettle();
-          } else {
-            _wobbleOffset =
-                sin(t * pi * 2.8) * _wobbleAmplitude * (1 - t);
-          }
-        case _ReelPhase.idle:
-        case _ReelPhase.settled:
-          break;
-      }
-    });
-  }
-
-  bool _isPlaceholder(String text) => text.startsWith('---');
-
-  static const _cellTextStyle = TextStyle(
-    fontFamily: 'JetBrains Mono',
-    fontSize: 13,
-    fontWeight: FontWeight.w600,
-    color: Colors.white,
-    letterSpacing: -0.3,
-  );
-
-  BoxDecoration _cellDecoration(LabColors c) => BoxDecoration(
-        border: Border(
-          top: BorderSide(color: c.black33, width: 0.33),
-          bottom: BorderSide(color: c.black33, width: 0.33),
-        ),
-      );
-
-  Widget _buildCellContent(
-    LabColors c,
-    String text, {
-    bool placeholder = false,
-  }) {
-    return Container(
-      height: _reelCellHeight,
-      decoration: _cellDecoration(c),
-      child: Center(
-        child: placeholder
-            ? Container(
-                width: 24,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: c.white33,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              )
-            : Text(text, style: _cellTextStyle),
-      ),
-    );
-  }
-
-  Widget _buildReelBody(LabColors c) {
-    // [_offset] == 0 → cell 0 centred in the 88px disk (16px inset top/bottom).
-    return Transform.translate(
-      offset: Offset(0, _reelCellInset + _offset + _wobbleOffset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < _items.length; i++)
-            _buildCellContent(
-              c,
-              _items[i],
-              placeholder: _isPlaceholder(_items[i]),
-            ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
-
-    return SizedBox(
-      width: 64,
-      height: _diskHeight,
-      child: ColoredBox(
-        color: c.white16,
-        child: ClipRect(
-          child: _buildReelBody(c),
-        ),
-      ),
-    );
+    // 86–100%: roll past the stop, then wobble back to 1.0
+    final settleT = (t - 0.86) / 0.14;
+    final decay = pow(1 - settleT, 1.35);
+    final wobble = sin(settleT * pi * 1.1) * 0.24 * decay;
+    return 0.96 + 0.04 * settleT + wobble;
   }
 }
 
@@ -376,116 +79,194 @@ class SpinKeySlotMachine extends StatefulWidget {
     super.key,
     this.initialNsec,
     this.onNsecReady,
-    this.onSpinComplete,
-    this.completeDelay = const Duration(milliseconds: 1200),
+    this.onSettled,
+    this.revealFinale = false,
+    this.settleDelay = _defaultSettleDelay,
   });
 
-  /// When set, reels use this key (cosmetic spin only) instead of generating anew.
   final String? initialNsec;
-
-  /// Fired when a signing key exists (initial pregen or after [regenerateKey]).
   final void Function(String nsec)? onNsecReady;
 
-  final void Function(String nsec)? onSpinComplete;
-  final Duration completeDelay;
+  /// Fired after all reels stop and [settleDelay] has elapsed — parent can
+  /// switch the surrounding modal into its reveal state.
+  final void Function(String nsec)? onSettled;
+
+  /// When true the handle animates away and a border frames the disks.
+  final bool revealFinale;
+  final Duration settleDelay;
 
   @override
   State<SpinKeySlotMachine> createState() => SpinKeySlotMachineState();
 }
 
-/// [GlobalKey] target for [SpinKeySlotMachineState.regenerateKey].
 class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
-    with SingleTickerProviderStateMixin {
-  String _nsec = '';
-  List<String> _targetParts = _emptyParts();
-  bool _isSpinning = false;
-  int _spinEpoch = 0;
-  int _resetEpoch = 0;
+    with TickerProviderStateMixin {
+  static const _slotCount = 12;
 
-  // Handle drag
+  late final List<AnimationController> _controllers;
+  late final List<Animation<double>> _animations;
+
+  final List<String> _displayValues =
+      List.generate(_slotCount, _placeholderForSlot);
+  final List<List<String>> _spinSequences =
+      List.generate(_slotCount, (_) => <String>[]);
+
+  String _nsec = '';
+  List<String> _targetParts =
+      List.generate(_slotCount, _placeholderForSlot);
+
+  bool _isSpinning = false;
+  bool _hasSpun = false;
+  int _spinGeneration = 0;
   double _handleOffset = _handleMin;
   bool _isDragging = false;
+
   late final AnimationController _handleCtrl;
   late Animation<double> _handleAnim;
+  late final AnimationController _finaleCtrl;
+  late final Animation<double> _finaleAnim;
 
   @override
   void initState() {
     super.initState();
+    _controllers = List.generate(
+      _slotCount,
+      (_) => AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: _spinDurationMs),
+      ),
+    );
+    _animations = List.generate(
+      _slotCount,
+      (i) => Tween<double>(begin: 0, end: 1).animate(
+        CurvedAnimation(parent: _controllers[i], curve: _SlotSpinCurve()),
+      ),
+    );
     _handleCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
     _handleCtrl.addListener(() {
-      if (mounted) setState(() => _handleOffset = _handleAnim.value);
+      if (mounted && _handleCtrl.isAnimating) {
+        setState(() => _handleOffset = _handleAnim.value);
+      }
     });
+    _finaleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: _finaleAnimMs),
+    );
+    _finaleAnim = CurvedAnimation(
+      parent: _finaleCtrl,
+      curve: Curves.easeInOutCubic,
+    );
+    _finaleCtrl.addListener(() {
+      if (mounted) setState(() {});
+    });
+
     if (widget.initialNsec != null && widget.initialNsec!.isNotEmpty) {
-      _applyNsec(widget.initialNsec!, notify: true);
+      _applyNsec(widget.initialNsec!);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onNsecReady?.call(_nsec);
+      });
     } else {
-      _assignNewKey(notify: true);
+      final result = KeyGenerator.generate();
+      _applyNsec(result.nsec);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onNsecReady?.call(_nsec);
+      });
     }
   }
 
-  void _applyNsec(String nsec, {required bool notify}) {
+  void _applyNsec(String nsec) {
     _nsec = nsec;
     _targetParts = KeyGenerator.splitNsec(nsec);
-    if (notify) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        widget.onNsecReady?.call(nsec);
-      });
+    for (var i = 0; i < _slotCount; i++) {
+      _displayValues[i] = _placeholderForSlot(i);
+      _spinSequences[i] = [];
     }
   }
 
-  /// New key for PoW + signing; cosmetic reels reset to placeholders.
-  void regenerateKey() {
-    _assignNewKey(notify: true);
-    setState(() {
-      _isSpinning = false;
-      _resetEpoch++;
-    });
-  }
-
-  void _assignNewKey({required bool notify}) {
-    final result = KeyGenerator.generate();
-    _nsec = result.nsec;
-    _targetParts = result.parts;
-    if (notify) {
-      final nsec = _nsec;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        widget.onNsecReady?.call(nsec);
-      });
+  @override
+  void didUpdateWidget(SpinKeySlotMachine oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.revealFinale && !oldWidget.revealFinale) {
+      _finaleCtrl.forward();
     }
   }
 
   @override
   void dispose() {
+    _spinGeneration++;
+    for (final c in _controllers) {
+      c.stop();
+      c.dispose();
+    }
     _handleCtrl.dispose();
+    _finaleCtrl.dispose();
     super.dispose();
   }
 
   void _spin() {
-    if (_isSpinning) return;
-
+    if (_isSpinning || _hasSpun) return;
+    final generation = ++_spinGeneration;
     setState(() {
       _isSpinning = true;
-      _spinEpoch++;
+      _hasSpun = true;
     });
 
-    const totalMs = 2000 + 11 * 100 + _stopDurationMs + _wobbleMs;
-    Future.delayed(const Duration(milliseconds: totalMs), () {
-      if (!mounted) return;
-      setState(() => _isSpinning = false);
-      Future.delayed(widget.completeDelay, () {
-        if (mounted) widget.onSpinComplete?.call(_nsec);
+    var finished = 0;
+
+    for (var i = 0; i < _slotCount; i++) {
+      Future.delayed(Duration(milliseconds: i * _spinStaggerMs), () {
+        if (!mounted || generation != _spinGeneration || !_isSpinning) return;
+
+        final firstRandom = _randomChunkForSlot(i);
+        final sequence = <String>[
+          _displayValues[i],
+          firstRandom,
+          ...List<String>.generate(
+            _spinSequenceLength - 1,
+            (_) => _randomChunkForSlot(i),
+          ),
+          _targetParts[i],
+        ];
+
+        setState(() => _spinSequences[i] = sequence);
+
+        _controllers[i].duration =
+            const Duration(milliseconds: _spinDurationMs);
+        _controllers[i].reset();
+        _animations[i] = Tween<double>(
+          begin: 0,
+          end: (sequence.length - 1).toDouble(),
+        ).animate(
+          CurvedAnimation(
+            parent: _controllers[i],
+            curve: _SlotSpinCurve(),
+          ),
+        );
+
+        _controllers[i].forward().then((_) {
+          if (!mounted || generation != _spinGeneration) return;
+          setState(() {
+            _displayValues[i] = _targetParts[i];
+            _spinSequences[i] = [_targetParts[i]];
+          });
+          finished++;
+          if (finished >= _slotCount) {
+            setState(() => _isSpinning = false);
+            Future.delayed(widget.settleDelay, () {
+              if (!mounted || generation != _spinGeneration) return;
+              widget.onSettled?.call(_nsec);
+            });
+          }
+        });
       });
-    });
+    }
   }
 
-  // ── Handle drag ─────────────────────────────────────────────────────────────
-
   void _onDragUpdate(DragUpdateDetails d) {
-    if (!_isDragging || _isSpinning) return;
+    if (!_isDragging || _isSpinning || _hasSpun) return;
     setState(() {
       _handleOffset =
           (_handleOffset + d.delta.dy).clamp(_handleMin, _handleMax);
@@ -495,7 +276,7 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
   void _onDragEnd(DragEndDetails _) {
     if (!_isDragging) return;
     setState(() => _isDragging = false);
-    if (_handleOffset > _centerY + 30) _spin();
+    if (_handleOffset > _handleCenterY + 24) _spin();
     _animateHandleBack();
   }
 
@@ -511,21 +292,171 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
       ..forward();
   }
 
-  // ── Build helpers ───────────────────────────────────────────────────────────
+  double _fontSizeForSlot(int diskIndex) =>
+      _chunkSizeForSlot(diskIndex) <= 5 ? 13.0 : 12.0;
 
-  Widget _buildSlot(LabColors c, int index) {
-    final charLen = index < 9 ? 5 : 6;
-    return _SlotReel(
-      key: ValueKey('reel-$index-$_resetEpoch'),
-      charLen: charLen,
-      target: _targetParts[index],
-      spinEpoch: _spinEpoch,
-      spinDelayMs: index * 100,
-      resetEpoch: _resetEpoch,
+  Widget _buildCell(LabColors c, int diskIndex, String text) {
+    final isPlaceholder = RegExp(r'^-+$').hasMatch(text);
+    return SizedBox(
+      width: _diskWidth,
+      height: _cellHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: c.black33, width: 0.33),
+            bottom: BorderSide(color: c.black33, width: 0.33),
+          ),
+        ),
+        child: Center(
+          child: isPlaceholder
+              ? Container(
+                  width: 24,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: c.white33,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      text,
+                      style: TextStyle(
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: _fontSizeForSlot(diskIndex),
+                        fontWeight: FontWeight.w600,
+                        color: c.white,
+                        letterSpacing: -0.3,
+                        height: 1.15,
+                      ),
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+        ),
+      ),
     );
   }
 
-  Widget _buildRow(LabColors c, int rowIndex) {
+  String _textAt(int diskIndex, int sequenceIndex) {
+    final seq = _spinSequences[diskIndex];
+    if (seq.isEmpty) return _displayValues[diskIndex];
+    if (sequenceIndex < 0) {
+      // Above the resting index: show the first random entering from the top,
+      // not the placeholder clamped to seq.first.
+      return seq.length > 1 ? seq[1] : seq.first;
+    }
+    if (sequenceIndex >= seq.length) return seq.last;
+    return seq[sequenceIndex];
+  }
+
+  /// Fade + squash symbols as they move away from the reel center — mimics a
+  /// curved drum receding in Z.
+  Widget _buildPositionedCell(
+    LabColors c,
+    int diskIndex,
+    String text,
+    double top,
+  ) {
+    final diskCenterY = _diskHeight / 2;
+    final cellCenterY = top + _cellHeight / 2;
+    final dist = (cellCenterY - diskCenterY).abs();
+    final t = (dist / _cellHeight).clamp(0.0, 1.0);
+    final opacity = _nsecTextOpacity * (1 - 0.72 * t);
+    final scaleY = 1.0 - 0.32 * t;
+    final pushTowardCenter =
+        cellCenterY < diskCenterY ? 4.0 * t : -4.0 * t;
+
+    return Positioned(
+      top: top + pushTowardCenter,
+      left: 0,
+      right: 0,
+      child: Opacity(
+        opacity: opacity,
+        child: Transform.scale(
+          scaleY: scaleY,
+          alignment: Alignment.center,
+          child: _buildCell(c, diskIndex, text),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDisk(LabColors c, int diskIndex) {
+    return SizedBox(
+      width: _diskWidth,
+      height: _diskHeight,
+      child: ColoredBox(
+        color: c.white16,
+        child: ClipRect(
+          child: AnimatedBuilder(
+            animation: _animations[diskIndex],
+            builder: (context, _) {
+              final controller = _controllers[diskIndex];
+              final seq = _spinSequences[diskIndex];
+
+              if (seq.isEmpty || (seq.length <= 1 && !controller.isAnimating)) {
+                final text = _displayValues[diskIndex];
+                const offset = _cellInset;
+                return Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    _buildPositionedCell(
+                      c,
+                      diskIndex,
+                      text,
+                      offset - _cellHeight,
+                    ),
+                    _buildPositionedCell(c, diskIndex, text, offset),
+                    _buildPositionedCell(
+                      c,
+                      diskIndex,
+                      text,
+                      offset + _cellHeight,
+                    ),
+                  ],
+                );
+              }
+
+              final value = _animations[diskIndex].value;
+              final currentIndex = value.floor();
+              // Positive scroll: symbols enter from above, exit below.
+              final offset = (value % 1.0) * _cellHeight + _cellInset;
+
+              return Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  _buildPositionedCell(
+                    c,
+                    diskIndex,
+                    _textAt(diskIndex, currentIndex - 1),
+                    offset - _cellHeight,
+                  ),
+                  _buildPositionedCell(
+                    c,
+                    diskIndex,
+                    _textAt(diskIndex, currentIndex),
+                    offset,
+                  ),
+                  _buildPositionedCell(
+                    c,
+                    diskIndex,
+                    _textAt(diskIndex, currentIndex + 1),
+                    offset + _cellHeight,
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiskRow(LabColors c, int rowIndex) {
     return Container(
       height: _diskHeight,
       decoration: BoxDecoration(
@@ -537,15 +468,16 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
       child: Stack(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(width: 8),
-              _buildSlot(c, rowIndex * 4 + 0),
+              _buildDisk(c, rowIndex * 4 + 0),
               const SizedBox(width: 4),
-              _buildSlot(c, rowIndex * 4 + 1),
+              _buildDisk(c, rowIndex * 4 + 1),
               const SizedBox(width: 4),
-              _buildSlot(c, rowIndex * 4 + 2),
+              _buildDisk(c, rowIndex * 4 + 2),
               const SizedBox(width: 4),
-              _buildSlot(c, rowIndex * 4 + 3),
+              _buildDisk(c, rowIndex * 4 + 3),
               const SizedBox(width: 8),
             ],
           ),
@@ -553,8 +485,8 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
             top: 0,
             left: 0,
             right: 0,
-            height: 32,
-            child: Container(
+            height: 28,
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -573,8 +505,8 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
             bottom: 0,
             left: 0,
             right: 0,
-            height: 32,
-            child: Container(
+            height: 28,
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
@@ -595,15 +527,34 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
   }
 
   Widget _buildHandle(LabColors c) {
-    final isBottomHalf = _handleOffset > _centerY;
-    final distFromCenter = (_handleOffset - _centerY).abs();
-    final maxDist = _centerY - _handleMin;
-    final circleProgress = 1.0 - (distFromCenter / maxDist).clamp(0.0, 1.0);
-    final circleSize = 44.0 + 6.0 * circleProgress;
-    final circleSizeOffset = (circleSize - 44.0) / 2;
+    const baseCircleSize = 44.0;
+    const circleGrowth = 6.0;
+    final handleBarLength = _totalHeight / 2 - 40;
 
-    final barHeight = (_handleOffset - _centerY).abs();
-    final barTop = isBottomHalf ? _centerY : _handleOffset;
+    final isBottomHalf = _handleOffset > _handleCenterY;
+    final progress = isBottomHalf
+        ? (_handleOffset - _handleCenterY) / (_handleMax - _handleCenterY)
+        : (_handleOffset - _handleMin) / (_handleCenterY - _handleMin);
+
+    final distanceFromCenter = (_handleOffset - _handleCenterY).abs();
+    final maxDistanceFromCenter = _handleCenterY - _handleMin;
+    final circleProgress =
+        1.0 - (distanceFromCenter / maxDistanceFromCenter).clamp(0.0, 1.0);
+    final circleSize = baseCircleSize + circleGrowth * circleProgress;
+    final circleSizeOffset = (circleSize - baseCircleSize) / 2;
+
+    double barHeight;
+    double barTop;
+    var isFlipped = false;
+
+    if (isBottomHalf) {
+      barHeight = handleBarLength * progress;
+      barTop = _handleCenterY + (256 - _handleCenterY) * progress;
+      isFlipped = true;
+    } else {
+      barHeight = handleBarLength * (1 - progress);
+      barTop = 40 + (_handleCenterY - 40) * progress;
+    }
 
     return SizedBox(
       width: 48,
@@ -616,7 +567,7 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
             top: _slotTop,
             child: Container(
               width: 32,
-              height: _diskHeight,
+              height: _slotHeight,
               decoration: BoxDecoration(
                 color: const Color(0x88000000),
                 borderRadius: BorderRadius.circular(16),
@@ -624,44 +575,44 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
               ),
             ),
           ),
-          if (barHeight > 2)
+          if (barHeight > 0)
             Positioned(
               left: 16,
               top: barTop,
-              child: ShaderMask(
-                shaderCallback: (bounds) => LinearGradient(
-                  begin: isBottomHalf
-                      ? Alignment.bottomCenter
-                      : Alignment.topCenter,
-                  end: isBottomHalf
-                      ? Alignment.topCenter
-                      : Alignment.bottomCenter,
-                  colors: const [
-                    Colors.white,
-                    Color(0xFF232323),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.5, 0.66, 1.0],
-                ).createShader(bounds),
-                blendMode: BlendMode.dstIn,
-                child: Container(
-                  width: 16,
-                  height: barHeight,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF9696A3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+              child: Transform.scale(
+                scaleY: isFlipped ? -1 : 1,
+                alignment: Alignment.topCenter,
+                child: ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFFFFFFF),
+                      Color(0xFF232323),
+                      Color(0x00000000),
+                    ],
+                    stops: [0.5, 0.66, 1],
+                  ).createShader(bounds),
+                  blendMode: BlendMode.dstIn,
                   child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Colors.transparent,
-                          Color(0x1A000000),
-                          Color(0x0D000000),
-                        ],
-                        stops: [0.33, 0.80, 1.0],
+                    width: 16,
+                    height: barHeight,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9696A3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            Colors.transparent,
+                            c.black16,
+                            c.black8,
+                          ],
+                          stops: const [0.33, 0.80, 1.0],
+                        ),
                       ),
                     ),
                   ),
@@ -672,8 +623,10 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
             left: 2 - circleSizeOffset,
             top: _handleOffset - circleSizeOffset,
             child: GestureDetector(
-              onVerticalDragStart: (_) =>
-                  setState(() => _isDragging = true),
+              onVerticalDragStart: (_) {
+                if (_hasSpun) return;
+                setState(() => _isDragging = true);
+              },
               onVerticalDragUpdate: _onDragUpdate,
               onVerticalDragEnd: _onDragEnd,
               child: Container(
@@ -690,8 +643,8 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
                     ),
                   ],
                 ),
-                child: Container(
-                  decoration: const BoxDecoration(
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       center: Alignment(-0.6, -0.6),
@@ -708,26 +661,57 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
     );
   }
 
+  Widget _buildDiskGrid(LabColors c) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildDiskRow(c, 0),
+        const SizedBox(height: _rowGap),
+        _buildDiskRow(c, 1),
+        const SizedBox(height: _rowGap),
+        _buildDiskRow(c, 2),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
+    final finaleT = _finaleAnim.value;
+    final handleWidth = 48.0 * (1 - finaleT);
+    final handleGap = 16.0 * (1 - finaleT);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildRow(c, 0),
-            const SizedBox(height: 16),
-            _buildRow(c, 1),
-            const SizedBox(height: 16),
-            _buildRow(c, 2),
-          ],
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: c.white16.withValues(alpha: finaleT),
+              width: LabStroke.thin,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(10 * finaleT),
+            child: _buildDiskGrid(c),
+          ),
         ),
-        const SizedBox(width: 16),
-        _buildHandle(c),
+        SizedBox(width: handleGap),
+        ClipRect(
+          child: SizedBox(
+            width: handleWidth,
+            height: _totalHeight,
+            child: Opacity(
+              opacity: (1 - finaleT).clamp(0.0, 1.0),
+              child: IgnorePointer(
+                ignoring: _hasSpun || finaleT > 0.01,
+                child: _buildHandle(c),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }

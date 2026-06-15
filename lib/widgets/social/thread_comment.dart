@@ -23,6 +23,7 @@ class ThreadComment extends StatelessWidget {
     required this.content,
     this.timestamp,
     this.showAvatar = true,
+    this.onAuthorTap,
     this.headerActions,
   });
 
@@ -33,6 +34,8 @@ class ThreadComment extends StatelessWidget {
 
   /// When false, avatar is rendered on the thread left rail instead.
   final bool showAvatar;
+
+  final VoidCallback? onAuthorTap;
 
   /// Trailing actions on the author row (e.g. options ⋯ on root comment).
   final Widget? headerActions;
@@ -69,7 +72,11 @@ class ThreadComment extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (showAvatar) ...[
-                ProfilePic(profile: profile, pubkey: pubkey, size: 36),
+                GestureDetector(
+                  onTap: onAuthorTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: ProfilePic(profile: profile, pubkey: pubkey, size: 36),
+                ),
                 const SizedBox(width: 12),
               ],
               Expanded(
@@ -80,11 +87,16 @@ class ThreadComment extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Flexible(
-                            child: Text(
-                              displayName,
-                              style: LabTextStyles.semibold15.copyWith(color: nameColor),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
+                            child: GestureDetector(
+                              onTap: onAuthorTap,
+                              behavior: HitTestBehavior.opaque,
+                              child: Text(
+                                displayName,
+                                style: LabTextStyles.semibold15
+                                    .copyWith(color: nameColor),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
                             ),
                           ),
                           if (timestamp != null) ...[

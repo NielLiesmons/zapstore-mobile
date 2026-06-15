@@ -1,22 +1,26 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:zapstore/widgets/common/stack_link_card.dart';
+import 'package:zapstore/providers/comment_activity_feed_provider.dart';
+import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/extensions.dart';
-import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
-import '../theme.dart';
-import '../widgets/common/note_parser.dart';
-import '../widgets/common/profile_identity_row.dart';
-import '../widgets/app_card.dart';
-import '../widgets/zap_widgets.dart';
-import '../widgets/common/top_scroll_fader.dart';
+import 'package:zapstore/widgets/common/detail_page_chrome.dart';
+import 'package:zapstore/widgets/common/note_parser.dart';
+import 'package:zapstore/widgets/common/profile_pic.dart';
+import 'package:zapstore/widgets/common/relay_loading_bar.dart';
+import 'package:zapstore/widgets/common/section_header.dart';
+import 'package:zapstore/widgets/common/top_scroll_fader.dart';
+import 'package:zapstore/widgets/profile/profile_browse_rows.dart';
+import 'package:zapstore/widgets/community/comment_activity_feed.dart';
+import 'package:zapstore/widgets/community/comment_card.dart';
+import 'package:zapstore/widgets/community/lazy_mount_on_scroll.dart';
+import 'package:zapstore/widgets/social/details_tab.dart';
+import 'package:zapstore/widgets/zap_widgets.dart';
 
-/// User profile screen - shows any user/developer profile
+/// Public profile — layout mirrors app/stack/forum detail pages + webapp profile.
 class UserScreen extends HookConsumerWidget {
   const UserScreen({super.key, required this.pubkey});
 
@@ -26,9 +30,7 @@ class UserScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scrollController = useScrollController();
     final topPad = MediaQuery.paddingOf(context).top;
-    final headerHeight = topPad + 48.0;
 
-    // Load user profile
     final profileState = ref.watch(
       query<Profile>(
         authors: {pubkey},
@@ -40,8 +42,8 @@ class UserScreen extends HookConsumerWidget {
       ),
     );
     final profile = profileState.models.firstOrNull;
+    final profileLoading = profileState is StorageLoading && profile == null;
 
-    // Query user's apps
     final userAppsState = ref.watch(
       query<App>(
         authors: {pubkey},
@@ -63,12 +65,10 @@ class UserScreen extends HookConsumerWidget {
       ),
     );
 
-    // For trusted relay pubkeys, only show Zapstore's own apps (not relay-signed ones)
     final apps = kTrustedRelayPubkeys.contains(pubkey)
         ? userAppsState.models.where((a) => a.isZapstoreApp).toList()
         : userAppsState.models;
 
-    // Query user's app stacks
     final appStacksState = ref.watch(
       query<AppStack>(
         authors: {pubkey},
@@ -87,82 +87,103 @@ class UserScreen extends HookConsumerWidget {
     final stacks = appStacksState.models.toList()
       ..sort((a, b) => b.event.createdAt.compareTo(a.event.createdAt));
 
+    final displayName = profile?.name?.trim().isNotEmpty == true
+        ? profile!.name!.trim()
+        : detailShortPubkey(pubkey);
+
+    final activityState = ref.watch(profileActivityCommentsProvider(pubkey));
+    final activityVisible = ref.watch(profileActivityVisibleLimitProvider(pubkey));
+    final activitySyncing =
+        activityState is StorageLoading && activityState.models.isNotEmpty;
+
+    final npub = Utils.encodeShareableFromString(pubkey, type: 'npub');
+
     return Scaffold(
       body: Stack(
         children: [
-          // ── Full-body scrollable content (behind the floating header) ─────
           Positioned.fill(
             child: TopScrollFader(
               scrollController: scrollController,
-              fadeStart: headerHeight,
+              fadeHeight: 48,
+              safeEdgeFades: true,
               child: SingleChildScrollView(
                 controller: scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(
-                  top: headerHeight + 10,
-                  bottom: MediaQuery.paddingOf(context).bottom + 32,
+                  top: topPad + 8,
+                  bottom: MediaQuery.paddingOf(context).bottom + 24,
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Header with avatar and name
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: _UserHeader(
+                    DetailAuthorMetaRow(
+                      leading: ProfilePic(
                         profile: profile,
                         pubkey: pubkey,
-                        isLoading:
-                            profileState is StorageLoading && profile == null,
+                        size: kDetailAuthorAvatarSize,
                       ),
+                      title: displayName,
                     ),
 
-                    // Zaps widget
-                    _UserZapsList(apps: apps),
+                    if (profile?.about?.trim().isNotEmpty == true)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                        child: _ProfileAbout(about: profile!.about!),
+                      ),
 
-                    // Bio section with max height
-                    if (profile?.about != null && profile!.about!.isNotEmpty)
-                      _UserBio(profile: profile),
-
-                    // Apps section - only show if apps exist
                     if (apps.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                        child: Text(
-                          'Published Apps',
-                          style: context.textTheme.titleLarge,
-                        ),
-                      ),
-                      ...apps.map((app) => AppCard(app: app, showSignedBy: false)),
+                      _UserZapsList(apps: apps),
+                      ProfileAppsBrowseRow(apps: apps),
                     ],
 
-                    // App stacks section - only show if stacks exist
-                    if (stacks.isNotEmpty) ...[
+                    if (stacks.isNotEmpty)
+                      ProfileStacksBrowseRow(stacks: stacks),
+
+                    const SectionHeader(title: 'Activity'),
+                    if (activitySyncing)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
-                        child: Text(
-                          'App Stacks',
-                          style: context.textTheme.headlineMedium,
-                        ),
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: RelayLoadingBar(loading: activitySyncing),
                       ),
-                      ...stacks.map(
-                        (stack) => Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: StackLinkCard(stack: stack),
-                        ),
+
+                    LazyMountOnScroll(
+                      scrollController: scrollController,
+                      mountOffset: 320,
+                      placeholder: const CommentCardSkeletonList(rowCount: 3),
+                      child: CommentActivityFeed(
+                        scrollController: scrollController,
+                        commentsState: activityState,
+                        visibleLimit: activityVisible,
+                        emptyMessage: profileLoading
+                            ? 'Loading activity…'
+                            : 'No activity yet',
+                        onLoadMore: () => ref
+                            .read(
+                              profileActivityVisibleLimitProvider(pubkey).notifier,
+                            )
+                            .update(
+                              (v) => v + kActivityFeedVisibleStep > kActivityFeedMaxVisible
+                                  ? kActivityFeedMaxVisible
+                                  : v + kActivityFeedVisibleStep,
+                            ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
             ),
           ),
 
-          // ── Floating blurred header (on top) ──────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _UserDetailHeader(pubkey: pubkey),
+          DetailActionsButtonOverlay(
+            onTap: () => _showProfileActions(
+              context,
+              displayName: displayName,
+              npub: npub,
+              pubkey: pubkey,
+              profile: profile,
+            ),
+            scrollController: scrollController,
+            expandLabel: displayName,
           ),
         ],
       ),
@@ -170,111 +191,134 @@ class UserScreen extends HookConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Floating blurred detail header
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _UserDetailHeader extends StatelessWidget {
-  const _UserDetailHeader({required this.pubkey});
-
-  final String pubkey;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
-    final topPad = MediaQuery.paddingOf(context).top;
-
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          color: c.black.withValues(alpha: 0.85),
+void _showProfileActions(
+  BuildContext context, {
+  required String displayName,
+  required String npub,
+  required String pubkey,
+  required Profile? profile,
+}) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      final c = Theme.of(ctx).extension<LabColors>()!;
+      return Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        decoration: BoxDecoration(
+          color: c.gray66,
+          borderRadius: BorderRadius.circular(16),
+          border: LabBorder.all(color: c.white16),
+        ),
+        child: SafeArea(
+          top: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(height: topPad + 9),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 9),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Profile',
-                        style: LabTextStyles.semibold23.copyWith(color: c.white),
-                      ),
-                    ),
-
-                    // Share button
-                    GestureDetector(
-                      onTap: () {
-                        final npub = Utils.encodeShareableFromString(
-                          pubkey,
-                          type: 'npub',
-                        );
-                        SharePlus.instance
-                            .share(ShareParams(text: 'nostr:$npub'));
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: c.gray33,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Center(
-                          child: LabIcon(
-                            LabIcons.shareFill,
-                            size: 14,
-                            color: c.white33,
+              ListTile(
+                title: Text('Share profile', style: LabTextStyles.med15),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  SharePlus.instance.share(ShareParams(text: 'nostr:$npub'));
+                },
+              ),
+              ListTile(
+                title: Text('Details', style: LabTextStyles.med15),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => DraggableScrollableSheet(
+                      initialChildSize: 0.6,
+                      minChildSize: 0.4,
+                      maxChildSize: 0.92,
+                      builder: (context, scrollController) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: c.black,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            ),
                           ),
-                        ),
-                      ),
+                          child: SingleChildScrollView(
+                            controller: scrollController,
+                            padding: const EdgeInsets.all(14),
+                            child: DetailsTab(
+                              publicationLabel: 'Profile',
+                              npub: npub,
+                              pubkey: pubkey,
+                              rawData: profile?.event.content,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
+    },
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Profile identity row (avatar + name + npub)
-// ─────────────────────────────────────────────────────────────────────────────
+class _ProfileAbout extends HookWidget {
+  const _ProfileAbout({required this.about});
 
-class _UserHeader extends StatelessWidget {
-  const _UserHeader({
-    required this.profile,
-    required this.pubkey,
-    this.isLoading = false,
-  });
-
-  final Profile? profile;
-  final String pubkey;
-  final bool isLoading;
+  final String about;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ProfileIdentityRow(
-        pubkey: pubkey,
-        profile: profile,
-        isLoading: isLoading,
-        avatarRadius: 40,
+    final expanded = useState(false);
+    const maxLines = 5;
+
+    final content = NoteParser.parse(
+      context,
+      about,
+      textStyle: LabTextStyles.reg15.copyWith(
+        color: Theme.of(context).extension<LabColors>()!.white66,
+        height: 1.5,
       ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AnimatedCrossFade(
+          firstChild: Text(
+            about,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: LabTextStyles.reg15.copyWith(
+              color: Theme.of(context).extension<LabColors>()!.white66,
+              height: 1.5,
+            ),
+          ),
+          secondChild: DefaultTextStyle(
+            style: LabTextStyles.reg15.copyWith(
+              color: Theme.of(context).extension<LabColors>()!.white66,
+              height: 1.5,
+            ),
+            child: content,
+          ),
+          crossFadeState: expanded.value
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 200),
+        ),
+        if (!expanded.value && about.length > 180)
+          TextButton(
+            onPressed: () => expanded.value = true,
+            child: const Text('Read more'),
+          ),
+      ],
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Zaps list
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _UserZapsList extends HookConsumerWidget {
   const _UserZapsList({required this.apps});
@@ -283,12 +327,8 @@ class _UserZapsList extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Don't query zaps if user has no apps
-    if (apps.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (apps.isEmpty) return const SizedBox.shrink();
 
-    // Collect addressable tags for apps and metadata IDs
     final allAppTags = <String, Set<String>>{};
     final metadataIds = <String>{};
     for (final app in apps) {
@@ -297,12 +337,9 @@ class _UserZapsList extends HookConsumerWidget {
         allAppTags[entry.key] = {...?allAppTags[entry.key], ...entry.value};
       }
       final metadata = app.installable;
-      if (metadata != null) {
-        metadataIds.add(metadata.id);
-      }
+      if (metadata != null) metadataIds.add(metadata.id);
     }
 
-    // Query zaps on apps (via #a tag)
     final appZapsState = ref.watch(
       query<Zap>(
         tags: allAppTags,
@@ -311,7 +348,6 @@ class _UserZapsList extends HookConsumerWidget {
       ),
     );
 
-    // Query zaps on metadata (via #e tag) - for legacy compatibility
     final metadataZapsState = metadataIds.isNotEmpty
         ? ref.watch(
             query<Zap>(
@@ -322,26 +358,19 @@ class _UserZapsList extends HookConsumerWidget {
           )
         : null;
 
-    // Combine zaps from both queries
     final allZaps = {
       ...appZapsState.models,
       if (metadataZapsState != null) ...metadataZapsState.models,
     };
 
-    if (allZaps.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (allZaps.isEmpty) return const SizedBox.shrink();
 
-    // Collect zapper pubkeys from metadata (already extracted from description tag)
     final zapperPubkeys = <String>{};
     for (final zap in allZaps) {
       final zapperPubkey = zap.event.metadata['author'] as String?;
-      if (zapperPubkey != null) {
-        zapperPubkeys.add(zapperPubkey);
-      }
+      if (zapperPubkey != null) zapperPubkeys.add(zapperPubkey);
     }
 
-    // Query profiles separately with cachedFor
     final profilesState = ref.watch(
       query<Profile>(
         authors: zapperPubkeys,
@@ -355,115 +384,10 @@ class _UserZapsList extends HookConsumerWidget {
     final profilesMap = {for (final p in profilesState.models) p.pubkey: p};
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
       child: ZappersHorizontalList(
         zaps: allZaps.toList(),
         profilesMap: profilesMap,
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Bio section
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _UserBio extends HookWidget {
-  const _UserBio({required this.profile});
-
-  final Profile profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final expanded = useState(false);
-    const maxHeight = 120.0;
-
-    bool isLikelyLong(String text) {
-      final trimmed = text.trim();
-      if (trimmed.isEmpty) return false;
-
-      final wordCount = trimmed.split(RegExp(r'\s+')).length;
-      final newlineCount = '\n'.allMatches(trimmed).length;
-      final charCount = trimmed.length;
-
-      return wordCount > 50 || newlineCount > 4 || charCount > 350;
-    }
-
-    final about = profile.about ?? '';
-    final shouldCollapse = !expanded.value && isLikelyLong(about);
-
-    final bioContent = NoteParser.parse(
-      context,
-      about,
-      textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        height: 1.5,
-        color: LabColors.darkOnSurfaceSecondary,
-      ),
-      linkStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        height: 1.5,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-      onNostrEntity: (entity) => NostrEntityWidget(
-        entity: entity,
-        colorPair: [
-          Theme.of(context).colorScheme.primary,
-          Theme.of(context).colorScheme.secondary,
-        ],
-      ),
-    );
-
-    if (!shouldCollapse) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        child: bioContent,
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: maxHeight),
-            child: ShaderMask(
-              shaderCallback: (Rect bounds) {
-                return const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.white, Colors.white, Colors.transparent],
-                  stops: [0.0, 0.7, 1.0],
-                ).createShader(bounds);
-              },
-              blendMode: BlendMode.dstIn,
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                child: bioContent,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.08),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () => expanded.value = true,
-              child: Text(
-                'Read more',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

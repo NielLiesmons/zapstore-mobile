@@ -8,7 +8,7 @@ import 'package:zapstore/utils/url_utils.dart';
 import 'package:zapstore/widgets/common/app_pic.dart';
 
 /// Compact app card matching webapp's AppSmallCard.svelte:
-/// 56px icon + name (bold16) + 1-line description (reg12, white66).
+/// 56px icon + name (semibold17) + 1-line description (reg13).
 /// Used in the horizontal "Latest Apps" scroll on the discover page.
 class AppSmallCard extends StatelessWidget {
   const AppSmallCard({super.key, required this.app});
@@ -31,9 +31,6 @@ class AppSmallCard extends StatelessWidget {
       ),
       behavior: HitTestBehavior.opaque,
       child: Row(
-        // start-align so the icon sits flush at y=0 of its slot — no centering
-        // gap above it that would make the section-header→first-card spacing
-        // look larger than in the stacks row.
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppPic(
@@ -44,30 +41,27 @@ class AppSmallCard extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(
-            // 56px = exact icon height → text is centered against the icon,
-            // not against the taller card slot.
-            child: SizedBox(
-              height: 56,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
               child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  app.name ?? app.identifier,
-                  style: LabTextStyles.semibold17.copyWith(color: c.white),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (description.isNotEmpty) ...[
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    app.name ?? app.identifier,
+                    style: LabTextStyles.semibold17.copyWith(color: c.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
                   Text(
-                    description,
-                    style: LabTextStyles.reg13.copyWith(color: c.white66),
+                    description.isNotEmpty ? description : 'No description',
+                    style: LabTextStyles.reg13.copyWith(
+                      color: description.isNotEmpty ? c.white66 : c.white33,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-              ],
               ),
             ),
           ),

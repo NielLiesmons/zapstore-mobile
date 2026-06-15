@@ -23,7 +23,7 @@ import 'package:zapstore/widgets/zap_widgets.dart';
 // Step 1  slider    circular arc amount picker + .input-container
 //                   (amount row + divider + NostrComposer with send button)
 // Step 2  invoice   QR code + copy link + back + waiting/done button
-// Step 3  success   blurple circle + "Zap Sent!" + sats amount
+// Step 3  success   blurple circle + success message + sats amount
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum _ZapStep { slider, invoice, success }
@@ -149,7 +149,7 @@ class _ZapSliderContent extends HookConsumerWidget {
               child: Column(
                 children: [
                   Text(
-                    'Zap',
+                    'Tip',
                     style: LabTextStyles.semibold23.copyWith(color: c.white),
                     textAlign: TextAlign.center,
                   ),
@@ -363,12 +363,12 @@ class _ZapSliderContent extends HookConsumerWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Zap Sent!',
+            'Success',
             style: LabTextStyles.semibold23.copyWith(color: c.blurpleColor),
           ),
           const SizedBox(height: 8),
           Text(
-            'Zapped ${formatSatsWithSeparators(amount.value.round())} ⚡ successfully',
+            '${formatSatsWithSeparators(amount.value.round())} sats tipped',
             style: LabTextStyles.reg15.copyWith(color: c.white66),
           ),
         ],

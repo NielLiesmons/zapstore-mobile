@@ -38,7 +38,7 @@ Widget _tallBubble(LabColors c) {
           SizedBox(height: 4),
           Text(
             'A taller inbox bubble with enough body copy to exceed the '
-            '34px avatar column and verify ForumPostCard-style intrinsic row.',
+            '34px avatar column and verify split-row intrinsic layout.',
           ),
         ],
       ),
@@ -46,69 +46,71 @@ Widget _tallBubble(LabColors c) {
   );
 }
 
-/// Mirrors [CommentCard]: [IntrinsicHeight] + stretch [Row] + left [Stack] rail.
+/// Mirrors [CommentCard]: badge row + [IntrinsicHeight] avatar/bubble row.
 Widget _inboxStyleCard(LabColors c) {
-  return IntrinsicHeight(
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: kCommentCardLeftColWidth,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Align(
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  height: kCommentCardBadgeSize,
-                  child: Center(
-                    child: Container(
-                      width: kCommentCardBadgeSize,
-                      height: kCommentCardBadgeSize,
-                      color: c.white8,
-                    ),
-                  ),
-                ),
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          SizedBox(
+            width: kCommentCardLeftColWidth,
+            height: kCommentCardBadgeSize,
+            child: Center(
+              child: Container(
+                width: kCommentCardBadgeSize,
+                height: kCommentCardBadgeSize,
+                color: c.white8,
               ),
-              Positioned(
-                top: kCommentCardBadgeSize,
-                bottom: kCommentCardAvatarSize,
-                left: (kCommentCardLeftColWidth - 2) / 2,
-                width: 2,
-                child: ColoredBox(color: c.white16),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: kCommentCardAvatarSize,
-                child: const Center(child: CircleAvatar(radius: 17)),
-              ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: kCommentCardColGap),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: kCommentCardBadgeSize),
-              const SizedBox(height: 4),
-              BubbleSwiper(
+          const SizedBox(width: kCommentCardColGap),
+          const Expanded(
+            child: SizedBox(height: kCommentCardBadgeSize),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: kCommentCardLeftColWidth,
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 0,
+                    bottom: kCommentCardAvatarSize,
+                    left: (kCommentCardLeftColWidth - 2) / 2,
+                    width: 2,
+                    child: ColoredBox(color: Colors.grey),
+                  ),
+                  const Align(
+                    alignment: Alignment.bottomCenter,
+                    child: CircleAvatar(radius: 17),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: kCommentCardColGap),
+            Expanded(
+              child: BubbleSwiper(
                 c: c,
                 replyIconInset: 8,
                 child: _tallBubble(c),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
-    ),
+      ),
+    ],
   );
 }
 
 void main() {
-  testWidgets('CommentCard intrinsic row in ListView', (tester) async {
+  testWidgets('CommentCard split intrinsic row in ListView', (tester) async {
     final c = LabColors.dark();
     final errors = await _pump(tester, _inboxStyleCard(c));
 

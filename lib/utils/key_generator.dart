@@ -27,11 +27,18 @@ class KeyGenerator {
   /// Matches webapp splitNsecIntoParts logic:
   ///   slots 0–8 → 5 chars each, slots 9–11 → 6 chars each.
   static List<String> splitNsec(String nsec) {
+    final upper = nsec.toUpperCase();
     final parts = <String>[];
-    int pos = 0;
-    for (int i = 0; i < 12; i++) {
+    var pos = 0;
+    for (var i = 0; i < 12; i++) {
       final size = i < 9 ? 5 : 6;
-      parts.add(nsec.substring(pos, pos + size).toUpperCase());
+      final end = min(pos + size, upper.length);
+      if (pos >= upper.length) {
+        parts.add('-' * size);
+      } else {
+        final chunk = upper.substring(pos, end);
+        parts.add(chunk.padRight(size, '-'));
+      }
       pos += size;
     }
     return parts;

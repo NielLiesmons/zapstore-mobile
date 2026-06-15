@@ -10,7 +10,7 @@ const double kSocialTabsSectionGap = 14;
 
 /// Tabbed feed interface matching webapp's SocialTabs.svelte exactly.
 ///
-/// Tabs: Comments · Zaps · Labels · Details (each a pill button).
+/// Tabs: Comments · Tips · Labels · Details (each a pill button).
 /// Tab row is a horizontally scrollable [Row] of [LabButton.tab] widgets —
 /// selected tab uses blurple66 gradient, unselected uses gray66.
 ///
@@ -41,7 +41,7 @@ class SocialTabs extends StatefulWidget {
   /// True while relay catch-up runs after local data is already shown.
   final bool commentsSyncing;
 
-  /// Total sats received — shown with ⚡ in the Zaps tab button.
+  /// Total sats received — shown with ⚡ in the Tips tab button.
   final int? zapAmount;
   final bool zapsLoading;
 
@@ -217,7 +217,7 @@ class _TabLabel extends StatelessWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Zaps', style: textStyle),
+            Text('Tips', style: textStyle),
             if (zapsLoading) ...[
               const SizedBox(width: 6),
               SizedBox(

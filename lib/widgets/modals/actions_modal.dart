@@ -20,8 +20,6 @@ const _kHandoffComment = 'actions-handoff-comment';
 /// Content kinds supported by [showActionsModal] — mirrors webapp ActionsModal.
 enum ActionsContentType { comment, zap, app, stack, forum }
 
-const _kZapPresets = [1000, 2000, 5000, 10000, 25000, 50000, 100000];
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Unified actions sheet — port of webapp `ActionsModal.svelte`.
@@ -123,13 +121,15 @@ Future<void> showCommentActionsModal(
   final type = contentType ??
       (zap != null
           ? ActionsContentType.zap
-          : rootContext?.isApp == true
-              ? ActionsContentType.app
-              : rootContext?.isStack == true
-                  ? ActionsContentType.stack
-                  : rootContext?.isForum == true
-                      ? ActionsContentType.forum
-                      : ActionsContentType.comment);
+          : comment != null
+              ? ActionsContentType.comment
+              : rootContext?.isApp == true
+                  ? ActionsContentType.app
+                  : rootContext?.isStack == true
+                      ? ActionsContentType.stack
+                      : rootContext?.isForum == true
+                          ? ActionsContentType.forum
+                          : ActionsContentType.comment);
 
   return showActionsModal(
     context,
@@ -194,8 +194,10 @@ class _ActionsModalContentState extends ConsumerState<_ActionsModalContent> {
 
   bool get _showStacksSection => widget.contentType == ActionsContentType.app;
 
+  /// Catalog-only (app/stack/forum sheet). Never on comment/zap actions —
+  /// the quoted target already shows what we're acting on.
   bool get _showRootRow =>
-      _isCatalog && widget.rootContext != null;
+      _isCatalog && widget.rootContext != null && !_hasSocialTarget;
 
   void _chooseComment() {
     if (_isCatalog && widget.onCommentSubmit != null) {
@@ -236,16 +238,17 @@ class _ActionsModalContentState extends ConsumerState<_ActionsModalContent> {
   List<Widget> _buildMain(BuildContext context, LabColors c) {
     return [
       if (_showRootRow) ...[
+        const SizedBox(height: kModalInset),
         CommentModalRootRow(
           context_: widget.rootContext!,
           version: widget.version,
           showConnector: true,
         ),
-        const SizedBox(height: 4),
       ],
 
       // Comment CTA — quoted card (social) or plain button (catalog)
       if (_isCatalog || _hasSocialTarget) ...[
+        if (!_showRootRow) const SizedBox(height: kModalInset),
         if (_hasSocialTarget)
           _QuotedCommentCard(
             comment: widget.comment,
@@ -260,13 +263,6 @@ class _ActionsModalContentState extends ConsumerState<_ActionsModalContent> {
         const SizedBox(height: 10),
       ],
 
-      if (_hasSocialTarget) ...[
-        _EyebrowLabel(text: 'Zap', c: c),
-        const SizedBox(height: 8),
-        _ZapChipsRow(presets: _kZapPresets, c: c),
-        const SizedBox(height: 10),
-      ],
-
       if (_showStacksSection) ...[
         _EyebrowLabel(text: 'Add to stacks', c: c),
         const SizedBox(height: 8),
@@ -278,7 +274,6 @@ class _ActionsModalContentState extends ConsumerState<_ActionsModalContent> {
       const SizedBox(height: 8),
       _ActionsRow(
         onDetails: () => setState(() => _panel = _SubPanel.details),
-        onLabel: () => setState(() => _panel = _SubPanel.label),
         onShare: () => setState(() => _panel = _SubPanel.share),
         c: c,
       ),
@@ -495,98 +490,14 @@ class _EyebrowLabel extends StatelessWidget {
   }
 }
 
-class _ZapChipsRow extends StatelessWidget {
-  const _ZapChipsRow({required this.presets, required this.c});
-  final List<int> presets;
-  final LabColors c;
-
-  String _fmt(int n) {
-    if (n >= 1000000) return '${n ~/ 1000000}M';
-    if (n >= 1000) return '${n ~/ 1000}K';
-    return n.toString();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      decoration: BoxDecoration(
-        color: c.black33,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: presets.map((amt) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _ZapChip(label: _fmt(amt), c: c),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-          Container(
-            width: 32,
-            height: 36,
-            margin: const EdgeInsets.only(right: 6),
-            decoration: BoxDecoration(
-              color: c.white8,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: LabIcon(LabIcons.chevronDown, size: 14, color: c.white66),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ZapChip extends StatelessWidget {
-  const _ZapChip({required this.label, required this.c});
-  final String label;
-  final LabColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: c.white8,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          LabIcon(LabIcons.zap, size: 12, gradient: c.gold),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: LabTextStyles.semibold15.copyWith(color: c.white),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ActionsRow extends StatelessWidget {
   const _ActionsRow({
     required this.onDetails,
-    required this.onLabel,
     required this.onShare,
     required this.c,
   });
 
   final VoidCallback onDetails;
-  final VoidCallback onLabel;
   final VoidCallback onShare;
   final LabColors c;
 
@@ -598,13 +509,6 @@ class _ActionsRow extends StatelessWidget {
           icon: LabIcons.details,
           label: 'Details',
           onTap: onDetails,
-          c: c,
-        ),
-        const SizedBox(width: 12),
-        _ActionTile(
-          icon: LabIcons.label,
-          label: 'Label',
-          onTap: onLabel,
           c: c,
         ),
         const SizedBox(width: 12),
@@ -685,7 +589,7 @@ class _ReportButton extends StatelessWidget {
     final label = isCatalog
         ? 'Report'
         : isZap
-            ? 'Report this zap'
+            ? 'Report this tip'
             : 'Report this comment';
 
     return GestureDetector(

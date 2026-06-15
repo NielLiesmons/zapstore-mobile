@@ -108,13 +108,49 @@ class NoteParser {
   /// so the color reads clearly on dark backgrounds.
   /// Mirrors webapp's `hexToColor` + `getProfileTextColor` pipeline.
   static Color _pubkeyToMentionColor(String pubkey) {
-    if (pubkey.length < 6) return const Color(0xFF818CF8);
-    final r = int.parse(pubkey.substring(0, 2), radix: 16);
-    final g = int.parse(pubkey.substring(2, 4), radix: 16);
-    final b = int.parse(pubkey.substring(4, 6), radix: 16);
-    final base = Color.fromARGB(255, r, g, b);
-    final hsl = HSLColor.fromColor(base);
-    return hsl.withLightness(hsl.lightness.clamp(0.65, 0.85)).toColor();
+    if (pubkey.length < 6 ||
+        !RegExp(r'^[0-9a-fA-F]+$').hasMatch(pubkey.substring(0, 6))) {
+      return const Color(0xFF818CF8);
+    }
+    try {
+      final r = int.parse(pubkey.substring(0, 2), radix: 16);
+      final g = int.parse(pubkey.substring(2, 4), radix: 16);
+      final b = int.parse(pubkey.substring(4, 6), radix: 16);
+      final base = Color.fromARGB(255, r, g, b);
+      final hsl = HSLColor.fromColor(base);
+      return hsl.withLightness(hsl.lightness.clamp(0.65, 0.85)).toColor();
+    } catch (_) {
+      return const Color(0xFF818CF8);
+    }
+  }
+
+  /// Like [parse] but never throws — falls back to plain text on any error.
+  static Widget parseSafe(
+    BuildContext context,
+    String content, {
+    Map<String, String>? emojiTags,
+    Widget? Function(String entity)? onNostrEntity,
+    Widget? Function(String httpUrl)? onHttpUrl,
+    Widget? Function(String hashtag)? onHashtag,
+    void Function(String hashtag)? onHashtagTap,
+    TextStyle? textStyle,
+    TextStyle? linkStyle,
+  }) {
+    try {
+      return parse(
+        context,
+        content,
+        emojiTags: emojiTags,
+        onNostrEntity: onNostrEntity,
+        onHttpUrl: onHttpUrl,
+        onHashtag: onHashtag,
+        onHashtagTap: onHashtagTap,
+        textStyle: textStyle,
+        linkStyle: linkStyle,
+      );
+    } catch (_) {
+      return Text(content, style: textStyle);
+    }
   }
 
   static Widget parse(

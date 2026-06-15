@@ -511,7 +511,7 @@ class _ZapEncouragementInCard extends HookConsumerWidget {
                   ),
                 ),
                 child: Text(
-                  'Zap',
+                  'Tip',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,

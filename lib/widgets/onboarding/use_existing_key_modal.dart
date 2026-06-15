@@ -21,8 +21,7 @@ import 'package:zapstore/widgets/common/modal.dart';
 Future<void> showUseExistingKeyModal(BuildContext context) {
   return showModal<void>(
     context,
-    title: 'Use Existing Key',
-    description: 'Connect an existing Profile to Zapstore',
+    title: 'Add Existing Profile',
     builder: (_) => const _UseExistingKeyContent(),
   );
 }
@@ -84,13 +83,14 @@ class _UseExistingKeyContentState
     try {
       await ref.read(amberSignerProvider).signIn();
       await onSignInSuccess(ref.read(refProvider));
-      if (mounted) context.go('/');
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      if (context.mounted) context.go('/');
     } catch (e) {
       if (mounted) {
         context.showError('Sign in failed', technicalDetails: '$e');
+        setState(() => _isSigningIn = false);
       }
-    } finally {
-      if (mounted) setState(() => _isSigningIn = false);
     }
   }
 
@@ -99,7 +99,7 @@ class _UseExistingKeyContentState
     final c = Theme.of(context).extension<LabColors>()!;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

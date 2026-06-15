@@ -33,7 +33,7 @@ class WelcomePanel extends HookConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+                padding: const EdgeInsets.fromLTRB(14, 12, 12, 0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -65,53 +65,89 @@ class WelcomePanel extends HookConsumerWidget {
                   ],
                 ),
               ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => launchProfileOnboarding(context, ref),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    child: Row(
-                      children: [
-                        LabIcon(
-                          LabIcons.profile,
-                          size: 18,
-                          thick: true,
-                          color: c.white33,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Add a Profile',
-                          style: LabTextStyles.med15.copyWith(color: c.white66),
-                        ),
-                      ],
-                    ),
+              _WelcomeOption(
+                icon: LabIcons.profile,
+                title: 'Add a Profile',
+                description: 'To enjoy our social features',
+                padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
+                onTap: () => launchProfileOnboarding(context, ref),
+              ),
+              Container(height: LabStroke.thin, color: c.white16),
+              _WelcomeOption(
+                icon: LabIcons.qr,
+                title: 'Scan Code',
+                description: 'For Apps and Invite codes',
+                onTap: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeOption extends StatelessWidget {
+  const _WelcomeOption({
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.padding = const EdgeInsets.fromLTRB(10, 8, 10, 8),
+    this.onTap,
+  });
+
+  final String icon;
+  final String title;
+  final String description;
+  final EdgeInsets padding;
+  final VoidCallback? onTap;
+
+  static const double _iconBoxSize = 40;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: padding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: _iconBoxSize,
+                height: _iconBoxSize,
+                decoration: BoxDecoration(
+                  color: c.black33,
+                  borderRadius: BorderRadius.circular(LabRadius.r11),
+                ),
+                child: Center(
+                  child: LabIcon(
+                    icon,
+                    size: 20,
+                    thick: true,
+                    color: c.white33,
                   ),
                 ),
               ),
-              Container(height: LabStroke.thin, color: c.white16),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {},
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                    child: Row(
-                      children: [
-                        LabIcon(
-                          LabIcons.qr,
-                          size: 18,
-                          thick: true,
-                          color: c.white33,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Scan Code',
-                          style: LabTextStyles.med15.copyWith(color: c.white66),
-                        ),
-                      ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: LabTextStyles.med13.copyWith(color: c.white66),
                     ),
-                  ),
+                    const SizedBox(height: 1),
+                    Text(
+                      description,
+                      style: LabTextStyles.reg13.copyWith(color: c.white33),
+                    ),
+                  ],
                 ),
               ),
             ],

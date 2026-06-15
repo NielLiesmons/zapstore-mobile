@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 
-/// How far swipe-action icons drift opposite to the drag (0–1 of bubble travel).
-const double kBubbleSwipeIconParallax = 0.45;
+/// Icon drift scales with drag until [kBubbleSwipeIconMaxOutwardPx].
+const double kBubbleSwipeIconParallax = 0.35;
+
+/// Hard cap on how far reply/options circles drift outward (px).
+const double kBubbleSwipeIconMaxOutwardPx = 8.0;
 
 /// Horizontal swipe gestures on a chat bubble: right → reply, left → options.
 ///
@@ -79,7 +82,7 @@ class _BubbleSwiperState extends State<BubbleSwiper>
       vsync: this,
       duration: const Duration(milliseconds: 140),
     );
-    _popScale = Tween<double>(begin: 1.0, end: 1.2).animate(
+    _popScale = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _popCtrl, curve: Curves.easeOut),
     );
   }
@@ -163,8 +166,10 @@ class _BubbleSwiperState extends State<BubbleSwiper>
           final leftProg = (leftDrag / _triggerAt).clamp(0.0, 1.0);
           final popMult = _popScale.value;
 
-          final replyParallaxX = -rightDrag * kBubbleSwipeIconParallax;
-          final optionsParallaxX = leftDrag * kBubbleSwipeIconParallax;
+          final replyParallaxX = (-rightDrag * kBubbleSwipeIconParallax)
+              .clamp(-kBubbleSwipeIconMaxOutwardPx, 0.0);
+          final optionsParallaxX = (leftDrag * kBubbleSwipeIconParallax)
+              .clamp(0.0, kBubbleSwipeIconMaxOutwardPx);
 
           // Bubble sizes the [Stack]; swipe icons overlay via [Positioned.fill].
           // (Icons with top+bottom before the child broke intrinsic height.)

@@ -14,10 +14,15 @@ class StackLinkCard extends HookConsumerWidget {
     super.key,
     required this.stack,
     this.displayName,
+    this.outerPadding = const EdgeInsets.fromLTRB(16, 0, 16, 0),
   });
 
   final AppStack stack;
   final String? displayName;
+
+  /// Side margins when the card sits in a vertical list. Use [EdgeInsets.zero]
+  /// inside profile horizontal browse rows (list padding handles inset).
+  final EdgeInsets outerPadding;
 
   bool get _isEncrypted => stack.content.isNotEmpty;
 
@@ -56,7 +61,7 @@ class StackLinkCard extends HookConsumerWidget {
     final title = displayName ?? stack.name ?? stack.identifier;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: outerPadding,
       child: InkWell(
         onTap: () => pushStack(
           context,

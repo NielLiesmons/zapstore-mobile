@@ -32,18 +32,13 @@ import 'package:zapstore/screens/app_stacks_screen.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/providers/theme_mode.dart';
 import 'package:zapstore/services/local_signer_service.dart';
-import 'package:zapstore/utils/debug_utils.dart';
-import 'package:zapstore/utils/key_generator.dart';
 import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/widgets/common/selector.dart';
-import 'package:zapstore/widgets/onboarding/new_profile_modal.dart';
 import 'package:zapstore/widgets/onboarding/onboarding_flow.dart';
-import 'package:zapstore/widgets/onboarding/spin_key_modal.dart';
-import 'package:zapstore/widgets/onboarding/use_existing_key_modal.dart';
 import 'package:zapstore/widgets/settings/profile_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ProfilesScreen — profile cards + settings list
+// ProfilesScreen — active profile card + settings list
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ProfilesScreen extends HookConsumerWidget {
@@ -111,7 +106,7 @@ class _ProfileHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      'Profiles',
+                      'Settings',
                       style: LabTextStyles.semibold23.copyWith(color: c.white),
                     ),
                   ],
@@ -180,8 +175,17 @@ class _SignedInContent extends ConsumerWidget {
         // ── Full-width divider above cards ──────────────────────────────────
         Container(height: LabStroke.medium, color: c.white8),
 
-        // ── Profile cards row ───────────────────────────────────────────────
-        _ProfileCardsRow(activePubkey: activePubkey),
+        // ── Active profile (single account) ─────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: ActiveProfileCard(
+            fullWidth: true,
+            profile: activeProfile,
+            pubkey: activePubkey,
+            onViewProfile: () =>
+                context.push('/profile/user/$activePubkey'),
+          ),
+        ),
 
         // ── Full-width divider below cards ──────────────────────────────────
         Container(height: LabStroke.medium, color: c.white8),
@@ -197,92 +201,6 @@ class _SignedInContent extends ConsumerWidget {
           activeProfile: activeProfile,
         ),
       ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Profile cards horizontal scroll
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ProfileCardsRow extends ConsumerWidget {
-  const _ProfileCardsRow({required this.activePubkey});
-
-  final String activePubkey;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final signedInPubkeys = ref.watch(Signer.signedInPubkeysProvider);
-    final otherPubkeys =
-        signedInPubkeys.where((k) => k != activePubkey).toList();
-
-    // Load profiles for all signed-in accounts
-    final profilesState = signedInPubkeys.isNotEmpty
-        ? ref.watch(
-            query<Profile>(
-              authors: signedInPubkeys,
-              source: const LocalAndRemoteSource(
-                relays: {'social', 'vertex'},
-                stream: false,
-                cachedFor: Duration(hours: 2),
-              ),
-              subscriptionPrefix: 'profile-cards-all',
-            ),
-          )
-        : StorageData<Profile>(const []);
-
-    final byPubkey = {for (final p in profilesState.models) p.pubkey: p};
-
-    return ShaderMask(
-      shaderCallback: (bounds) => LinearGradient(
-        colors: [
-          Colors.transparent,
-          Colors.black,
-          Colors.black,
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.04, 0.96, 1.0],
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-      ).createShader(bounds),
-      blendMode: BlendMode.dstIn,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            // Active profile card
-            ActiveProfileCard(
-              profile: byPubkey[activePubkey],
-              pubkey: activePubkey,
-              onViewProfile: () =>
-                  context.push('/profile/user/$activePubkey'),
-            ),
-
-            // Other profiles
-            for (final pubkey in otherPubkeys) ...[
-              const SizedBox(width: 12),
-              OtherProfileCard(
-                profile: byPubkey[pubkey],
-                pubkey: pubkey,
-                onSelect: () {
-                  ref.read(Signer.signerProvider(pubkey))?.setAsActivePubkey();
-                },
-              ),
-            ],
-
-            // Add Profile
-            const SizedBox(width: 12),
-            AddProfileCard(
-              onTap: () => launchProfileOnboarding(context, ref),
-            ),
-
-            // Right edge buffer so last card clears the fade zone
-            const SizedBox(width: 14),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -489,13 +407,6 @@ class _SettingsItemState extends State<_SettingsItem> {
                 ],
               ),
             ),
-
-            const SizedBox(width: 8),
-
-            // Chevron
-            LabIcon(LabIcons.chevronRight, size: 16, color: c.white33),
-
-            const SizedBox(width: 2),
           ],
         ),
       ),
@@ -583,7 +494,7 @@ class _SignedOutContent extends ConsumerWidget {
 
         // ── Full-width "Add Profile" card — identical to the in-row card ─────
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           child: AddProfileCard(
             fullWidth: true,
             onTap: () => launchProfileOnboarding(context, ref),

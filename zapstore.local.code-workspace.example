@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "zapstore",
+      "path": "."
+    },
+    {
+      "name": "webapp (local)",
+      "path": "../webapp"
+    }
+  ],
+  "settings": {}
+}
