@@ -133,7 +133,7 @@ const kPrimalBlossomUrl = 'https://blossom.primal.net';
 
 /// Skip onboarding sign-in / local save so the name → spin → complete-profile
 /// UI can be tested without touching the session. Flip off before shipping.
-const kOnboardingDeferSignIn = true;
+const kOnboardingDeferSignIn = false;
 
 /// Amber signer package ID
 const kAmberPackageId = 'com.greenart7c3.nostrsigner';

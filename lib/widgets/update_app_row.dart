@@ -205,7 +205,7 @@ class _VersionPill extends StatelessWidget {
           ),
           if (onTap != null) ...[
             const SizedBox(width: 10),
-            LabIcon(LabIcons.chevronDown, size: 10, color: c.white33),
+            LabIcon(LabIcons.chevronDown, size: 7, color: c.white33),
           ],
         ],
       );
@@ -220,7 +220,7 @@ class _VersionPill extends StatelessWidget {
           Text(display, style: textStyle),
           if (onTap != null) ...[
             const SizedBox(width: 10),
-            LabIcon(LabIcons.chevronDown, size: 10, color: c.white33),
+            LabIcon(LabIcons.chevronDown, size: 7, color: c.white33),
           ],
         ],
       );

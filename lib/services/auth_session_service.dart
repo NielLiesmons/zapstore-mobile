@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:purplebase/purplebase.dart';
 
-import '../constants/app_constants.dart';
 import '../utils/key_generator.dart';
 import 'local_signer_service.dart';
 import 'settings_service.dart';
@@ -111,19 +110,8 @@ Future<void> _purgeCorruptKind0ViaSql(
   await storage.delete(corruptIds);
 }
 
-/// Pre-restore cleanup — clears test onboarding keys and corrupt metadata.
+/// Pre-restore cleanup — purges corrupt local kind-0 metadata before hydrate.
 Future<void> prepareSessionRestore(Ref ref, AmberSigner amberSigner) async {
-  if (kOnboardingDeferSignIn) {
-    final hasStored = await probeStoredCredentials(ref);
-    if (hasStored) {
-      debugPrint(
-        'prepareSessionRestore: clearing stored credentials (defer sign-in)',
-      );
-      await clearLocalOnboardingSession(ref, amberSigner: amberSigner);
-    }
-    return;
-  }
-
   try {
     final nsec = await ref.read(localSignerServiceProvider).loadNsec();
     if (nsec == null || nsec.isEmpty) return;

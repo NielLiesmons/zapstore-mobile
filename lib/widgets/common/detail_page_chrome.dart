@@ -96,7 +96,7 @@ class DetailAuthorMetaRow extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Expanded(
+                        Flexible(
                           child: onAuthorTap != null
                               ? GestureDetector(
                                   onTap: onAuthorTap,
@@ -117,7 +117,10 @@ class DetailAuthorMetaRow extends StatelessWidget {
                                   maxLines: 1,
                                 ),
                         ),
-                        if (timestamp != null) timestamp!,
+                        if (timestamp != null) ...[
+                          const SizedBox(width: 14),
+                          timestamp!,
+                        ],
                       ],
                     ),
                     if (trailing != null) ...[

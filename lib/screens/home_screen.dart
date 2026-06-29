@@ -265,11 +265,10 @@ class _HomeContent extends HookConsumerWidget {
     final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
     final storedHint = ref.watch(storedSessionHintProvider);
     final authRestore = ref.watch(authRestoreProvider);
-    final sessionActive = authRestore.hasValue &&
-        authRestore.valueOrNull == true &&
-        signedInPubkey != null;
-    final restoringSession = authRestore.isLoading ||
-        ((storedHint.valueOrNull ?? false) && !authRestore.hasValue);
+    final sessionActive = signedInPubkey != null;
+    final restoringSession = !sessionActive &&
+        (authRestore.isLoading ||
+            ((storedHint.valueOrNull ?? false) && !authRestore.hasValue));
 
     final communitySectionKey = useMemoized(() => GlobalKey());
 
@@ -1265,11 +1264,10 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
     final pubkey = ref.watch(Signer.activePubkeyProvider);
     final storedHint = ref.watch(storedSessionHintProvider);
     final authRestore = ref.watch(authRestoreProvider);
-    final sessionActive = authRestore.hasValue &&
-        authRestore.valueOrNull == true &&
-        pubkey != null;
-    final restoringSession = authRestore.isLoading ||
-        ((storedHint.valueOrNull ?? false) && !authRestore.hasValue);
+    final sessionActive = pubkey != null;
+    final restoringSession = !sessionActive &&
+        (authRestore.isLoading ||
+            ((storedHint.valueOrNull ?? false) && !authRestore.hasValue));
     final profile = sessionActive
         ? ref.watch(safeActiveLocalProfileProvider)
         : null;
