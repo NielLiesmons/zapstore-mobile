@@ -15,6 +15,7 @@ import 'package:zapstore/widgets/common/detail_page_chrome.dart';
 import 'package:zapstore/widgets/common/empty_state.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
+import 'package:zapstore/widgets/common/read_more_button.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
 import 'package:zapstore/widgets/common/time_utils.dart';
 import 'package:zapstore/widgets/common/shimmer.dart';
@@ -225,6 +226,8 @@ class _ForumPostContent extends HookConsumerWidget {
             onTap: () => showActionsModal(
               context,
               contentType: ActionsContentType.forum,
+              forumPost: post,
+              authorName: publisherName,
               rootContext: ThreadRootContext.fromForumPost(post),
               onCommentSubmit: (result) => publishRootComment(
                 ref: ref,
@@ -338,22 +341,9 @@ class _ExpandableBody extends HookWidget {
           ),
           if (wasTruncated) ...[
             const SizedBox(height: 8),
-            GestureDetector(
+            ReadMoreButton(
+              label: expanded.value ? 'Show less' : 'Read more',
               onTap: () => expanded.value = !expanded.value,
-              child: Container(
-                height: 28,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: c.white8,
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: Center(
-                  child: Text(
-                    expanded.value ? 'Read less' : 'Read more',
-                    style: LabTextStyles.med13.copyWith(color: c.white66),
-                  ),
-                ),
-              ),
             ),
           ],
         ],
@@ -412,6 +402,7 @@ class _ForumCommentsSection extends ConsumerWidget {
     final zapModels = zapsState.models;
 
     final rootComments = comments.where((c) => c.parentKind != 1111).toList();
+    final inlineRootId = singleRootCommentId(comments);
     final zapsWithComments = zapModels
         .where((z) => z.event.content.trim().isNotEmpty)
         .toList();
@@ -447,8 +438,8 @@ class _ForumCommentsSection extends ConsumerWidget {
             )
           else
             const EmptyState(
-              message: 'No comments yet. Be the first!',
-              minHeight: 160,
+              message: 'No comments yet',
+              minHeight: 120,
             )
         else
           Column(
@@ -460,6 +451,8 @@ class _ForumCommentsSection extends ConsumerWidget {
                     key: ValueKey(entries[i].comment!.id),
                     comment: entries[i].comment!,
                     rootContext: ThreadRootContext.fromForumPost(post),
+                    inlineThreadReplies:
+                        entries[i].comment!.id == inlineRootId,
                   )
                 else
                   ZapCommentItem(

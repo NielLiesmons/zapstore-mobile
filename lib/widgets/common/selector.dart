@@ -17,8 +17,11 @@ class Selector extends StatefulWidget {
     required this.tabs,
     this.initialIndex = 0,
     this.emphasized = false,
+    this.emphasizedDimmed = false,
     this.small = false,
     this.dark = false,
+    this.white8Selection = false,
+    this.containerRadius,
     this.onChanged,
   });
 
@@ -28,12 +31,21 @@ class Selector extends StatefulWidget {
   /// When true the selected tab gets the blurple gradient instead of white16.
   final bool emphasized;
 
+  /// When true with [emphasized], uses [LabColors.blurple66] instead of full blurple.
+  final bool emphasizedDimmed;
+
   /// Smaller height (26px instead of 30px).
   final bool small;
 
   /// Dark variant — black33 container bg + white8 selection fill.
   /// Use this inside gray-backgrounded surfaces like modals.
   final bool dark;
+
+  /// When true (and not [emphasized]), selected tab uses white8 instead of white16.
+  final bool white8Selection;
+
+  /// Outer container corner radius. Defaults to 14px (fully rounded pill use 21).
+  final double? containerRadius;
 
   final ValueChanged<int>? onChanged;
 
@@ -62,11 +74,13 @@ class _SelectorState extends State<Selector> {
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
 
+    final outerRadius = widget.containerRadius ?? 14.0;
+
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: widget.dark ? c.black33 : c.gray66,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(outerRadius),
       ),
       child: Row(
         children: [
@@ -77,8 +91,10 @@ class _SelectorState extends State<Selector> {
                 unselected: widget.tabs[i].unselectedContent,
                 isSelected: i == _selectedIndex,
                 emphasized: widget.emphasized,
+                emphasizedDimmed: widget.emphasizedDimmed,
                 small: widget.small,
                 dark: widget.dark,
+                white8Selection: widget.white8Selection,
                 onTap: () {
                   setState(() => _selectedIndex = i);
                   widget.onChanged?.call(i);
@@ -99,8 +115,10 @@ class SelectorButton extends StatefulWidget {
     required this.unselected,
     required this.isSelected,
     this.emphasized = false,
+    this.emphasizedDimmed = false,
     this.small = false,
     this.dark = false,
+    this.white8Selection = false,
     this.onTap,
   });
 
@@ -108,12 +126,16 @@ class SelectorButton extends StatefulWidget {
   final List<Widget> unselected;
   final bool isSelected;
   final bool emphasized;
+  final bool emphasizedDimmed;
 
   /// Smaller height (26px instead of 30px).
   final bool small;
 
   /// Matches [Selector.dark] — uses white8 fill instead of white16.
   final bool dark;
+
+  /// Matches [Selector.white8Selection] on a gray66 container.
+  final bool white8Selection;
 
   final VoidCallback? onTap;
 
@@ -128,7 +150,10 @@ class _SelectorButtonState extends State<SelectorButton> {
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
     final height = widget.small ? 26.0 : 30.0;
-    final fillColor = widget.dark ? c.white8 : c.white16;
+    final fillColor = widget.white8Selection || widget.dark
+        ? c.white8
+        : c.white16;
+    final buttonRadius = height / 2;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -143,9 +168,13 @@ class _SelectorButtonState extends State<SelectorButton> {
         child: Container(
           height: height,
           decoration: BoxDecoration(
-            gradient: widget.isSelected && widget.emphasized ? c.blurple : null,
+            gradient: widget.isSelected && widget.emphasized
+                ? (widget.emphasizedDimmed ? c.blurple66 : c.blurple)
+                : null,
             color: widget.isSelected && !widget.emphasized ? fillColor : null,
-            borderRadius: BorderRadius.circular(widget.emphasized ? 14 : 8),
+            borderRadius: BorderRadius.circular(
+              widget.emphasized ? 14 : buttonRadius,
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -163,12 +192,10 @@ class SelectorTab {
   const SelectorTab({
     required this.label,
     this.count,
-    this.isLoading = false,
   });
 
   final String label;
   final int? count;
-  final bool isLoading;
 
   List<Widget> get selectedContent => _buildContent(selected: true);
   List<Widget> get unselectedContent => _buildContent(selected: false);
@@ -176,10 +203,7 @@ class SelectorTab {
   List<Widget> _buildContent({required bool selected}) {
     return [
       _SelectorLabel(label: label, selected: selected),
-      if (isLoading) ...[
-        const SizedBox(width: 6),
-        const _SelectorSpinner(),
-      ] else if (count != null) ...[
+      if (count != null) ...[
         const SizedBox(width: 6),
         _SelectorCount(count: count!, selected: selected),
       ],
@@ -217,23 +241,6 @@ class _SelectorCount extends StatelessWidget {
       display,
       style: LabTextStyles.med13.copyWith(
         color: selected ? c.white66 : c.white33,
-      ),
-    );
-  }
-}
-
-class _SelectorSpinner extends StatelessWidget {
-  const _SelectorSpinner();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
-    return SizedBox(
-      width: 10,
-      height: 10,
-      child: CircularProgressIndicator(
-        strokeWidth: 1.5,
-        color: c.blurpleLightColor,
       ),
     );
   }

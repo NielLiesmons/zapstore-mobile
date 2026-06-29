@@ -159,6 +159,7 @@ class _CommentsSectionLayout extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rootComments = comments.where((c) => c.parentKind != 1111).toList();
+    final inlineRootId = singleRootCommentId(comments);
 
     // Merge root comments and zaps-with-comments, sorted newest first.
     final entries = <_FeedEntry>[
@@ -221,7 +222,7 @@ class _CommentsSectionLayout extends ConsumerWidget {
               child: BubbleSkeletonList(),
             )
           else
-            const EmptyState(message: 'No comments yet', minHeight: 160)
+            const EmptyState(message: 'No comments yet', minHeight: 120)
         else
           Column(
             children: [
@@ -239,6 +240,8 @@ class _CommentsSectionLayout extends ConsumerWidget {
                             ? ThreadRootContext.fromStack(stack!)
                             : null,
                     version: fileMetadata?.version,
+                    inlineThreadReplies:
+                        entries[i].comment!.id == inlineRootId,
                   )
                 else
                   ZapCommentItem(

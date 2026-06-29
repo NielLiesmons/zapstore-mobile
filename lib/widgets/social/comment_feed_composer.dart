@@ -12,10 +12,12 @@ class CommentFeedComposer extends ConsumerWidget {
     super.key,
     this.ctaLabel = 'Your Comment',
     this.onTap,
+    this.padding = const EdgeInsets.fromLTRB(14, 0, 21, 14),
   });
 
   final String ctaLabel;
   final VoidCallback? onTap;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,7 +38,7 @@ class CommentFeedComposer extends ConsumerWidget {
     ).models.firstOrNull;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 21, 14),
+      padding: padding,
       child: Row(
         children: [
           ProfilePic(profile: profile, pubkey: pubkey, size: 35),

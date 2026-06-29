@@ -6,7 +6,7 @@ import 'package:zapstore/utils/app_query.dart';
 import 'app_small_card.dart';
 import 'common/shimmer.dart';
 
-const _kPageSize = 8;
+const _kPageSize = 6;
 
 // ---------------------------------------------------------------------------
 // State
@@ -225,8 +225,8 @@ final latestReleasesProvider =
 // Widget
 // ---------------------------------------------------------------------------
 
-/// Apps per column in the horizontal scroll (matching webapp's 4-per-column).
-const int _kAppsPerColumn = 4;
+/// Apps per column in the horizontal scroll (3 rows visible per column).
+const int _kAppsPerColumn = 3;
 
 /// Height of each app row inside a column: 56px icon + 16px vertical padding.
 const double _kAppRowHeight = 72;

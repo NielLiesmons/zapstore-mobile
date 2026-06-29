@@ -7,7 +7,7 @@ import 'package:models/models.dart';
 import 'package:zapstore/utils/key_generator.dart';
 import 'package:zapstore/utils/nip13_pow.dart';
 
-/// Live snapshot for onboarding PoW UI.
+/// Live snapshot for background profile PoW mining.
 @immutable
 class ProfilePowSnapshot {
   const ProfilePowSnapshot({

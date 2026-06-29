@@ -26,6 +26,20 @@ Map<String, Set<String>> get kForumPostCommunityTags => {
       '#h': {kZapstoreCommunityPubkey},
     };
 
+/// Topic labels for forum post creation and feed filtering.
+const kForumCategories = [
+  'General',
+  'Dev Support',
+  'User Support',
+  'Feature Request',
+  'Ideas',
+  'Bugs',
+  'Announcements',
+  'News',
+  'Showcase',
+  'Off-Topic',
+];
+
 /// Returns true when a kind-11 event targets the Zapstore community via `#h`.
 bool forumPostEventFilter(Map<String, dynamic> event) {
   final kind = event['kind'] as int?;
@@ -104,6 +118,18 @@ bool appStackEventFilter(Map<String, dynamic> event) {
 /// Invariant: all Zapstore-published app events are available on this relay.
 /// Stack events (social relays) should NOT use this hint.
 const kDefaultRelay = 'wss://relay.zapstore.dev';
+
+/// Relay group for onboarding kind-0 profiles until Zapstore relay PoW is live.
+///
+/// Uses Primal only — accepts normal profiles and pairs with [kPrimalBlossomUrl]
+/// for avatar uploads during the complete-profile step.
+const kOnboardingProfileRelayGroup = 'primal';
+
+/// Relay set passed to [StorageNotifier.publish] for onboarding profiles.
+const Set<String> kOnboardingProfileRelays = {kOnboardingProfileRelayGroup};
+
+/// Primal Blossom base URL for onboarding profile pictures.
+const kPrimalBlossomUrl = 'https://blossom.primal.net';
 
 /// Amber signer package ID
 const kAmberPackageId = 'com.greenart7c3.nostrsigner';

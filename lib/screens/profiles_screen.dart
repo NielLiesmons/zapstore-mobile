@@ -35,6 +35,7 @@ import 'package:zapstore/services/local_signer_service.dart';
 import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/widgets/common/selector.dart';
 import 'package:zapstore/widgets/onboarding/onboarding_flow.dart';
+import 'package:zapstore/widgets/onboarding/complete_profile_modal.dart';
 import 'package:zapstore/widgets/settings/profile_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,6 +185,14 @@ class _SignedInContent extends ConsumerWidget {
             pubkey: activePubkey,
             onViewProfile: () =>
                 context.push('/profile/user/$activePubkey'),
+            onEditProfile: () => showEditProfileModal(
+              context,
+              ref,
+              title: 'Edit Profile',
+              initialName: activeProfile?.name?.trim() ?? '',
+              initialAbout: activeProfile?.about,
+              initialPictureUrl: activeProfile?.pictureUrl,
+            ),
           ),
         ),
 
@@ -460,7 +469,12 @@ class _DisconnectButton extends ConsumerWidget {
     if (confirmed == true && context.mounted) {
       try {
         await ref.read(localSignerServiceProvider).clearNsec();
-        await ref.read(amberSignerProvider).signOut();
+        final activeSigner = ref.read(Signer.activeSignerProvider);
+        if (activeSigner != null) {
+          await activeSigner.signOut();
+        } else {
+          await ref.read(amberSignerProvider).signOut();
+        }
         if (context.mounted) context.go('/');
       } catch (e) {
         if (context.mounted) {

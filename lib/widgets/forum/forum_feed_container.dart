@@ -8,6 +8,8 @@ import 'package:zapstore/models/forum_post.dart';
 import 'package:zapstore/utils/paged_subscription_notifier.dart';
 import 'package:zapstore/widgets/common/shimmer.dart';
 import 'package:zapstore/widgets/forum/forum_post_card.dart';
+import 'package:zapstore/widgets/modals/forum_post_modal.dart';
+import 'package:zapstore/widgets/social/comment_feed_composer.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ForumFeedNotifier
@@ -139,14 +141,26 @@ class ForumFeedContainer extends HookConsumerWidget {
 
     final posts = state.combined;
 
+    final composer = CommentFeedComposer(
+      ctaLabel: 'Your Forum Post',
+      padding: const EdgeInsets.fromLTRB(14, 12, 21, 7),
+      onTap: () => showForumPostModal(context, ref),
+    );
+
     // Initial loading state
     if (posts.isEmpty) {
-      if (!showSkeleton.value) return const SizedBox.shrink();
-      return _buildSkeletonList(count: 5);
+      if (!showSkeleton.value) return composer;
+      return Column(
+        children: [
+          composer,
+          _buildSkeletonList(count: 5),
+        ],
+      );
     }
 
     return Column(
       children: [
+        composer,
         ...posts.map(
           (post) => ForumPostCard(
             key: ValueKey(post.id),

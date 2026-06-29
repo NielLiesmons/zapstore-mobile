@@ -265,6 +265,8 @@ class _AppStackContent extends HookConsumerWidget {
     void openOptions() => showActionsModal(
           context,
           contentType: ActionsContentType.stack,
+          stack: stack,
+          authorName: publisherName,
           rootContext: ThreadRootContext.fromStack(stack),
           onCommentSubmit: (result) => publishRootComment(
             ref: ref,

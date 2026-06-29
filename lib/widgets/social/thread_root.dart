@@ -17,6 +17,9 @@ const double kCommentModalInset = 14;
 /// Forum post badge emoji — matches webapp `/images/emoji/forum.png`.
 const String kForumEmojiAsset = 'assets/images/emoji/forum.png';
 
+/// Stack badge emoji — matches webapp `/images/emoji/stack.png`.
+const String kStackEmojiAsset = 'assets/images/emoji/stack.png';
+
 /// Bottom scroll fade height above pinned footer — matches webapp inset token.
 const double kCommentModalBottomFade = 14;
 

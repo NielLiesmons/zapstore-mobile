@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/services/nostr_comment_service.dart';
+import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/widgets/bookmark_widgets.dart';
+import 'package:zapstore/widgets/common/label.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/composer/nostr_text_controller.dart'
     show ComposerResult;
+import 'package:zapstore/models/forum_post.dart';
+import 'package:zapstore/widgets/modals/actions_sub_modals.dart';
 import 'package:zapstore/widgets/modals/comment_modal.dart';
 import 'package:zapstore/widgets/social/quoted_message.dart';
 import 'package:zapstore/widgets/social/quoted_zap_message.dart';
@@ -29,10 +35,14 @@ enum ActionsContentType { comment, zap, app, stack, forum }
 Future<void> showActionsModal(
   BuildContext context, {
   ActionsContentType contentType = ActionsContentType.comment,
+  App? app,
+  AppStack? stack,
+  ForumPost? forumPost,
   Comment? comment,
   Profile? commentAuthor,
   Zap? zap,
   String? zapSenderName,
+  String? authorName,
   ThreadRootContext? rootContext,
   String? version,
   VoidCallback? onComment,
@@ -47,10 +57,14 @@ Future<void> showActionsModal(
     nestedModal: isNested,
     builder: (ctx) => _ActionsModalContent(
       contentType: contentType,
+      app: app,
+      stack: stack,
+      forumPost: forumPost,
       comment: comment,
       commentAuthor: commentAuthor,
       zap: zap,
       zapSenderName: zapSenderName,
+      authorName: authorName ?? commentAuthor?.name ?? zapSenderName,
       rootContext: rootContext,
       version: version,
       onComment: onComment,
@@ -67,7 +81,8 @@ Future<void> showActionsModal(
       placeholder: _commentPlaceholder(contentType, rootContext),
       rootContext: rootContext,
       version: version,
-      showRootConnector: rootContext != null,
+      showRootConnector:
+          rootContext != null && comment == null && zap == null,
       quotedComment: comment,
       quotedCommentAuthor: commentAuthor,
       quotedZap: zap,
@@ -134,6 +149,7 @@ Future<void> showCommentActionsModal(
   return showActionsModal(
     context,
     contentType: type,
+    app: null,
     comment: comment,
     commentAuthor: commentAuthor,
     zap: zap,
@@ -148,15 +164,17 @@ Future<void> showCommentActionsModal(
 
 // ── Modal content ─────────────────────────────────────────────────────────────
 
-enum _SubPanel { main, details, label, share, report }
-
-class _ActionsModalContent extends ConsumerStatefulWidget {
+class _ActionsModalContent extends ConsumerWidget {
   const _ActionsModalContent({
     required this.contentType,
+    this.app,
+    this.stack,
+    this.forumPost,
     this.comment,
     this.commentAuthor,
     this.zap,
     this.zapSenderName,
+    this.authorName,
     this.rootContext,
     this.version,
     this.onComment,
@@ -164,24 +182,20 @@ class _ActionsModalContent extends ConsumerStatefulWidget {
   });
 
   final ActionsContentType contentType;
+  final App? app;
+  final AppStack? stack;
+  final ForumPost? forumPost;
   final Comment? comment;
   final Profile? commentAuthor;
   final Zap? zap;
   final String? zapSenderName;
+  final String? authorName;
   final ThreadRootContext? rootContext;
   final String? version;
   final VoidCallback? onComment;
   final Future<void> Function(ComposerResult result)? onCommentSubmit;
 
-  @override
-  ConsumerState<_ActionsModalContent> createState() =>
-      _ActionsModalContentState();
-}
-
-class _ActionsModalContentState extends ConsumerState<_ActionsModalContent> {
-  _SubPanel _panel = _SubPanel.main;
-
-  bool get _isCatalog => switch (widget.contentType) {
+  bool get _isCatalog => switch (contentType) {
         ActionsContentType.app ||
         ActionsContentType.stack ||
         ActionsContentType.forum =>
@@ -189,34 +203,42 @@ class _ActionsModalContentState extends ConsumerState<_ActionsModalContent> {
         _ => false,
       };
 
-  bool get _hasSocialTarget =>
-      widget.comment != null || widget.zap != null;
+  bool get _hasSocialTarget => comment != null || zap != null;
 
-  bool get _showStacksSection => widget.contentType == ActionsContentType.app;
+  bool get _showStacksSection => contentType == ActionsContentType.app;
 
   /// Catalog-only (app/stack/forum sheet). Never on comment/zap actions —
   /// the quoted target already shows what we're acting on.
   bool get _showRootRow =>
-      _isCatalog && widget.rootContext != null && !_hasSocialTarget;
-
-  void _chooseComment() {
-    if (_isCatalog && widget.onCommentSubmit != null) {
-      Navigator.of(context).pop(_kHandoffComment);
-      return;
-    }
-    if (widget.onComment != null) {
-      Navigator.of(context).pop();
-      widget.onComment!();
-      return;
-    }
-    if (_hasSocialTarget) {
-      Navigator.of(context).pop(_kHandoffComment);
-    }
-  }
+      _isCatalog && rootContext != null && !_hasSocialTarget;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
+    final target = ActionsTarget.fromModal(
+      contentType: contentType,
+      comment: comment,
+      zap: zap,
+      app: app,
+      stack: stack,
+      forumPost: forumPost,
+      authorName: authorName ?? commentAuthor?.name ?? zapSenderName,
+    );
+
+    void chooseComment() {
+      if (_isCatalog && onCommentSubmit != null) {
+        Navigator.of(context).pop(_kHandoffComment);
+        return;
+      }
+      if (onComment != null) {
+        Navigator.of(context).pop();
+        onComment!();
+        return;
+      }
+      if (_hasSocialTarget) {
+        Navigator.of(context).pop(_kHandoffComment);
+      }
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
@@ -224,114 +246,84 @@ class _ActionsModalContentState extends ConsumerState<_ActionsModalContent> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_panel == _SubPanel.main) ..._buildMain(context, c),
-          if (_panel == _SubPanel.details)
-            ..._buildStubPanel(context, c, 'Details'),
-          if (_panel == _SubPanel.label) ..._buildStubPanel(context, c, 'Label'),
-          if (_panel == _SubPanel.share) ..._buildStubPanel(context, c, 'Share'),
-          if (_panel == _SubPanel.report) ..._buildReportPanel(context, c),
+          if (_showRootRow) ...[
+            const SizedBox(height: kModalInset),
+            CommentModalRootRow(
+              context_: rootContext!,
+              version: version,
+              showConnector: true,
+            ),
+          ],
+
+          if (_isCatalog || _hasSocialTarget) ...[
+            if (!_showRootRow) const SizedBox(height: kModalInset),
+            if (_hasSocialTarget)
+              _QuotedCommentCard(
+                comment: comment,
+                commentAuthor: commentAuthor,
+                zap: zap,
+                zapSenderName: zapSenderName,
+                onTap: chooseComment,
+                c: c,
+              )
+            else
+              _PlainCommentButton(onTap: chooseComment, c: c),
+            const SizedBox(height: 10),
+          ],
+
+          _EyebrowLabel(text: 'Actions', c: c),
+          const SizedBox(height: 8),
+          _ActionsRow(
+            showStack: _showStacksSection && app != null,
+            onStack: app == null
+                ? null
+                : () => openActionsNestedModal(
+                      context,
+                      () => openActionsAddToStackModal(
+                        context,
+                        ref,
+                        app: app!,
+                      ),
+                    ),
+            shareEnabled: target.canShare,
+            onDetails: () => openActionsNestedModal(
+              context,
+              () => openActionsDetailsModal(context, target: target),
+            ),
+            onShare: () => openActionsNestedModal(
+              context,
+              () => openActionsShareModal(context, target: target),
+            ),
+            onReport: () => openActionsNestedModal(
+              context,
+              () => openActionsReportModal(context, ref, target: target),
+            ),
+            c: c,
+          ),
         ],
       ),
     );
   }
-
-  List<Widget> _buildMain(BuildContext context, LabColors c) {
-    return [
-      if (_showRootRow) ...[
-        const SizedBox(height: kModalInset),
-        CommentModalRootRow(
-          context_: widget.rootContext!,
-          version: widget.version,
-          showConnector: true,
-        ),
-      ],
-
-      // Comment CTA — quoted card (social) or plain button (catalog)
-      if (_isCatalog || _hasSocialTarget) ...[
-        if (!_showRootRow) const SizedBox(height: kModalInset),
-        if (_hasSocialTarget)
-          _QuotedCommentCard(
-            comment: widget.comment,
-            commentAuthor: widget.commentAuthor,
-            zap: widget.zap,
-            zapSenderName: widget.zapSenderName,
-            onTap: _chooseComment,
-            c: c,
-          )
-        else
-          _PlainCommentButton(onTap: _chooseComment, c: c),
-        const SizedBox(height: 10),
-      ],
-
-      if (_showStacksSection) ...[
-        _EyebrowLabel(text: 'Add to stacks', c: c),
-        const SizedBox(height: 8),
-        _StacksSectionStub(c: c),
-        const SizedBox(height: 10),
-      ],
-
-      _EyebrowLabel(text: 'Actions', c: c),
-      const SizedBox(height: 8),
-      _ActionsRow(
-        onDetails: () => setState(() => _panel = _SubPanel.details),
-        onShare: () => setState(() => _panel = _SubPanel.share),
-        c: c,
-      ),
-      const SizedBox(height: 10),
-
-      _ReportButton(
-        isZap: widget.zap != null || widget.contentType == ActionsContentType.zap,
-        isCatalog: _isCatalog,
-        onTap: () => setState(() => _panel = _SubPanel.report),
-        c: c,
-      ),
-    ];
-  }
-
-  List<Widget> _buildStubPanel(
-    BuildContext context,
-    LabColors c,
-    String title,
-  ) {
-    return [
-      _SubPanelHeader(
-        title: title,
-        onBack: () => setState(() => _panel = _SubPanel.main),
-        c: c,
-      ),
-      const SizedBox(height: 16),
-      Container(
-        height: 80,
-        alignment: Alignment.center,
-        child: Text(
-          '$title panel coming soon',
-          style: LabTextStyles.reg15.copyWith(color: c.white33),
-        ),
-      ),
-    ];
-  }
-
-  List<Widget> _buildReportPanel(BuildContext context, LabColors c) {
-    return [
-      _SubPanelHeader(
-        title: 'Report',
-        onBack: () => setState(() => _panel = _SubPanel.main),
-        c: c,
-      ),
-      const SizedBox(height: 16),
-      Container(
-        height: 80,
-        alignment: Alignment.center,
-        child: Text(
-          'Report panel coming soon',
-          style: LabTextStyles.reg15.copyWith(color: c.white33),
-        ),
-      ),
-    ];
-  }
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+Future<void> openActionsAddToStackModal(
+  BuildContext context,
+  WidgetRef ref, {
+  required App app,
+}) {
+  final c = Theme.of(context).extension<LabColors>()!;
+  return showModal<void>(
+    context,
+    nestedModal: true,
+    title: 'Add to stacks',
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: _ActionsStacksSection(app: app, c: c),
+    ),
+  );
+}
 
 class _PlainCommentButton extends StatelessWidget {
   const _PlainCommentButton({required this.onTap, required this.c});
@@ -435,38 +427,126 @@ class _QuotedCommentCard extends StatelessWidget {
   }
 }
 
-class _StacksSectionStub extends StatelessWidget {
-  const _StacksSectionStub({required this.c});
+class _ActionsStacksSection extends HookConsumerWidget {
+  const _ActionsStacksSection({required this.app, required this.c});
+
+  final App app;
   final LabColors c;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: c.black33,
-        borderRadius: BorderRadius.circular(16),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
+    if (signedInPubkey == null) {
+      return Container(
+        height: 48,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: c.black33,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          'Sign in to add to stacks',
+          style: LabTextStyles.reg15.copyWith(color: c.white33),
+        ),
+      );
+    }
+
+    final stacksState = ref.watch(
+      query<AppStack>(
+        authors: {signedInPubkey},
+        source: const LocalAndRemoteSource(relays: 'AppCatalog', stream: false),
+        subscriptionPrefix: 'app-actions-stacks',
+        schemaFilter: publicAppStackSchemaFilter,
       ),
+    );
+
+    final stacks = stacksState.models.toList();
+    final saving = useState(false);
+    final selectedIds = useState<Set<String>>({});
+
+    useEffect(() {
+      selectedIds.value = {
+        for (final stack in stacks)
+          if (stack.event.getTagSetValues('a').contains(app.id))
+            stack.identifier,
+      };
+      return null;
+    }, [stacks.map((s) => '${s.id}:${s.event.tags.length}').join('|'), app.id]);
+
+    if (stacksState is StorageLoading && stacks.isEmpty) {
+      return SizedBox(
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: c.white33,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (stacks.isEmpty) {
+      return Container(
+        height: 48,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: c.black33,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          'No stacks yet',
+          style: LabTextStyles.reg15.copyWith(color: c.white33),
+        ),
+      );
+    }
+
+    Future<void> toggle(String identifier) async {
+      if (saving.value) return;
+      final previous = Set<String>.from(selectedIds.value);
+      final next = Set<String>.from(previous);
+      if (next.contains(identifier)) {
+        next.remove(identifier);
+      } else {
+        next.add(identifier);
+      }
+      selectedIds.value = next;
+      saving.value = true;
+      try {
+        await saveAppPublicStackSelections(
+          ref,
+          app: app,
+          existingStacks: stacks,
+          selectedCollectionIds: next,
+        );
+      } catch (e) {
+        selectedIds.value = previous;
+        if (context.mounted) {
+          context.showError('Could not update stacks', technicalDetails: '$e');
+        }
+      } finally {
+        saving.value = false;
+      }
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: c.white8,
-              borderRadius: BorderRadius.circular(8),
+          for (final stack in stacks) ...[
+            LabLabel(
+              stack.name ?? stack.identifier,
+              size: LabLabelSize.defaultSize,
+              isSelected: selectedIds.value.contains(stack.identifier),
+              onTap: saving.value ? null : () => toggle(stack.identifier),
             ),
-            child: Center(
-              child: LabIcon(LabIcons.plus, size: 16, color: c.white66),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Stacks coming soon',
-            style: LabTextStyles.reg15.copyWith(color: c.white33),
-          ),
+            const SizedBox(width: 8),
+          ],
         ],
       ),
     );
@@ -492,19 +572,42 @@ class _EyebrowLabel extends StatelessWidget {
 
 class _ActionsRow extends StatelessWidget {
   const _ActionsRow({
+    this.showStack = false,
+    this.onStack,
     required this.onDetails,
     required this.onShare,
+    required this.onReport,
+    required this.shareEnabled,
     required this.c,
   });
 
+  final bool showStack;
+  final VoidCallback? onStack;
   final VoidCallback onDetails;
   final VoidCallback onShare;
+  final VoidCallback onReport;
+  final bool shareEnabled;
   final LabColors c;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        if (showStack) ...[
+          _ActionTile(
+            iconWidget: Image.asset(
+              kStackEmojiAsset,
+              width: 24,
+              height: 24,
+              errorBuilder: (_, __, ___) =>
+                  LabIcon(LabIcons.index, size: 20, color: c.white66),
+            ),
+            label: 'Stack',
+            onTap: onStack,
+            c: c,
+          ),
+          const SizedBox(width: 12),
+        ],
         _ActionTile(
           icon: LabIcons.details,
           label: 'Details',
@@ -515,8 +618,17 @@ class _ActionsRow extends StatelessWidget {
         _ActionTile(
           icon: LabIcons.share,
           label: 'Share',
-          onTap: onShare,
+          onTap: shareEnabled ? onShare : null,
           c: c,
+          dimmed: !shareEnabled,
+        ),
+        const SizedBox(width: 12),
+        _ActionTile(
+          icon: LabIcons.alert,
+          label: 'Report',
+          onTap: onReport,
+          c: c,
+          iconSize: 20,
         ),
       ],
     );
@@ -525,19 +637,28 @@ class _ActionsRow extends StatelessWidget {
 
 class _ActionTile extends StatelessWidget {
   const _ActionTile({
-    required this.icon,
+    this.icon,
+    this.iconWidget,
     required this.label,
     required this.onTap,
     required this.c,
-  });
+    this.dimmed = false,
+    this.iconSize = 24,
+  }) : assert(icon != null || iconWidget != null);
 
-  final String icon;
+  final String? icon;
+  final Widget? iconWidget;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final LabColors c;
+  final bool dimmed;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = dimmed ? c.white33 : c.white66;
+    final labelColor = dimmed ? c.white33 : c.white;
+
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -554,97 +675,20 @@ class _ActionTile extends StatelessWidget {
                 width: 28,
                 height: 28,
                 child: Center(
-                  child: LabIcon(icon, size: 24, color: c.white66),
+                  child: iconWidget ??
+                      LabIcon(icon!, size: iconSize, color: iconColor),
                 ),
               ),
               const SizedBox(height: 10),
               Text(
                 label,
-                style: LabTextStyles.med15.copyWith(color: c.white),
+                style: LabTextStyles.med15.copyWith(color: labelColor),
                 textAlign: TextAlign.center,
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ReportButton extends StatelessWidget {
-  const _ReportButton({
-    required this.isZap,
-    required this.isCatalog,
-    required this.onTap,
-    required this.c,
-  });
-
-  final bool isZap;
-  final bool isCatalog;
-  final VoidCallback onTap;
-  final LabColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = isCatalog
-        ? 'Report'
-        : isZap
-            ? 'Report this tip'
-            : 'Report this comment';
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 42,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: c.black33,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: LabTextStyles.med15.copyWith(color: c.rougeColor),
-        ),
-      ),
-    );
-  }
-}
-
-class _SubPanelHeader extends StatelessWidget {
-  const _SubPanelHeader({
-    required this.title,
-    required this.onBack,
-    required this.c,
-  });
-
-  final String title;
-  final VoidCallback onBack;
-  final LabColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: onBack,
-          child: Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: c.white8,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Center(
-              child: LabIcon(LabIcons.chevronLeft, size: 14, color: c.white66),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: LabTextStyles.semibold17.copyWith(color: c.white),
-        ),
-      ],
     );
   }
 }

@@ -232,6 +232,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
 
       if (isUpdatesRoute && !wasUpdatesRoute) {
+        ref.read(packageManagerProvider.notifier).clearCompletedOperations();
         unawaited(
           ref.read(updatePollerProvider.notifier).refreshFromLocal(),
         );

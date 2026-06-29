@@ -1,11 +1,8 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/nostr_route.dart';
-import 'package:zapstore/utils/text_styles.dart';
+import 'package:zapstore/widgets/common/read_more_button.dart';
 
 class ExpandableMarkdown extends HookWidget {
   const ExpandableMarkdown({
@@ -20,10 +17,10 @@ class ExpandableMarkdown extends HookWidget {
   final MarkdownStyleSheet? styleSheet;
 
   static const double _collapsedMaxHeight = 120.0;
+  static const double _fadeHeight = 56.0;
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
     final expanded = useState(false);
 
     bool isLikelyLong(String text) {
@@ -55,86 +52,55 @@ class ExpandableMarkdown extends HookWidget {
           content,
           if (expanded.value) ...[
             const SizedBox(height: 8),
-            GestureDetector(
+            ReadMoreButton(
+              label: 'Show less',
               onTap: () => expanded.value = false,
-              child: _ReadMorePill(label: 'Show less', colors: c),
             ),
           ],
         ],
       );
     }
 
-    return Stack(
-      children: [
-        // Collapsed content, clipped at maxHeight
-        SizedBox(
-          height: _collapsedMaxHeight,
-          child: ClipRect(
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: content,
-            ),
-          ),
-        ),
-
-        // Gradient overlay fading content into background
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 80,
-          child: IgnorePointer(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
+    return SizedBox(
+      height: _collapsedMaxHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: ShaderMask(
+              shaderCallback: (bounds) {
+                final fadeStart =
+                    ((bounds.height - _fadeHeight) / bounds.height)
+                        .clamp(0.0, 1.0);
+                return LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, c.black],
+                  colors: const [
+                    Colors.black,
+                    Colors.black,
+                    Colors.transparent,
+                  ],
+                  stops: [0.0, fadeStart, 1.0],
+                ).createShader(bounds);
+              },
+              blendMode: BlendMode.dstIn,
+              child: ClipRect(
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: content,
                 ),
               ),
             ),
           ),
-        ),
-
-        // "Read More" pill button, absolute at bottom-left
-        Positioned(
-          left: 0,
-          bottom: 8,
-          child: GestureDetector(
-            onTap: () => expanded.value = true,
-            child: _ReadMorePill(label: 'Read More', colors: c),
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: ReadMoreButton(
+              label: 'Read more',
+              onTap: () => expanded.value = true,
+            ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ReadMorePill extends StatelessWidget {
-  const _ReadMorePill({required this.label, required this.colors});
-
-  final String label;
-  final LabColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: colors.white8,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: LabTextStyles.med13.copyWith(color: colors.white66),
-          ),
-        ),
+        ],
       ),
     );
   }

@@ -17,6 +17,7 @@ import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/nostr_route.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/base_dialog.dart';
+import 'package:zapstore/widgets/common/button_loading_overlay.dart';
 import 'package:zapstore/widgets/common/dropdown_menu.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/floating_overflow_menu.dart';
@@ -32,9 +33,14 @@ import 'package:zapstore/widgets/install_alert_dialog.dart';
 /// A blurple bar grows left-to-right in the left section as data downloads;
 /// the right (chevron) section is always solid blurple during those states.
 class SplitInstallButton extends HookConsumerWidget {
-  const SplitInstallButton({super.key, required this.app});
+  const SplitInstallButton({
+    super.key,
+    required this.app,
+    this.showOptionsChevron = true,
+  });
 
   final App app;
+  final bool showOptionsChevron;
 
 
   @override
@@ -236,7 +242,10 @@ class SplitInstallButton extends HookConsumerWidget {
       onTap: isDisabled ? null : leftAction,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.only(left: 16, right: 12),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: showOptionsChevron ? 12 : 16,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -247,17 +256,6 @@ class SplitInstallButton extends HookConsumerWidget {
                 color: isDisabled ? c.white33 : c.white,
               ),
             ),
-            if (showSpinner) ...[
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 13,
-                height: 13,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: c.white66,
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -292,7 +290,67 @@ class SplitInstallButton extends HookConsumerWidget {
       ),
     );
 
-    return OverlayPortal(
+    final expandedChildren = showOptionsChevron
+        ? <Widget>[Expanded(child: leftSection), divider, chevron]
+        : <Widget>[Expanded(child: leftSection)];
+
+    final compactChildren = showOptionsChevron
+        ? <Widget>[leftSection, divider, chevron]
+        : <Widget>[leftSection];
+
+    final pill = ButtonLoadingOverlay(
+      active: showSpinner,
+      child: SizedBox(
+        height: 34,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: gradient,
+            color: gradient == null ? bgColor : null,
+            borderRadius: BorderRadius.circular(17),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(17),
+            child: isExpandedOp
+                ? Stack(
+                    children: [
+                      if (downloadProgress != null)
+                        Positioned.fill(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: downloadProgress,
+                              heightFactor: 1.0,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(gradient: c.blurple),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Positioned.fill(
+                        child: IntrinsicHeight(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.max,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: expandedChildren,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : IntrinsicHeight(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: compactChildren,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+
+    return showOptionsChevron
+        ? OverlayPortal(
       controller: overlayController,
       overlayChildBuilder: (ctx) => CompositedTransformFollower(
         link: layerLink,
@@ -361,69 +419,10 @@ class SplitInstallButton extends HookConsumerWidget {
       ),
       child: CompositedTransformTarget(
         link: layerLink,
-        child: SizedBox(
-          height: 34,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: gradient,
-              color: gradient == null ? bgColor : null,
-              borderRadius: BorderRadius.circular(17),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(17),
-              child: isExpandedOp
-                  ? Stack(
-                      children: [
-                        // ── Blurple progress fill (full button width) ──────
-                        // Sweeps left-to-right across the entire pill surface.
-                        // ClipRRect rounds the pill corners; no extra borderRadius
-                        // is needed on the fill itself.
-                        if (downloadProgress != null)
-                          Positioned.fill(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: FractionallySizedBox(
-                                widthFactor: downloadProgress,
-                                heightFactor: 1.0,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(gradient: c.blurple),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                        // ── Content row (rendered on top of the fill) ─────
-                        Positioned.fill(
-                          child: IntrinsicHeight(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.max,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(child: leftSection),
-                                divider,
-                                chevron,
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : IntrinsicHeight(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          leftSection,
-                          divider,
-                          chevron,
-                        ],
-                      ),
-                    ),
-            ),
-          ),
-        ),
+        child: pill,
       ),
-    );
+    )
+        : pill;
   }
 
   // ── Install actions ──────────────────────────────────────────────────────
@@ -548,6 +547,20 @@ class SplitInstallButton extends HookConsumerWidget {
     if (bytes == null || bytes <= 0) return null;
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
+}
+
+/// Whether an install operation should expand the action button to full width.
+bool isActiveInstallOperation(Object? operation, {required bool isInstalled}) {
+  final effectiveOp =
+      (!isInstalled && operation is Completed) ? null : operation;
+  return effectiveOp is DownloadQueued ||
+      effectiveOp is Downloading ||
+      effectiveOp is DownloadPaused ||
+      effectiveOp is Verifying ||
+      effectiveOp is ReadyToInstall ||
+      effectiveOp is Installing ||
+      effectiveOp is SystemProcessing ||
+      effectiveOp is Uninstalling;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -4,10 +4,20 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/key_generator.dart';
+import 'package:zapstore/widgets/onboarding/secret_key_actions.dart';
 
 // Port of zaplab_design `LabSlotMachine` (Nsec mode) — layout + motion source of truth.
 
 const _bech32Chars = 'QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L';
+
+/// Width of the four-disk reel grid inside [SpinKeySlotMachine].
+const double kSpinKeySlotGridWidth = 252.0;
+
+/// Revealed panel width — grid plus finale [SpinKeySlotMachine] padding.
+const double kSpinKeyRevealedPanelWidth = kSpinKeySlotGridWidth + 20.0;
+
+/// Grid + gap + handle — width while the lever is still on screen.
+const double kSpinKeyActiveRowWidth = kSpinKeySlotGridWidth + 16 + 48;
 
 const _totalHeight = 296.0;
 const _rowGap = 16.0;
@@ -80,20 +90,23 @@ class SpinKeySlotMachine extends StatefulWidget {
     this.initialNsec,
     this.onNsecReady,
     this.onSettled,
-    this.revealFinale = false,
     this.settleDelay = _defaultSettleDelay,
+    this.onFinaleStarted,
+    this.onFinaleComplete,
   });
 
   final String? initialNsec;
   final void Function(String nsec)? onNsecReady;
 
-  /// Fired after all reels stop and [settleDelay] has elapsed — parent can
-  /// switch the surrounding modal into its reveal state.
+  /// Fired after all reels stop and [settleDelay] has elapsed.
   final void Function(String nsec)? onSettled;
-
-  /// When true the handle animates away and a border frames the disks.
-  final bool revealFinale;
   final Duration settleDelay;
+
+  /// Fired when the handle-out / panel-in finale begins (title + footer swap).
+  final VoidCallback? onFinaleStarted;
+
+  /// Called once the handle-out / panel-in finale animation completes.
+  final VoidCallback? onFinaleComplete;
 
   @override
   State<SpinKeySlotMachine> createState() => SpinKeySlotMachineState();
@@ -120,6 +133,7 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
   int _spinGeneration = 0;
   double _handleOffset = _handleMin;
   bool _isDragging = false;
+  bool _finalePlayed = false;
 
   late final AnimationController _handleCtrl;
   late Animation<double> _handleAnim;
@@ -186,12 +200,13 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
     }
   }
 
-  @override
-  void didUpdateWidget(SpinKeySlotMachine oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.revealFinale && !oldWidget.revealFinale) {
-      _finaleCtrl.forward();
-    }
+  void _startFinaleAnimation() {
+    if (_finalePlayed || _finaleCtrl.isAnimating) return;
+    _finalePlayed = true;
+    widget.onFinaleStarted?.call();
+    _finaleCtrl.forward(from: 0).then((_) {
+      if (mounted) widget.onFinaleComplete?.call();
+    });
   }
 
   @override
@@ -258,6 +273,7 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
             Future.delayed(widget.settleDelay, () {
               if (!mounted || generation != _spinGeneration) return;
               widget.onSettled?.call(_nsec);
+              _startFinaleAnimation();
             });
           }
         });
@@ -678,40 +694,71 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
     final finaleT = _finaleAnim.value;
-    final handleWidth = 48.0 * (1 - finaleT);
-    final handleGap = 16.0 * (1 - finaleT);
+    final handleT = (1 - finaleT).clamp(0.0, 1.0);
+    final handleWidth = 48.0 * handleT;
+    final handleGap = 16.0 * handleT;
+    final handleInteractive = !_isSpinning && !_hasSpun && finaleT <= 0;
 
-    return Row(
+    final gridPanel = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Color.lerp(Colors.transparent, c.white8, finaleT),
+      ),
+      padding: EdgeInsets.all(10 * finaleT),
+      child: _buildDiskGrid(c),
+    );
+
+    final reelRow = Row(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: c.white16.withValues(alpha: finaleT),
-              width: LabStroke.thin,
-            ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(10 * finaleT),
-            child: _buildDiskGrid(c),
-          ),
-        ),
+        gridPanel,
         SizedBox(width: handleGap),
-        ClipRect(
-          child: SizedBox(
-            width: handleWidth,
+        if (handleT > 0.001)
+          SizedBox(
+            width: max(handleWidth, 0),
             height: _totalHeight,
-            child: Opacity(
-              opacity: (1 - finaleT).clamp(0.0, 1.0),
-              child: IgnorePointer(
-                ignoring: _hasSpun || finaleT > 0.01,
-                child: _buildHandle(c),
+            child: ClipRect(
+              child: Align(
+                alignment: Alignment.centerRight,
+                widthFactor: handleT,
+                child: Opacity(
+                  opacity: handleT,
+                  child: IgnorePointer(
+                    ignoring: !handleInteractive,
+                    child: _buildHandle(c),
+                  ),
+                ),
               ),
             ),
           ),
+      ],
+    );
+
+    // Spin row is wider than the revealed panel — never clamp both to 272px.
+    final rowWidth = handleT > 0.001
+        ? kSpinKeyActiveRowWidth
+        : kSpinKeyRevealedPanelWidth;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: rowWidth,
+          child: Center(child: reelRow),
         ),
+        if (finaleT > 0.01)
+          Padding(
+            padding: EdgeInsets.only(top: 16 * finaleT),
+            child: Opacity(
+              opacity: finaleT,
+              child: SizedBox(
+                width: kSpinKeyRevealedPanelWidth,
+                child: SecretKeyActionsRow(nsec: _nsec),
+              ),
+            ),
+          ),
       ],
     );
   }

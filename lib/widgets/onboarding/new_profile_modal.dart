@@ -8,11 +8,16 @@ import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/button.dart';
 import 'package:zapstore/widgets/common/input_field.dart';
 import 'package:zapstore/widgets/common/modal.dart';
-import 'package:zapstore/widgets/onboarding/pow_status_banner.dart';
+
+/// Callbacks registered by modal body — footer sits outside the body tree.
+class _NewProfileModalActions {
+  VoidCallback? submit;
+  VoidCallback? useExistingKey;
+}
 
 /// Shows the new-profile modal (name input → create/existing).
 ///
-/// [nsec] is pre-generated so PoW can start as soon as the user enters a name.
+/// [nsec] is pre-generated so PoW mining can start as soon as the user enters a name.
 Future<void> showNewProfileModal(
   BuildContext context, {
   required ProfilePowMiner miner,
@@ -20,47 +25,98 @@ Future<void> showNewProfileModal(
   required void Function(String name) onContinue,
   VoidCallback? onUseExistingKey,
 }) {
+  final canContinue = ValueNotifier(false);
+  final actions = _NewProfileModalActions();
+
   return showModal<void>(
     context,
     title: 'Add a Profile',
-    builder: (ctx) => _NewProfileModalContent(
+    fillHeight: false,
+    footer: (ctx) => ValueListenableBuilder<bool>(
+      valueListenable: canContinue,
+      builder: (_, can, __) {
+        final c = Theme.of(ctx).extension<LabColors>()!;
+        return ModalFooterBar(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LabButton.primary(
+                text: 'Create Profile',
+                onTap: can ? actions.submit : null,
+              ),
+              const SizedBox(height: 10),
+              LabButton.secondary(
+                color: c.black33,
+                onTap: actions.useExistingKey,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    LabIcon(
+                      LabIcons.nostr,
+                      size: 18,
+                      color: c.blurpleLightColor,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Already have a Profile?',
+                      style: LabTextStyles.med15.copyWith(color: c.white66),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+    builder: (ctx) => _NewProfileScope(
       miner: miner,
       nsec: nsec,
+      canContinue: canContinue,
+      actions: actions,
       onContinue: onContinue,
       onUseExistingKey: onUseExistingKey,
+      child: const _NewProfileModalBody(),
     ),
-  );
+  ).whenComplete(canContinue.dispose);
 }
 
-class _NewProfileModalContent extends StatefulWidget {
-  const _NewProfileModalContent({
+class _NewProfileScope extends StatefulWidget {
+  const _NewProfileScope({
     required this.miner,
     required this.nsec,
+    required this.canContinue,
+    required this.actions,
     required this.onContinue,
     this.onUseExistingKey,
+    required this.child,
   });
 
   final ProfilePowMiner miner;
   final String nsec;
+  final ValueNotifier<bool> canContinue;
+  final _NewProfileModalActions actions;
   final void Function(String name) onContinue;
   final VoidCallback? onUseExistingKey;
+  final Widget child;
+
+  static _NewProfileScopeState of(BuildContext context) {
+    return context.findAncestorStateOfType<_NewProfileScopeState>()!;
+  }
 
   @override
-  State<_NewProfileModalContent> createState() =>
-      _NewProfileModalContentState();
+  State<_NewProfileScope> createState() => _NewProfileScopeState();
 }
 
-class _NewProfileModalContentState extends State<_NewProfileModalContent> {
+class _NewProfileScopeState extends State<_NewProfileScope> {
   final _ctrl = TextEditingController();
-  bool _canContinue = false;
   Timer? _miningDebounce;
-  ProfilePowSnapshot _powSnapshot = const ProfilePowSnapshot();
 
   @override
   void initState() {
     super.initState();
-    _powSnapshot = widget.miner.snapshot.value;
-    widget.miner.snapshot.addListener(_onPowUpdate);
+    widget.actions.submit = _submit;
+    widget.actions.useExistingKey = _useExistingKey;
     _ctrl.addListener(_onNameChanged);
     _onNameChanged();
   }
@@ -68,19 +124,15 @@ class _NewProfileModalContentState extends State<_NewProfileModalContent> {
   @override
   void dispose() {
     _miningDebounce?.cancel();
-    widget.miner.snapshot.removeListener(_onPowUpdate);
+    widget.actions.submit = null;
+    widget.actions.useExistingKey = null;
     _ctrl.dispose();
     super.dispose();
   }
 
-  void _onPowUpdate() {
-    if (mounted) setState(() => _powSnapshot = widget.miner.snapshot.value);
-  }
-
   void _onNameChanged() {
     final name = _ctrl.text.trim();
-    final ok = name.isNotEmpty;
-    if (ok != _canContinue) setState(() => _canContinue = ok);
+    widget.canContinue.value = name.isNotEmpty;
 
     _miningDebounce?.cancel();
     _miningDebounce = Timer(const Duration(milliseconds: 350), () {
@@ -98,66 +150,41 @@ class _NewProfileModalContentState extends State<_NewProfileModalContent> {
     if (name.isEmpty) return;
     final onContinue = widget.onContinue;
     Navigator.of(context).pop();
-    // Next modal must open after this sheet is gone — otherwise it stacks behind.
     WidgetsBinding.instance.addPostFrameCallback((_) => onContinue(name));
   }
 
-  void _handleExistingKey() {
+  void _useExistingKey() {
     widget.miner.stop();
     Navigator.of(context).pop();
     widget.onUseExistingKey?.call();
   }
 
+  TextEditingController get nameController => _ctrl;
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+class _NewProfileModalBody extends StatelessWidget {
+  const _NewProfileModalBody();
+
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<LabColors>()!;
+    final scope = _NewProfileScope.of(context);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      padding: const EdgeInsets.fromLTRB(kModalInset, 16, kModalInset, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           LabInputField(
-            controller: _ctrl,
+            controller: scope.nameController,
             label: 'Choose a Profile Name',
             placeholder: 'Profile Name',
             autofocus: true,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
-          ),
-          const SizedBox(height: 12),
-          PowStatusBanner(snapshot: _powSnapshot),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: LabButton.primary(
-              text: 'Create Profile',
-              onTap: _canContinue ? _submit : null,
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: LabButton.secondary(
-              color: c.black33,
-              onTap: _handleExistingKey,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  LabIcon(
-                    LabIcons.nostr,
-                    size: 18,
-                    color: c.blurpleLightColor,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Already have a Profile?',
-                    style: LabTextStyles.med15.copyWith(color: c.white66),
-                  ),
-                ],
-              ),
-            ),
+            onSubmitted: (_) => _NewProfileScope.of(context).widget.actions.submit?.call(),
           ),
         ],
       ),

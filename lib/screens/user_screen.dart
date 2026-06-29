@@ -3,12 +3,14 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:zapstore/providers/activity_feed_notifier.dart';
 import 'package:zapstore/providers/comment_activity_feed_provider.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/detail_page_chrome.dart';
 import 'package:zapstore/widgets/common/note_parser.dart';
+import 'package:zapstore/widgets/common/read_more_button.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/relay_loading_bar.dart';
 import 'package:zapstore/widgets/common/section_header.dart';
@@ -91,10 +93,11 @@ class UserScreen extends HookConsumerWidget {
         ? profile!.name!.trim()
         : detailShortPubkey(pubkey);
 
-    final activityState = ref.watch(profileActivityCommentsProvider(pubkey));
+    final paged = ref.watch(profileActivityFeedProvider(pubkey));
     final activityVisible = ref.watch(profileActivityVisibleLimitProvider(pubkey));
-    final activitySyncing =
-        activityState is StorageLoading && activityState.models.isNotEmpty;
+    final activitySyncing = (paged.firstPage is StorageLoading &&
+            paged.combined.isNotEmpty) ||
+        paged.isLoadingMore;
 
     final npub = Utils.encodeShareableFromString(pubkey, type: 'npub');
 
@@ -152,20 +155,25 @@ class UserScreen extends HookConsumerWidget {
                       placeholder: const CommentCardSkeletonList(rowCount: 3),
                       child: CommentActivityFeed(
                         scrollController: scrollController,
-                        commentsState: activityState,
+                        paged: paged,
                         visibleLimit: activityVisible,
                         emptyMessage: profileLoading
                             ? 'Loading activity…'
                             : 'No activity yet',
-                        onLoadMore: () => ref
-                            .read(
-                              profileActivityVisibleLimitProvider(pubkey).notifier,
-                            )
-                            .update(
-                              (v) => v + kActivityFeedVisibleStep > kActivityFeedMaxVisible
-                                  ? kActivityFeedMaxVisible
-                                  : v + kActivityFeedVisibleStep,
-                            ),
+                        onLoadMore: () => handleActivityFeedLoadMore(
+                          ref: ref,
+                          paged: paged,
+                          currentVisible: activityVisible,
+                          setVisibleLimit: (v) => ref
+                              .read(
+                                profileActivityVisibleLimitProvider(pubkey)
+                                    .notifier,
+                              )
+                              .state = v,
+                          fetchOlderPage: () => ref
+                              .read(profileActivityFeedProvider(pubkey).notifier)
+                              .loadMore(),
+                        ),
                       ),
                     ),
                   ],
@@ -310,10 +318,13 @@ class _ProfileAbout extends HookWidget {
               : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 200),
         ),
-        if (!expanded.value && about.length > 180)
-          TextButton(
-            onPressed: () => expanded.value = true,
-            child: const Text('Read more'),
+        if (about.length > 180)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: ReadMoreButton(
+              label: expanded.value ? 'Show less' : 'Read more',
+              onTap: () => expanded.value = !expanded.value,
+            ),
           ),
       ],
     );

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/constants/app_constants.dart';
+import 'package:zapstore/providers/activity_feed_notifier.dart';
 import 'package:zapstore/providers/comment_activity_feed_provider.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/widgets/common/detail_page_chrome.dart';
@@ -46,10 +47,11 @@ class CommunityScreen extends HookConsumerWidget {
             ? communityProfile!.name!.trim()
             : 'Zapstore Community';
 
-    final activityState = ref.watch(communityActivityCommentsProvider);
+    final paged = ref.watch(communityActivityFeedProvider);
     final activityVisible = ref.watch(communityActivityVisibleLimitProvider);
-    final activitySyncing =
-        activityState is StorageLoading && activityState.models.isNotEmpty;
+    final activitySyncing = (paged.firstPage is StorageLoading &&
+            paged.combined.isNotEmpty) ||
+        paged.isLoadingMore;
 
     return Scaffold(
       body: Stack(
@@ -105,18 +107,24 @@ class CommunityScreen extends HookConsumerWidget {
                         offstage: activeTab.value != CommunitySection.activity,
                         child: _KeepAliveTab(
                           child: CommentActivityFeed(
-                            commentsState: activityState,
+                            scrollController: scrollController,
+                            paged: paged,
                             visibleLimit: activityVisible,
                             emptyMessage: 'No activity yet',
-                            onLoadMore: () => ref
-                                .read(
-                                  communityActivityVisibleLimitProvider.notifier,
-                                )
-                                .update(
-                                  (v) => v + kActivityFeedVisibleStep > kActivityFeedMaxVisible
-                                      ? kActivityFeedMaxVisible
-                                      : v + kActivityFeedVisibleStep,
-                                ),
+                            onLoadMore: () => handleActivityFeedLoadMore(
+                              ref: ref,
+                              paged: paged,
+                              currentVisible: activityVisible,
+                              setVisibleLimit: (v) => ref
+                                  .read(
+                                    communityActivityVisibleLimitProvider
+                                        .notifier,
+                                  )
+                                  .state = v,
+                              fetchOlderPage: () => ref
+                                  .read(communityActivityFeedProvider.notifier)
+                                  .loadMore(),
+                            ),
                           ),
                         ),
                       ),

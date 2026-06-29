@@ -213,6 +213,8 @@ class _AppDetailContent extends HookConsumerWidget {
     void openOptions() => showActionsModal(
           context,
           contentType: ActionsContentType.app,
+          app: app,
+          authorName: publisherName,
           rootContext: ThreadRootContext.fromApp(
             app,
             version: latestMetadata?.version,
@@ -293,7 +295,7 @@ class _AppDetailContent extends HookConsumerWidget {
                     ),
 
                   // App description — webapp-matched: reg15, line-height 1.5,
-                  // white85, collapses to 120px with gradient fade + Read More pill
+                  // white85, collapses to 120px with ShaderMask fade + Read more pill
                   if (app.description.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),

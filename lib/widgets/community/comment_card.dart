@@ -38,6 +38,25 @@ const double kCommentCardColGap = 8;
 /// Space between successive feed rows — matches activity / inbox shell rhythm.
 const double kCommentCardListGap = 16;
 
+/// Hairline divider between successive feed rows (activity lists).
+class CommentCardRowDivider extends StatelessWidget {
+  const CommentCardRowDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
+    const halfGap = kCommentCardListGap / 2 + 4;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: halfGap),
+        Container(height: LabStroke.thin, color: c.white11),
+        const SizedBox(height: halfGap),
+      ],
+    );
+  }
+}
+
 const EdgeInsets _kBubblePadding = EdgeInsets.fromLTRB(11, 6, 11, 6);
 
 const BorderRadius _kBubbleRadius = BorderRadius.only(
@@ -55,10 +74,16 @@ const BorderRadius _kBubbleQuotedRadius = BorderRadius.only(
 );
 
 /// Roots for NIP‑22 threads: Zapstore relay (inbox parity) plus catalog fallback.
-const LocalAndRemoteSource _kCommentCardRootSource = LocalAndRemoteSource(
+const LocalAndRemoteSource kCommentCardRootSource = LocalAndRemoteSource(
   relays: {kDefaultRelay, 'AppCatalog'},
   stream: true,
 );
+
+/// Normalized `E` / `A` tag for batched root lookups.
+String? commentCardRootQueryId(EventBase<Model<dynamic>> event) =>
+    normalizeNostrQueryId(
+      event.getFirstTagValue('E') ?? event.getFirstTagValue('A'),
+    );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tag helpers (same rules as `CommentCard.svelte` `isReply` + oneliner)
@@ -272,9 +297,17 @@ class CommentCard extends ConsumerWidget {
     this.onCardTap,
     this.onReply,
     this.onActions,
+    this.batchedRootModel,
+    this.batchedRootsLoading = false,
+    this.useBatchedRoots = false,
   });
 
   final Comment comment;
+
+  /// When set (activity feed batch), skips per-card root subscription.
+  final Model? batchedRootModel;
+  final bool batchedRootsLoading;
+  final bool useBatchedRoots;
 
   /// When set (inbox feed), shows a blurple unread dot until [event id] is seen.
   final String? inboxOwnerPubkey;
@@ -296,18 +329,17 @@ class CommentCard extends ConsumerWidget {
     final c = Theme.of(context).extension<LabColors>()!;
     final ev = comment.event;
 
-    final rootCoordRaw = _commentCardRootCoord(ev);
-    final rootQueryId = normalizeNostrQueryId(rootCoordRaw);
+    final rootQueryId = commentCardRootQueryId(ev);
     final parentCoordRaw = _commentCardParentCoord(ev);
     final parentQueryId = normalizeNostrQueryId(parentCoordRaw);
     final nested = commentCardIsNestedReply(ev);
 
-    final rootState = rootQueryId != null
+    final rootState = !useBatchedRoots && rootQueryId != null
         ? ref.watch(
             queryKinds(
               ids: {rootQueryId},
               limit: 1,
-              source: _kCommentCardRootSource,
+              source: kCommentCardRootSource,
               subscriptionPrefix: 'cc-r-${comment.id.hashCode}',
               where: null,
               and: null,
@@ -315,12 +347,15 @@ class CommentCard extends ConsumerWidget {
           )
         : null;
 
-    Model? rootModel;
-    final rootRaw = rootState?.models.firstOrNull;
-    if (rootRaw is Model) rootModel = rootRaw;
+    Model? rootModel = useBatchedRoots ? batchedRootModel : null;
+    if (!useBatchedRoots) {
+      final rootRaw = rootState?.models.firstOrNull;
+      if (rootRaw is Model) rootModel = rootRaw;
+    }
 
-    final rootLoading =
-        rootState != null && rootState is StorageLoading && rootModel == null;
+    final rootLoading = useBatchedRoots
+        ? batchedRootsLoading && rootModel == null && rootQueryId != null
+        : rootState != null && rootState is StorageLoading && rootModel == null;
 
     final authorPubkey = normalizeAuthorPubkey(comment.event.pubkey);
     final parentPkRaw = nested ? ev.getFirstTagValue('p') : null;
@@ -335,7 +370,7 @@ class CommentCard extends ConsumerWidget {
             query<Comment>(
               ids: {parentQueryId},
               limit: 1,
-              source: _kCommentCardRootSource,
+              source: kCommentCardRootSource,
               subscriptionPrefix: 'cc-p-${comment.id.hashCode}',
             ),
           )
@@ -382,9 +417,10 @@ class CommentCard extends ConsumerWidget {
 
     late final _RootOneliner oneliner;
     final bool rootMissingAfterLoad = rootQueryId != null &&
-        rootState != null &&
-        rootState is! StorageLoading &&
-        rootModel == null;
+        rootModel == null &&
+        (useBatchedRoots
+            ? !batchedRootsLoading
+            : rootState != null && rootState is! StorageLoading);
 
     if (rootModel != null) {
       oneliner = _rootOnelinerFromModel(rootModel);

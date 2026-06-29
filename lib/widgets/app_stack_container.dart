@@ -56,10 +56,8 @@ List<AppStack> _shuffleStacks(List<AppStack> stacks, {String? signedInPubkey}) {
 /// Fixed card width — matches the app-column width (290px) for visual consistency.
 const double _kStackCardWidth = 290;
 
-/// Row height — content-driven (max of icon grid + text column).
-/// No vertical padding in the card so there is zero dead space at the top.
-///   icon grid: 95px  |  text col: bold17(25)+gap2+reg13×2(39)+gap8+author24 ≈ 98px
-const double _kStackRowHeight = 92;
+/// Row height — fits icon grid + text column without vertical overflow.
+const double _kStackRowHeight = 104;
 
 /// App Stack Container — horizontally scrolling row of fixed-width stack cards,
 /// matching the webapp discover layout.
@@ -288,8 +286,11 @@ class StackCard extends ConsumerWidget {
   static const double _iconSize = 32;
   static const double _gridGap = 6;
   static const double _gridPadding = 8;
+  static const double _gridBorderWidth = 1.4;
+  static const double _gridInnerExtent =
+      _iconSize * 2 + _gridGap;
   static const double _gridExtent =
-      _gridPadding * 2 + _iconSize * 2 + _gridGap;
+      _gridPadding * 2 + _gridInnerExtent + _gridBorderWidth;
 
   /// Renders one icon in the grid, or an empty placeholder tile.
   Widget _gridIcon(App? app, LabColors c) {
@@ -353,7 +354,7 @@ class StackCard extends ConsumerWidget {
       child: Padding(
         padding: EdgeInsets.only(right: trailingPadding),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
               width: _gridExtent,
@@ -361,9 +362,12 @@ class StackCard extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: c.gray33,
                 borderRadius: BorderRadius.circular(LabRadius.r16),
+              ),
+              foregroundDecoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(LabRadius.r16),
                 border: LabBorder.all(
                   color: c.white16,
-                  width: 1.4,
+                  width: _gridBorderWidth,
                 ),
               ),
               padding: const EdgeInsets.all(_gridPadding),
@@ -394,60 +398,56 @@ class StackCard extends ConsumerWidget {
             const SizedBox(width: 16),
 
             Expanded(
-              child: SizedBox(
-                height: _gridExtent,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          stack.name ?? stack.identifier,
-                          style:
-                              LabTextStyles.semibold17.copyWith(color: c.white),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          description.isNotEmpty
-                              ? description
-                              : 'No description',
-                          style: LabTextStyles.reg13.copyWith(
-                            color: description.isNotEmpty
-                                ? c.white66
-                                : c.white33,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    stack.name ?? stack.identifier,
+                    style:
+                        LabTextStyles.semibold17.copyWith(color: c.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description.isNotEmpty
+                        ? description
+                        : 'No description',
+                    style: LabTextStyles.reg13.copyWith(
+                      color: description.isNotEmpty
+                          ? c.white66
+                          : c.white33,
+                      height: 1.2,
                     ),
-                    if (showAuthor)
-                      GestureDetector(
-                        onTap: () => pushUser(context, stack.event.pubkey),
-                        behavior: HitTestBehavior.opaque,
-                        child: Row(
-                          children: [
-                            ProfilePic(profile: author, size: 24),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: ProfileNameWidget(
-                                pubkey: stack.event.pubkey,
-                                profile: author,
-                                isLoading: isAuthorLoading,
-                                style: LabTextStyles.reg13
-                                    .copyWith(color: c.white33),
-                                skeletonWidth: 60,
-                              ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (showAuthor) ...[
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => pushUser(context, stack.event.pubkey),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          ProfilePic(profile: author, size: 24),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ProfileNameWidget(
+                              pubkey: stack.event.pubkey,
+                              profile: author,
+                              isLoading: isAuthorLoading,
+                              style: LabTextStyles.reg13
+                                  .copyWith(color: c.white33),
+                              skeletonWidth: 60,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
           ],

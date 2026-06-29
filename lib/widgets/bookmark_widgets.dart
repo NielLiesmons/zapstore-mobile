@@ -287,21 +287,7 @@ class _AddToStackDialogSignedIn extends HookConsumerWidget {
         source: const LocalAndRemoteSource(relays: 'AppCatalog', stream: false),
         subscriptionPrefix: 'app-user-stacks-dialog',
         // Filter at query level: exclude saved-apps stack and stacks with no app references
-        schemaFilter: (event) {
-          final tags = event['tags'] as List?;
-          if (tags == null) return false;
-          // Check d tag is not the bookmarks identifier
-          final dTag = tags.firstWhere(
-            (t) => t is List && t.isNotEmpty && t[0] == 'd',
-            orElse: () => null,
-          );
-          if (dTag != null && dTag[1] == kAppBookmarksIdentifier) return false;
-          // Check has at least one 'a' tag (app reference)
-          final hasAppRef = tags.any(
-            (t) => t is List && t.isNotEmpty && t[0] == 'a',
-          );
-          return hasAppRef;
-        },
+        schemaFilter: publicAppStackSchemaFilter,
       ),
     );
 
@@ -541,14 +527,23 @@ class _AddToStackDialogSignedIn extends HookConsumerWidget {
             }
 
             // Now save with the updated collections
-            await _savePublicCollections(
-              context,
-              ref,
-              app,
-              publicStacks,
-              selectedCollections.value,
-              newStackNames.value,
-            );
+            try {
+              await saveAppPublicStackSelections(
+                ref,
+                app: app,
+                existingStacks: publicStacks,
+                selectedCollectionIds: selectedCollections.value,
+                newStackNames: newStackNames.value,
+              );
+              if (context.mounted) {
+                context.showInfo('App stacks updated');
+                Navigator.pop(context);
+              }
+            } catch (e) {
+              if (context.mounted) {
+                context.showError('Failed to save', technicalDetails: '$e');
+              }
+            }
           },
           builder: (context, child, callback, buttonState) {
             return FilledButton.icon(
@@ -573,125 +568,102 @@ class _AddToStackDialogSignedIn extends HookConsumerWidget {
     );
   }
 
-  Future<void> _savePublicCollections(
-    BuildContext context,
-    WidgetRef ref,
-    App app,
-    List<AppStack> existingStacks,
-    Set<String> selectedCollectionIds,
-    Map<String, String> newStackNames,
-  ) async {
-    try {
-      final signer = ref.read(Signer.activeSignerProvider);
-      if (signer == null) {
-        if (context.mounted) {
-          context.showError(
-            'Sign in required',
-            description: 'You need to sign in to manage app stacks.',
-          );
-        }
-        return;
-      }
+}
 
-      final platform = ref.read(packageManagerProvider.notifier).platform;
+/// Schema filter for public app stacks in pickers (excludes saved-apps stack).
+bool publicAppStackSchemaFilter(Map<String, dynamic> event) {
+  final tags = event['tags'] as List?;
+  if (tags == null) return false;
+  final dTag = tags.firstWhere(
+    (t) => t is List && t.isNotEmpty && t[0] == 'd',
+    orElse: () => null,
+  );
+  if (dTag != null && dTag[1] == kAppBookmarksIdentifier) return false;
+  final hasAppRef = tags.any(
+    (t) => t is List && t.isNotEmpty && t[0] == 'a',
+  );
+  return hasAppRef;
+}
 
-      // Get current state of which collections contain this app
-      final currentCollectionsWithApp = <String>{};
-      for (final stack in existingStacks) {
-        // Get raw app IDs from event tags
-        final appIds = stack.event.getTagSetValues('a');
-        if (appIds.contains(app.id)) {
-          currentCollectionsWithApp.add(stack.identifier);
-        }
-      }
+/// Persists add/remove of [app] across the user's public stacks.
+Future<void> saveAppPublicStackSelections(
+  WidgetRef ref, {
+  required App app,
+  required List<AppStack> existingStacks,
+  required Set<String> selectedCollectionIds,
+  Map<String, String> newStackNames = const {},
+}) async {
+  final signer = ref.read(Signer.activeSignerProvider);
+  if (signer == null) {
+    throw StateError('Sign in required');
+  }
 
-      // Collections to remove from
-      final collectionsToRemoveFrom = currentCollectionsWithApp.difference(
-        selectedCollectionIds,
-      );
+  final platform = ref.read(packageManagerProvider.notifier).platform;
 
-      // Update or create collections
-      for (final collectionId in selectedCollectionIds) {
-        final existingStack = existingStacks
-            .where((stack) => stack.identifier == collectionId)
-            .firstOrNull;
+  final currentCollectionsWithApp = <String>{};
+  for (final stack in existingStacks) {
+    final appIds = stack.event.getTagSetValues('a');
+    if (appIds.contains(app.id)) {
+      currentCollectionsWithApp.add(stack.identifier);
+    }
+  }
 
-        // Use the provided name from newStackNames, or existing stack name, or identifier
-        final stackName =
-            newStackNames[collectionId] ?? existingStack?.name ?? collectionId;
+  final collectionsToRemoveFrom =
+      currentCollectionsWithApp.difference(selectedCollectionIds);
 
-        // Get existing app IDs as a list to preserve order
-        final existingAppIds =
-            existingStack?.event.getTagSetValues('a').toList() ?? [];
+  for (final collectionId in selectedCollectionIds) {
+    final existingStack = existingStacks
+        .where((stack) => stack.identifier == collectionId)
+        .firstOrNull;
 
-        // Check if app already exists in the stack
-        final appAlreadyExists = existingAppIds.contains(app.id);
+    final stackName =
+        newStackNames[collectionId] ?? existingStack?.name ?? collectionId;
 
-        // Only update if the app is not already in the stack
-        if (!appAlreadyExists) {
-          final partialStack = PartialAppStack(
-            name: stackName,
-            identifier: collectionId,
-            platform: platform,
-          );
-          partialStack.addCommunityKey(kZapstoreCommunityPubkey);
+    final existingAppIds =
+        existingStack?.event.getTagSetValues('a').toList() ?? [];
 
-          // Add existing apps in order
-          for (final appId in existingAppIds) {
-            partialStack.addApp(appId);
-          }
+    if (existingAppIds.contains(app.id)) continue;
 
-          // Add this app at the end
-          partialStack.addApp(app.id);
+    final partialStack = PartialAppStack(
+      name: stackName,
+      identifier: collectionId,
+      platform: platform,
+    );
+    partialStack.addCommunityKey(kZapstoreCommunityPubkey);
 
-          final signedStack = await partialStack.signWith(signer);
-          await ref.storage.save({signedStack});
-          await ref.storage.publish({signedStack}, relays: 'AppCatalog');
-        }
-      }
+    for (final appId in existingAppIds) {
+      partialStack.addApp(appId);
+    }
+    partialStack.addApp(app.id);
 
-      // Remove from deselected collections
-      for (final collectionId in collectionsToRemoveFrom) {
-        final existingStack = existingStacks
-            .where((stack) => stack.identifier == collectionId)
-            .firstOrNull;
-        if (existingStack != null) {
-          final partialStack = PartialAppStack(
-            name: existingStack.name ?? collectionId,
-            identifier: collectionId,
-            platform: platform,
-          );
-          partialStack.addCommunityKey(kZapstoreCommunityPubkey);
+    final signedStack = await partialStack.signWith(signer);
+    await ref.storage.save({signedStack});
+    await ref.storage.publish({signedStack}, relays: 'AppCatalog');
+  }
 
-          // Re-add all apps except the one we're removing, preserving order
-          // Get raw app IDs from event tags as a list to preserve order
-          final existingAppIds = existingStack.event
-              .getTagSetValues('a')
-              .toList();
-          for (final appId in existingAppIds) {
-            if (appId != app.id) {
-              partialStack.addApp(appId);
-            }
-          }
+  for (final collectionId in collectionsToRemoveFrom) {
+    final existingStack = existingStacks
+        .where((stack) => stack.identifier == collectionId)
+        .firstOrNull;
+    if (existingStack == null) continue;
 
-          final signedStack = await partialStack.signWith(signer);
-          await ref.storage.save({signedStack});
-          await ref.storage.publish({signedStack}, relays: 'AppCatalog');
-        }
-      }
+    final partialStack = PartialAppStack(
+      name: existingStack.name ?? collectionId,
+      identifier: collectionId,
+      platform: platform,
+    );
+    partialStack.addCommunityKey(kZapstoreCommunityPubkey);
 
-      if (context.mounted) {
-        if (selectedCollectionIds.isEmpty) {
-          context.showInfo('Removed from all app stacks');
-        } else {
-          context.showInfo('App stacks updated');
-        }
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        context.showError('Failed to save', technicalDetails: '$e');
+    final existingAppIds =
+        existingStack.event.getTagSetValues('a').toList();
+    for (final appId in existingAppIds) {
+      if (appId != app.id) {
+        partialStack.addApp(appId);
       }
     }
+
+    final signedStack = await partialStack.signWith(signer);
+    await ref.storage.save({signedStack});
+    await ref.storage.publish({signedStack}, relays: 'AppCatalog');
   }
 }

@@ -52,7 +52,7 @@ class ZapsSection extends ConsumerWidget {
     if (zaps.isEmpty) {
       return const Padding(
         padding: EdgeInsets.fromLTRB(0, 0, 0, 0),
-        child: EmptyState(message: 'No tips yet', minHeight: 160),
+        child: EmptyState(message: 'No tips yet', minHeight: 120),
       );
     }
 

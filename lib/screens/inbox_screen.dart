@@ -6,35 +6,18 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
-import 'package:zapstore/constants/app_constants.dart';
+import 'package:zapstore/providers/activity_feed_notifier.dart';
 import 'package:zapstore/providers/inbox_seen_provider.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/empty_state.dart';
 import 'package:zapstore/widgets/common/shimmer.dart';
 import 'package:zapstore/widgets/common/top_scroll_fader.dart';
+import 'package:zapstore/widgets/community/comment_activity_feed.dart';
 import 'package:zapstore/widgets/community/comment_card.dart';
 import 'package:zapstore/widgets/modals/actions_modal.dart';
 import 'package:zapstore/widgets/social/root_comment.dart';
 
-/// Max kind-1111 comments to load (any `p` tag matching the inbox owner), from Zapstore relay only.
-const int kInboxReplyLimit = 20;
-
-/// Same [query] arguments must be used everywhere so Riverpod de-dupes the subscription.
-AutoDisposeStateNotifierProvider<RequestNotifier<Comment>, StorageState<Comment>>
-    inboxRepliesProvider(String pubkey) {
-  return query<Comment>(
-    tags: {'#p': {pubkey}},
-    limit: kInboxReplyLimit,
-    where: (comment) =>
-        comment.event.getTagSetValues('p').contains(pubkey),
-    source: const LocalAndRemoteSource(
-      relays: kDefaultRelay,
-      stream: true,
-    ),
-    subscriptionPrefix: 'app-inbox-zapstore-relay-$pubkey',
-  );
-}
 
 /// Full-screen inbox: kind-1111 comments that `p`-tag you, from [kDefaultRelay] only.
 class InboxScreen extends HookConsumerWidget {
@@ -61,8 +44,8 @@ class InboxScreen extends HookConsumerWidget {
       return const Scaffold(body: SizedBox.shrink());
     }
 
-    final commentsState = ref.watch(inboxRepliesProvider(pubkey));
-    final comments = List<Comment>.from(commentsState.models)
+    final paged = ref.watch(inboxFeedProvider(pubkey));
+    final comments = List<Comment>.from(paged.combined)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     final loadingGate = useState(false);
@@ -73,8 +56,28 @@ class InboxScreen extends HookConsumerWidget {
       return timer.cancel;
     }, []);
 
+    void loadMoreInbox() {
+      if (paged.isLoadingMore || !paged.hasMore) return;
+      ref.read(inboxFeedProvider(pubkey).notifier).loadMore();
+    }
+
+    useEffect(() {
+      void listener() {
+        if (!scrollController.hasClients) return;
+        final pos = scrollController.position;
+        if (pos.maxScrollExtent <= 0 ||
+            pos.pixels >= pos.maxScrollExtent - kActivityFeedLoadMoreThreshold) {
+          loadMoreInbox();
+        }
+      }
+
+      scrollController.addListener(listener);
+      WidgetsBinding.instance.addPostFrameCallback((_) => listener());
+      return () => scrollController.removeListener(listener);
+    }, [scrollController, paged.hasMore, paged.isLoadingMore, comments.length]);
+
     final List<Widget> emptyBodyChildren;
-    if (commentsState is StorageError) {
+    if (paged.firstPage is StorageError) {
       emptyBodyChildren = [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -84,7 +87,7 @@ class InboxScreen extends HookConsumerWidget {
           ),
         ),
       ];
-    } else if (commentsState is StorageLoading && loadingGate.value) {
+    } else if (paged.firstPage is StorageLoading && loadingGate.value) {
       emptyBodyChildren = const [
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 14),
@@ -94,8 +97,7 @@ class InboxScreen extends HookConsumerWidget {
     } else {
       emptyBodyChildren = const [
         EmptyState(
-          message:
-              'Nothing here yet. When someone comments on Zapstore, it shows up here.',
+          message: 'Nothing here yet',
           minHeight: 200,
         ),
       ];
@@ -126,10 +128,24 @@ class InboxScreen extends HookConsumerWidget {
                           right: 14,
                           bottom: MediaQuery.paddingOf(context).bottom + 32,
                         ),
-                        itemCount: comments.length,
+                        itemCount: comments.length + (paged.isLoadingMore ? 1 : 0),
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: kCommentCardListGap),
                         itemBuilder: (context, i) {
+                          if (i >= comments.length) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.5,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
                           final comment = comments[i];
                           final eventId = comment.event.id;
                           void markSeen() => ref
@@ -201,33 +217,41 @@ class _InboxHeader extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
-          color: c.black.withValues(alpha: 0.85),
+          color: c.black,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(height: topPad + 9),
+              SizedBox(height: topPad + 8),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 9),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      'Inbox',
-                      style: LabTextStyles.semibold23.copyWith(color: c.white),
+                    Expanded(
+                      child: Text(
+                        'Inbox',
+                        style: LabTextStyles.semibold23.copyWith(color: c.white),
+                      ),
                     ),
-                    const Spacer(),
                     if (onMarkAllRead != null)
                       GestureDetector(
                         onTap: onMarkAllRead,
                         behavior: HitTestBehavior.opaque,
-                        child: Text(
-                          'Mark all as read',
-                          style: LabTextStyles.reg11.copyWith(color: c.white33),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            'Mark all read',
+                            style: LabTextStyles.reg13.copyWith(color: c.white33),
+                          ),
                         ),
                       ),
                   ],
                 ),
               ),
+              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -235,4 +259,3 @@ class _InboxHeader extends StatelessWidget {
     );
   }
 }
-

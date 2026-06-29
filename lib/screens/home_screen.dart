@@ -11,14 +11,14 @@ import 'package:models/models.dart';
 import 'package:zapstore/utils/color.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/nostr_route.dart';
-import 'package:zapstore/screens/inbox_screen.dart';
+import 'package:zapstore/providers/activity_feed_notifier.dart';
+import 'package:zapstore/providers/comment_activity_feed_provider.dart';
+import 'package:zapstore/providers/inbox_seen_provider.dart';
 import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/text_styles.dart';
 import 'package:zapstore/widgets/common/profile_name_widget.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
-
-import '../providers/comment_activity_feed_provider.dart';
-import '../widgets/community/comment_activity_feed.dart';
+import 'package:zapstore/widgets/community/comment_activity_feed.dart';
 import '../widgets/community/community_feed_switcher.dart';
 import '../widgets/common/relay_loading_bar.dart';
 import '../widgets/app_stack_container.dart';
@@ -73,8 +73,42 @@ const double _kInboxTailOpacityFactor = 0.66;
 /// Each tail tier narrows by this total amount vs the row above (centered).
 const double _kInboxTailWidthStep = 24;
 
-/// Placeholder height while the inbox preview waits out the loading shimmer delay.
-const double _kInboxPreviewBlankHeight = 88;
+/// Bottom spacing below the home welcome / inbox panel.
+const double _kHomeTopPanelBottomPadding = 14;
+
+/// Tighter bottom spacing when the inbox preview shows a 3+ unread stack.
+const double _kHomeInboxStackedBottomPadding = 10;
+
+/// Placeholder height for the home inbox / welcome loading panel — between the
+/// compact inbox preview and the taller welcome panel.
+const double _kHomeInboxPanelPlaceholderHeight = 110;
+
+/// Shared rounded panel placeholder for inbox preview and session restore.
+class _HomeInboxPanelPlaceholder extends StatelessWidget {
+  const _HomeInboxPanelPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Shimmer(
+        width: double.infinity,
+        height: _kHomeInboxPanelPlaceholderHeight,
+        radius: LabRadius.r16,
+      ),
+    );
+  }
+}
+
+/// Placeholder while secure-storage session restore runs.
+class _SessionRestoreInboxPlaceholder extends StatelessWidget {
+  const _SessionRestoreInboxPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _HomeInboxPanelPlaceholder();
+  }
+}
 
 class _InboxPreviewChevron extends StatelessWidget {
   const _InboxPreviewChevron();
@@ -208,7 +242,7 @@ class HomeScreen extends HookConsumerWidget {
 // Home content (apps + stacks feed)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HomeContent extends ConsumerWidget {
+class _HomeContent extends HookConsumerWidget {
   const _HomeContent({
     super.key,
     required this.scrollController,
@@ -225,92 +259,96 @@ class _HomeContent extends ConsumerWidget {
   /// (installed packages, deep links, auto sign-in). Show sync spinners.
   final bool isSyncing;
 
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final signedInPubkey = ref.watch(Signer.activePubkeyProvider);
-    final hasProfile = signedInPubkey != null;
+    final storedHint = ref.watch(storedSessionHintProvider);
+    final authRestore = ref.watch(authRestoreProvider);
+    final sessionActive = authRestore.hasValue &&
+        authRestore.valueOrNull == true &&
+        signedInPubkey != null;
+    final restoringSession = authRestore.isLoading ||
+        ((storedHint.valueOrNull ?? false) && !authRestore.hasValue);
+
+    final communitySectionKey = useMemoized(() => GlobalKey());
 
     return ShimmerTheme(
       child: SingleChildScrollView(
         controller: scrollController,
-        // Ensures Flutter's gesture arena resolves to vertical scroll
-        // immediately on first touch — especially important when the view
-        // contains nested horizontal lists that would otherwise win the
-        // first-pointer competition.
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (hasProfile) ...[
+            if (sessionActive) ...[
               const SizedBox(height: 6),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _InboxStackPreview(pubkey: signedInPubkey),
+              _InboxStackPreview(pubkey: signedInPubkey),
+            ] else if (restoringSession) ...[
+              const SizedBox(height: 6),
+              const Padding(
+                padding: EdgeInsets.only(bottom: _kHomeTopPanelBottomPadding),
+                child: _SessionRestoreInboxPlaceholder(),
               ),
             ] else ...[
               const SizedBox(height: 6),
               const Padding(
-                padding: EdgeInsets.only(bottom: 10),
+                padding: EdgeInsets.only(bottom: _kHomeTopPanelBottomPadding),
                 child: WelcomePanel(),
               ),
             ],
 
-            // ── Apps ──────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionHeader(
-                    title: 'Apps',
-                    linkText: 'See more',
-                    onLinkTap: () => context.push('/updates'),
-                    bottomPadding: 18,
-                    isLoading: isSyncing,
+                // ── Apps ──────────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SectionHeader(
+                        title: 'Apps',
+                        linkText: 'See more',
+                        onLinkTap: () => context.push('/updates'),
+                        bottomPadding: 18,
+                        isLoading: isSyncing,
+                      ),
+                      LatestReleasesContainer(
+                        showSkeleton: showSkeleton,
+                        scrollController: scrollController,
+                      ),
+                    ],
                   ),
-                  LatestReleasesContainer(
-                    showSkeleton: showSkeleton,
-                    scrollController: scrollController,
-                  ),
-                ],
-              ),
-            ),
+                ),
 
-            // ── Stacks ────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.only(bottom: 19),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionHeader(
-                    title: 'Stacks',
-                    linkText: 'See more',
-                    onLinkTap: () => pushStacks(context),
-                    bottomPadding: 17,
-                    isLoading: isSyncing,
+                // ── Stacks ────────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 19),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SectionHeader(
+                        title: 'Stacks',
+                        linkText: 'See more',
+                        onLinkTap: () => pushStacks(context),
+                        bottomPadding: 14,
+                        isLoading: isSyncing,
+                      ),
+                      AppStackContainer(
+                        showSkeleton: showSkeleton,
+                      ),
+                    ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2, bottom: 6),
-                    child: AppStackContainer(
-                      showSkeleton: showSkeleton,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
 
-            // ── Forum ──────────────────────────────────────────────────────
-            _ForumSection(
-              scrollController: scrollController,
-              showSkeleton: showSkeleton,
-              isSyncing: isSyncing,
+                // ── Forum ──────────────────────────────────────────────────────
+                _ForumSection(
+                  sectionKey: communitySectionKey,
+                  scrollController: scrollController,
+                  showSkeleton: showSkeleton,
+                  isSyncing: isSyncing,
+                ),
+                const SizedBox(height: 32),
+              ],
             ),
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
-    );
+          ),
+        );
   }
 }
 
@@ -323,10 +361,20 @@ class _InboxStackPreview extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final commentsState = ref.watch(inboxRepliesProvider(pubkey));
-    final comments = List<Comment>.from(commentsState.models)
+    final paged = ref.watch(inboxFeedProvider(pubkey));
+    final seenIds = ref.watch(inboxSeenProvider(pubkey));
+    final comments = List<Comment>.from(paged.combined)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final latest = comments.firstOrNull;
+    final unreadComments = comments
+        .where((comment) => !seenIds.contains(comment.event.id))
+        .toList();
+    final latestUnread = unreadComments.firstOrNull;
+    final unreadCount = unreadComments.length;
+    final tailTierCount = switch (unreadCount) {
+      >= 3 => 2,
+      2 => 1,
+      _ => 0,
+    };
 
     final loadingGate = useState(false);
     useEffect(() {
@@ -335,6 +383,13 @@ class _InboxStackPreview extends HookConsumerWidget {
       });
       return timer.cancel;
     }, const []);
+
+    if (!loadingGate.value) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: _kHomeTopPanelBottomPadding),
+        child: _HomeInboxPanelPlaceholder(),
+      );
+    }
 
     final tailColor1 = c.gray66.withValues(
       alpha: c.gray66.a * _kInboxTailOpacityFactor,
@@ -355,17 +410,7 @@ class _InboxStackPreview extends HookConsumerWidget {
     );
 
     final mainPanel = () {
-      if (!loadingGate.value) {
-        return SizedBox(
-          height: _kInboxPreviewBlankHeight,
-          child: ClipRRect(
-            borderRadius: mainPanelRadius,
-            child: ColoredBox(color: c.gray66),
-          ),
-        );
-      }
-
-      if (commentsState is StorageError) {
+      if (paged.firstPage is StorageError) {
         return ClipRRect(
           borderRadius: mainPanelRadius,
           child: Material(
@@ -403,46 +448,18 @@ class _InboxStackPreview extends HookConsumerWidget {
         );
       }
 
-      if (commentsState is StorageLoading && comments.isEmpty) {
-        return ClipRRect(
-          borderRadius: mainPanelRadius,
-          child: Material(
-            color: c.gray66,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Shimmer(width: 36, height: 36, isCircle: true),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Shimmer(
-                          width: double.infinity,
-                          height: 14,
-                          radius: LabRadius.r8,
-                        ),
-                        SizedBox(height: 8),
-                        Shimmer(
-                          width: 160,
-                          height: 14,
-                          radius: LabRadius.r8,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const _InboxPreviewChevron(),
-                ],
-              ),
-            ),
-          ),
+      if (paged.firstPage is StorageLoading && comments.isEmpty) {
+        return Shimmer(
+          width: double.infinity,
+          height: _kHomeInboxPanelPlaceholderHeight,
+          radius: LabRadius.r16,
         );
       }
 
-      if (latest == null) {
+      if (latestUnread == null) {
+        final emptyLabel = comments.isEmpty
+            ? 'No comments yet'
+            : 'Nothing new';
         return ClipRRect(
           borderRadius: mainPanelRadius,
           child: Material(
@@ -466,7 +483,7 @@ class _InboxStackPreview extends HookConsumerWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'No comments yet',
+                      emptyLabel,
                       style: LabTextStyles.reg13.copyWith(color: c.white66),
                     ),
                   ),
@@ -478,6 +495,7 @@ class _InboxStackPreview extends HookConsumerWidget {
         );
       }
 
+      final latest = latestUnread;
       final authorPk = latest.event.pubkey;
       final authorState = ref.watch(
         query<Profile>(
@@ -570,9 +588,15 @@ class _InboxStackPreview extends HookConsumerWidget {
       );
     }();
 
+    final bottomPadding = unreadCount > 3
+        ? _kHomeInboxStackedBottomPadding
+        : _kHomeTopPanelBottomPadding;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: GestureDetector(
+      padding: EdgeInsets.only(bottom: bottomPadding),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: GestureDetector(
         onTap: () => context.push('/inbox'),
         behavior: HitTestBehavior.opaque,
         child: LayoutBuilder(
@@ -585,36 +609,39 @@ class _InboxStackPreview extends HookConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 mainPanel,
-                Align(
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: midW,
-                    height: _kInboxTailMid,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: tailColor1,
-                        borderRadius: midTailBottomRadius,
+                if (tailTierCount >= 1)
+                  Align(
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: midW,
+                      height: _kInboxTailMid,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: tailColor1,
+                          borderRadius: midTailBottomRadius,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Align(
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: backW,
-                    height: _kInboxTailBack,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: tailColor2,
-                        borderRadius: backTailBottomRadius,
+                if (tailTierCount >= 2)
+                  Align(
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: backW,
+                      height: _kInboxTailBack,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: tailColor2,
+                          borderRadius: backTailBottomRadius,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -626,26 +653,18 @@ class _InboxStackPreview extends HookConsumerWidget {
 
 enum _SortOrder { latest, mostZapped }
 
-const _kForumCategories = [
-  'General',
-  'Dev Support',
-  'User Support',
-  'Feature Request',
-  'Ideas',
-  'Bugs',
-  'Announcements',
-  'News',
-  'Showcase',
-  'Off-Topic',
-];
+/// Fixed height for forum filter row / activity sync bar — prevents tab-switch jump.
+const double _kCommunityToolbarHeight = 40;
 
 class _ForumSection extends HookConsumerWidget {
   const _ForumSection({
+    required this.sectionKey,
     required this.scrollController,
     required this.showSkeleton,
     required this.isSyncing,
   });
 
+  final GlobalKey sectionKey;
   final ScrollController scrollController;
 
   /// True while storage is not yet ready — show shimmer, do not mount ForumFeedContainer.
@@ -660,39 +679,39 @@ class _ForumSection extends HookConsumerWidget {
     final visited = useState(<CommunityFeedMode>{CommunityFeedMode.forum});
 
     void selectMode(CommunityFeedMode mode) {
+      if (feedMode.value == mode) return;
       feedMode.value = mode;
       visited.value = {...visited.value, mode};
     }
 
     final activitySubscribed = visited.value.contains(CommunityFeedMode.activity);
 
-    final headerLoading = feedMode.value == CommunityFeedMode.forum
-        ? isSyncing
-        : activitySubscribed &&
-            ref.watch(communityActivityCommentsProvider) is StorageLoading;
-
     return Column(
+      key: sectionKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         CommunityFeedHeader(
           mode: feedMode.value,
           onModeChanged: selectMode,
-          isLoading: headerLoading,
+          bottomPadding:
+              feedMode.value == CommunityFeedMode.forum ? 17 : 8,
         ),
 
         if (feedMode.value == CommunityFeedMode.forum)
-          _ForumFilterRow(
-            selectedCategory: selectedCategory.value,
-            sortOrder: sortOrder.value,
-            onCategoryTap: (cat) {
-              selectedCategory.value =
-                  selectedCategory.value == cat ? null : cat;
-            },
-            onSortOrderChange: (order) => sortOrder.value = order,
-          ),
-
-        if (feedMode.value == CommunityFeedMode.activity && activitySubscribed)
-          _CommunityActivitySyncBar(),
+          SizedBox(
+            height: _kCommunityToolbarHeight,
+            child: _ForumFilterRow(
+              selectedCategory: selectedCategory.value,
+              sortOrder: sortOrder.value,
+              onCategoryTap: (cat) {
+                selectedCategory.value =
+                    selectedCategory.value == cat ? null : cat;
+              },
+              onSortOrderChange: (order) => sortOrder.value = order,
+            ),
+          )
+        else if (activitySubscribed)
+          const _CommunityActivitySyncBar(),
 
         if (visited.value.contains(CommunityFeedMode.forum))
           Offstage(
@@ -753,20 +772,23 @@ class _CommunityActivityFeedPane extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activityState = ref.watch(communityActivityCommentsProvider);
+    final paged = ref.watch(communityActivityFeedProvider);
     final activityVisible = ref.watch(communityActivityVisibleLimitProvider);
 
     return CommentActivityFeed(
       scrollController: scrollController,
-      commentsState: activityState,
+      paged: paged,
       visibleLimit: activityVisible,
-      onLoadMore: () => ref
-          .read(communityActivityVisibleLimitProvider.notifier)
-          .update(
-            (v) => v + kActivityFeedVisibleStep > kActivityFeedMaxVisible
-                ? kActivityFeedMaxVisible
-                : v + kActivityFeedVisibleStep,
-          ),
+      onLoadMore: () => handleActivityFeedLoadMore(
+        ref: ref,
+        paged: paged,
+        currentVisible: activityVisible,
+        setVisibleLimit: (v) => ref
+            .read(communityActivityVisibleLimitProvider.notifier)
+            .state = v,
+        fetchOlderPage: () =>
+            ref.read(communityActivityFeedProvider.notifier).loadMore(),
+      ),
     );
   }
 }
@@ -776,9 +798,10 @@ class _CommunityActivitySyncBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activityState = ref.watch(communityActivityCommentsProvider);
-    final syncing =
-        activityState is StorageLoading && activityState.models.isNotEmpty;
+    final paged = ref.watch(communityActivityFeedProvider);
+    final syncing = (paged.firstPage is StorageLoading &&
+            paged.combined.isNotEmpty) ||
+        paged.isLoadingMore;
     if (!syncing) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -853,7 +876,7 @@ class _ForumFilterRow extends HookWidget {
               padding: const EdgeInsets.fromLTRB(14, 0, 0, 0),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: _kForumCategories.map((cat) {
+                children: kForumCategories.map((cat) {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: LabLabel(
@@ -1239,14 +1262,18 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
     final searching = widget.isSearching;
 
     final pubkey = ref.watch(Signer.activePubkeyProvider);
-    final profile = ref.watch(
-      Signer.activeProfileProvider(
-        const LocalAndRemoteSource(
-          relays: {'social', 'vertex'},
-          cachedFor: Duration(hours: 2),
-        ),
-      ),
-    );
+    final storedHint = ref.watch(storedSessionHintProvider);
+    final authRestore = ref.watch(authRestoreProvider);
+    final sessionActive = authRestore.hasValue &&
+        authRestore.valueOrNull == true &&
+        pubkey != null;
+    final restoringSession = authRestore.isLoading ||
+        ((storedHint.valueOrNull ?? false) && !authRestore.hasValue);
+    final profile = sessionActive
+        ? ref.watch(
+            Signer.activeProfileProvider(const LocalSource()),
+          )
+        : null;
     final updateCount = ref.watch(updateCountProvider);
     final poller = ref.watch(updatePollerProvider);
     final categorized = ref.watch(categorizedUpdatesProvider);
@@ -1280,13 +1307,19 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
                   child: AnimatedScale(
                     scale: _profilePressed ? 0.92 : 1.0,
                     duration: const Duration(milliseconds: 120),
-                    child: pubkey != null
+                    child: sessionActive
                         ? ProfilePic(
                             profile: profile,
                             pubkey: pubkey,
                             size: _picSize,
                           )
-                        : Container(
+                        : restoringSession
+                            ? Shimmer(
+                                width: _picSize,
+                                height: _picSize,
+                                isCircle: true,
+                              )
+                            : Container(
                             width: _picSize,
                             height: _picSize,
                             decoration: BoxDecoration(

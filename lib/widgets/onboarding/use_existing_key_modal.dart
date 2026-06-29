@@ -99,7 +99,7 @@ class _UseExistingKeyContentState
     final c = Theme.of(context).extension<LabColors>()!;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      padding: const EdgeInsets.fromLTRB(kModalInset, 0, kModalInset, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

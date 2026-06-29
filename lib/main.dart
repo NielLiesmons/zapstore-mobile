@@ -24,12 +24,14 @@ import 'package:zapstore/services/deep_link_service.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/text_scale.dart';
 import 'package:zapstore/providers/theme_mode.dart';
-import 'package:zapstore/services/local_signer_service.dart';
+import 'package:zapstore/services/auth_session_service.dart';
 import 'package:zapstore/services/updates_service.dart';
-import 'package:zapstore/utils/key_generator.dart';
 import 'models/emoji_list.dart';
 import 'models/forum_post.dart';
 import 'package:zapstore/widgets/breathing_logo.dart';
+
+export 'package:zapstore/services/auth_session_service.dart'
+    show onSignInSuccess, clearLocalOnboardingSession;
 
 /// Global provider container for error reporting (accessible outside widget tree)
 late final ProviderContainer _providerContainer;
@@ -43,6 +45,11 @@ void main() {
     ForumPost.register();
     UserEmojiList.register();
     EmojiSet.register();
+    Model.register(
+      kind: 1111,
+      constructor: Comment.fromMap,
+      partialConstructor: PartialComment.fromMap,
+    );
 
     // Edge-to-edge: let content draw behind system bars.
     // The barrier overlay and modal backdrop will now cover the full screen.
@@ -102,6 +109,10 @@ class ZapstoreApp extends HookConsumerWidget {
 
     // Watch initialization state for error overlay display
     final initState = ref.watch(appInitializationProvider);
+
+    // Kick off credential probe + session restore as early as possible.
+    ref.watch(storedSessionHintProvider);
+    ref.watch(authRestoreProvider);
 
     // Keep update polling alive app-wide — independent of profile sign-in.
     ref.watch(updatePollerProvider);
@@ -289,6 +300,7 @@ const _kDefaultAppCatalogRelay = 'wss://relay.zapstore.dev';
 
 /// Resolves as soon as local storage is open and queries can be made.
 /// UI content gates on this — not on the full [appInitializationProvider].
+/// Local seed DB + SQLite must be enough to render meaningful UI offline.
 final storageReadyProvider = FutureProvider<void>((ref) async {
   final dir = await getApplicationSupportDirectory();
   final dbPath = path.join(dir.path, 'zapstore.db');
@@ -323,6 +335,7 @@ final storageReadyProvider = FutureProvider<void>((ref) async {
             'wss://nos.lol',
           },
           'vertex': {'wss://relay.vertexlab.io'},
+          'primal': {'wss://relay.primal.net'},
         },
         responseTimeout: Duration(seconds: 6),
       ),
@@ -330,12 +343,32 @@ final storageReadyProvider = FutureProvider<void>((ref) async {
   );
 });
 
-/// Resolves after all app services are ready (installed packages, deep links,
-/// auto sign-in). Gates update polling and the error overlay in [_AppWidget].
-/// Content display gates on [storageReadyProvider] instead.
+/// True when secure storage has an Amber pubkey or local onboarding nsec.
+final storedSessionHintProvider = FutureProvider<bool>((ref) async {
+  return probeStoredCredentials(ref);
+});
+
+/// Restores session right after SQLite is open — before package sync.
+final authRestoreProvider = FutureProvider<bool>((ref) async {
+  await ref.watch(storageReadyProvider.future);
+  final amber = ref.read(amberSignerProvider);
+  try {
+    return await restoreSession(ref, amber);
+  } catch (e, stack) {
+    debugPrint('authRestoreProvider failed: $e\n$stack');
+    await clearLocalOnboardingSession(ref, amberSigner: amber);
+    return false;
+  }
+});
+
+/// Resolves after all app services are ready (installed packages, deep links).
+/// Session restore runs first via [authRestoreProvider].
 final appInitializationProvider = FutureProvider<void>((ref) async {
   // Wait for storage to be open first
   await ref.watch(storageReadyProvider.future);
+
+  // Restore signed-in profile before slow device / package work.
+  await ref.watch(authRestoreProvider.future);
 
   // Initialize device capabilities (used for dynamic download concurrency)
   await DeviceCapabilitiesCache.initialize();
@@ -353,8 +386,6 @@ final appInitializationProvider = FutureProvider<void>((ref) async {
   unawaited(backgroundService.initialize());
 
   await ref.read(deepLinkServiceProvider).initialize();
-
-  await _attemptAutoSignIn(ref);
 });
 
 // AmberSigner provider for Nostr authentication
@@ -390,44 +421,6 @@ Future<void> _maybeCopySeedDatabase(String dbPath) async {
   } catch (_) {
     // Non-fatal: the app works fine without the seed — just a cold start
   }
-}
-
-Future<void> _attemptAutoSignIn(Ref ref) async {
-  // Try Amber first (NIP-55 external signer app).
-  try {
-    await ref.read(amberSignerProvider).attemptAutoSignIn();
-    await onSignInSuccess(ref);
-    return;
-  } catch (_) {}
-
-  // Fallback: try a locally generated key stored from the onboarding flow.
-  try {
-    final nsec = await ref.read(localSignerServiceProvider).loadNsec();
-    if (nsec != null) {
-      final hex = KeyGenerator.nsecToHex(nsec);
-      final signer = Bip340PrivateKeySigner(hex, ref);
-      await signer.signIn();
-      await onSignInSuccess(ref);
-    }
-  } catch (e) {
-    debugPrint('Local key auto sign-in failed: $e');
-  }
-}
-
-/// Query ContactList after successful sign-in
-Future<void> onSignInSuccess(Ref ref) async {
-  final pubkey = ref.read(Signer.activePubkeyProvider);
-  if (pubkey == null) return;
-
-  final storage =
-      ref.read(storageNotifierProvider.notifier) as PurplebaseStorageNotifier;
-
-  // Fetch contact list for stack sorting (await to ensure it's cached)
-  await storage.query(
-    RequestFilter<ContactList>(authors: {pubkey}).toRequest(),
-    source: const RemoteSource(relays: 'social', stream: false),
-    subscriptionPrefix: 'app-contact-list',
-  );
 }
 
 /// Observes app lifecycle events and manages package/storage state

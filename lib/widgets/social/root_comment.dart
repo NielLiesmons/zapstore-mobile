@@ -12,6 +12,7 @@ import 'package:zapstore/widgets/common/note_parser.dart';
 import 'package:zapstore/widgets/common/profile_pic.dart';
 import 'package:zapstore/widgets/common/profile_pic_stack.dart';
 import 'package:zapstore/widgets/modals/actions_modal.dart';
+import 'package:zapstore/widgets/modals/comment_modal.dart';
 import 'package:zapstore/widgets/composer/nostr_composer.dart';
 import 'package:zapstore/widgets/composer/nostr_text_controller.dart' show ComposerResult;
 import 'package:zapstore/widgets/social/message_bubble.dart';
@@ -22,20 +23,55 @@ import 'package:zapstore/widgets/social/thread_root.dart';
 import 'package:zapstore/widgets/modals/tip_amount_modal.dart';
 import 'package:zapstore/widgets/social/tip_amount_row.dart';
 
+/// BFS walk of [root.replies] → [reply.replies] → … collecting ALL descendants
+/// at every depth, sorted chronologically.
+///
+/// Mirrors webapp's collectCommentSubtree() in thread-discussion.js.
+List<Comment> collectCommentSubtree(Comment root) {
+  final result = <Comment>[];
+  final seen = <String>{};
+  try {
+    final queue = <Comment>[...root.replies.toList()];
+    while (queue.isNotEmpty) {
+      final c = queue.removeAt(0);
+      if (seen.add(c.id)) {
+        result.add(c);
+        queue.addAll(c.replies.toList());
+      }
+    }
+    result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  } catch (_) {
+    // Relationship load can fail on partial/corrupt cache — degrade to empty.
+  }
+  return result;
+}
+
+/// When exactly one non-wrapper root comment has nested replies, return its id
+/// so the feed can render that thread inline (webapp SocialTabs.svelte).
+String? singleRootCommentId(List<Comment> comments) {
+  final roots = comments.where((c) => c.parentKind != 1111).toList();
+  if (roots.length != 1) return null;
+  final subtree = collectCommentSubtree(roots.first);
+  if (subtree.isEmpty) return null;
+  return roots.first.id;
+}
+
 /// Feed-level comment item matching webapp's RootComment.svelte.
 ///
 /// Layout:
 ///   1. [MessageBubble] — avatar + gray66 bubble (author header + content).
 ///   2. [_ReplyIndicator] — connector line + [ProfilePicStack] (when replies exist).
+///   3. [_InlineThreadFeed] — expanded L-rail thread (single-root inline mode).
 ///
-/// Tapping opens [_ThreadModal] — a bottom sheet with blurred backdrop —
-/// showing the root comment (flat [ThreadComment]) + all replies as bubbles.
+/// Tapping opens [_ThreadModal] unless [inlineThreadReplies] is true — then the
+/// subtree is shown inline with swipeable reply bubbles.
 class RootComment extends ConsumerWidget {
   const RootComment({
     super.key,
     required this.comment,
     this.rootContext,
     this.version,
+    this.inlineThreadReplies = false,
     this.onReply,
     this.onActions,
   });
@@ -47,6 +83,10 @@ class RootComment extends ConsumerWidget {
 
   /// App version tag shown beside the root label (app detail threads).
   final String? version;
+
+  /// When true, render nested replies inline with L-rails instead of opening
+  /// the thread modal (webapp `inlineThreadReplies`).
+  final bool inlineThreadReplies;
 
   /// Called when the user swipes right on the bubble (reply gesture).
   /// If null the swipe animation still plays but nothing opens.
@@ -63,6 +103,50 @@ class RootComment extends ConsumerWidget {
       comment: comment,
       rootContext: rootContext,
       version: version,
+    );
+  }
+
+  void _openInlineReply(
+    BuildContext context,
+    WidgetRef ref, {
+    required Comment parent,
+    Profile? parentAuthor,
+  }) {
+    final isRoot = parent.id == comment.id;
+    showCommentModal(
+      context,
+      placeholder: 'Reply…',
+      quotedComment: isRoot ? null : parent,
+      quotedCommentAuthor: isRoot ? null : parentAuthor,
+      rootContext: rootContext,
+      version: version,
+      showRootConnector: false,
+      onSubmit: (result) => publishReplyComment(
+        ref: ref,
+        result: result,
+        parentComment: parent,
+      ),
+    );
+  }
+
+  void _openRootActions(
+    BuildContext context,
+    WidgetRef ref,
+    Profile? author,
+  ) {
+    showCommentActionsModal(
+      context,
+      comment: comment,
+      commentAuthor: author,
+      rootContext: rootContext,
+      version: version,
+      ref: ref,
+      onComment: () => _openInlineReply(
+        context,
+        ref,
+        parent: comment,
+        parentAuthor: author,
+      ),
     );
   }
 
@@ -145,13 +229,24 @@ class RootComment extends ConsumerWidget {
       emojiTags: NoteParser.extractEmojiTags(comment.event.tags),
     );
 
-    return GestureDetector(
-      onTap: () => _openThread(context, ref),
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          MessageBubble(
+    final showInline = inlineThreadReplies && allDescendants.isNotEmpty;
+    final subtree = showInline ? collectCommentSubtree(comment) : <Comment>[];
+    final byId = showInline
+        ? <String, Comment>{
+            comment.id: comment,
+            for (final r in subtree) r.id: r,
+          }
+        : <String, Comment>{};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: showInline
+              ? () => _openRootActions(context, ref, author)
+              : () => _openThread(context, ref),
+          behavior: HitTestBehavior.opaque,
+          child: MessageBubble(
             profile: author,
             pubkey: comment.event.pubkey,
             content: contentWidget,
@@ -160,38 +255,62 @@ class RootComment extends ConsumerWidget {
             onAvatarTap: () => pushUser(context, comment.event.pubkey),
             onNameTap: () => pushUser(context, comment.event.pubkey),
             onReply: onReply ??
-                () => showThreadModal(
-                      context,
-                      ref,
-                      comment: comment,
-                      rootContext: rootContext,
-                      version: version,
-                      initialExpand: true,
-                    ),
+                (showInline
+                    ? () => _openInlineReply(
+                          context,
+                          ref,
+                          parent: comment,
+                          parentAuthor: author,
+                        )
+                    : () => showThreadModal(
+                          context,
+                          ref,
+                          comment: comment,
+                          rootContext: rootContext,
+                          version: version,
+                          initialExpand: true,
+                        )),
             onActions: onActions ??
-                () => showCommentActionsModal(
-                      context,
-                      comment: comment,
-                      commentAuthor: author,
-                      rootContext: rootContext,
-                      version: version,
-                      ref: ref,
-                    ),
+                () => showInline
+                    ? _openRootActions(context, ref, author)
+                    : showCommentActionsModal(
+                        context,
+                        comment: comment,
+                        commentAuthor: author,
+                        rootContext: rootContext,
+                        version: version,
+                        ref: ref,
+                      ),
+          ),
+        ),
+
+        // Reply indicator — pulled 2px up to sit closer to the bubble above.
+        if (!showInline && allDescendants.isNotEmpty)
+          Transform.translate(
+            offset: const Offset(0, -2),
+            child: _ReplyIndicator(
+              replierItems: replierItemsWithProfiles,
+              replyCount: allDescendants.length,
+              replyIndicatorText: replyIndicatorText,
+              onTap: () => _openThread(context, ref),
+            ),
           ),
 
-          // Reply indicator — pulled 2px up to sit closer to the bubble above.
-          if (allDescendants.isNotEmpty)
-            Transform.translate(
-              offset: const Offset(0, -2),
-              child: _ReplyIndicator(
-                replierItems: replierItemsWithProfiles,
-                replyCount: allDescendants.length,
-                replyIndicatorText: replyIndicatorText,
-                onTap: () => _openThread(context, ref),
-              ),
+        if (showInline)
+          _InlineThreadFeed(
+            root: comment,
+            replies: subtree,
+            byId: byId,
+            rootContext: rootContext,
+            version: version,
+            onReply: (reply, profile) => _openInlineReply(
+              context,
+              ref,
+              parent: reply,
+              parentAuthor: profile,
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -309,35 +428,12 @@ class _ThreadBody extends ConsumerWidget {
   final String? version;
   final ThreadModalController controller;
 
-  /// BFS walk of [root.replies] → [reply.replies] → … collecting ALL
-  /// descendants at every depth, sorted chronologically.
-  ///
-  /// Mirrors webapp's collectCommentSubtree() in thread-discussion.js.
-  static List<Comment> _collectSubtree(Comment root) {
-    final result = <Comment>[];
-    final seen = <String>{};
-    try {
-      final queue = <Comment>[...root.replies.toList()];
-      while (queue.isNotEmpty) {
-        final c = queue.removeAt(0);
-        if (seen.add(c.id)) {
-          result.add(c);
-          queue.addAll(c.replies.toList());
-        }
-      }
-      result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    } catch (_) {
-      // Relationship load can fail on partial/corrupt cache — degrade to empty.
-    }
-    return result;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).extension<LabColors>()!;
 
     // Recursively collect all descendants (level 2, 3, 4 …) chronologically.
-    final replies = _collectSubtree(comment);
+    final replies = collectCommentSubtree(comment);
 
     // Build an id→Comment lookup for resolving quoted parents in nested replies.
     final byId = <String, Comment>{
@@ -725,8 +821,6 @@ class _ThreadReply extends ConsumerWidget {
     );
   }
 
-  /// Extracts the lowercase `e` tag value (direct parent event ID) from a
-  /// NIP-22 comment event, matching getCommentParentEventId() in thread-discussion.js.
   static String? _getParentEventId(Comment c) {
     for (final tag in c.event.tags) {
       if (tag.length >= 2 && tag[0] == 'e' && tag[1].isNotEmpty) {
@@ -734,6 +828,206 @@ class _ThreadReply extends ConsumerWidget {
       }
     }
     return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline thread feed (single-root expanded replies with L-rails)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Expanded inline reply list with vertical spine + branch/elbow connectors.
+///
+/// Port of webapp `.inline-thread` inside [RootComment.svelte].
+class _InlineThreadFeed extends ConsumerWidget {
+  const _InlineThreadFeed({
+    required this.root,
+    required this.replies,
+    required this.byId,
+    required this.onReply,
+    this.rootContext,
+    this.version,
+  });
+
+  final Comment root;
+  final List<Comment> replies;
+  final Map<String, Comment> byId;
+  final ThreadRootContext? rootContext;
+  final String? version;
+  final void Function(Comment reply, Profile? profile) onReply;
+
+  static const _inset = 32.0;
+  static const _gap = 12.0;
+  static const _picSize = 36.0;
+  static const _lineWidth = 1.5;
+  static const _elbowHeight = 12.0;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: _inset, top: _gap),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Continuous vertical spine — stops at the top of the last L.
+          Positioned(
+            left: 0,
+            top: -_gap,
+            bottom: _picSize / 2 - 1 + _elbowHeight,
+            width: _lineWidth,
+            child: ColoredBox(color: c.white16),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < replies.length; i++) ...[
+                if (i > 0) const SizedBox(height: _gap),
+                _InlineThreadRow(
+                  reply: replies[i],
+                  rootId: root.id,
+                  byId: byId,
+                  isLast: i == replies.length - 1,
+                  rootContext: rootContext,
+                  version: version,
+                  onReply: onReply,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineThreadRow extends ConsumerWidget {
+  const _InlineThreadRow({
+    required this.reply,
+    required this.rootId,
+    required this.byId,
+    required this.isLast,
+    required this.onReply,
+    this.rootContext,
+    this.version,
+  });
+
+  final Comment reply;
+  final String rootId;
+  final Map<String, Comment> byId;
+  final bool isLast;
+  final ThreadRootContext? rootContext;
+  final String? version;
+  final void Function(Comment reply, Profile? profile) onReply;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = Theme.of(context).extension<LabColors>()!;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        SizedBox(
+          width: kInlineThreadConnectorWidth,
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: _InlineThreadFeed._picSize / 2 - 1),
+              child: isLast
+                  ? LabInlineThreadElbow(color: c.white16)
+                  : LabInlineThreadBranch(color: c.white16),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _InlineThreadReply(
+            reply: reply,
+            rootId: rootId,
+            byId: byId,
+            rootContext: rootContext,
+            version: version,
+            onReply: onReply,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Swipeable reply bubble inside the inline thread feed.
+class _InlineThreadReply extends ConsumerWidget {
+  const _InlineThreadReply({
+    required this.reply,
+    required this.rootId,
+    required this.byId,
+    required this.onReply,
+    this.rootContext,
+    this.version,
+  });
+
+  final Comment reply;
+  final String rootId;
+  final Map<String, Comment> byId;
+  final ThreadRootContext? rootContext;
+  final String? version;
+  final void Function(Comment reply, Profile? profile) onReply;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileState = ref.watch(
+      query<Profile>(
+        authors: {reply.event.pubkey},
+        source: const LocalAndRemoteSource(
+          relays: {'social', 'vertex'},
+          stream: false,
+          cachedFor: Duration(hours: 2),
+        ),
+        subscriptionPrefix: 'itr-profile-${reply.event.pubkey}',
+      ),
+    );
+    final profile = profileState.models.firstOrNull;
+
+    final parentId = _ThreadReply._getParentEventId(reply);
+    final isNestedReply = parentId != null && parentId != rootId;
+    final quotedComment = isNestedReply ? byId[parentId] : null;
+
+    Widget bubbleContent = NoteParser.parseSafe(
+      context,
+      reply.content,
+      emojiTags: NoteParser.extractEmojiTags(reply.event.tags),
+    );
+
+    if (quotedComment != null) {
+      bubbleContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          QuotedMessage.fromComment(quotedComment),
+          bubbleContent,
+        ],
+      );
+    }
+
+    return MessageBubble(
+      profile: profile,
+      pubkey: reply.event.pubkey,
+      content: bubbleContent,
+      timestamp: reply.createdAt,
+      isLight: true,
+      inThreadModal: true,
+      onAvatarTap: () => pushUser(context, reply.event.pubkey),
+      onNameTap: () => pushUser(context, reply.event.pubkey),
+      onReply: () => onReply(reply, profile),
+      onActions: () => showCommentActionsModal(
+        context,
+        comment: reply,
+        commentAuthor: profile,
+        rootContext: rootContext,
+        version: version,
+        ref: ref,
+        onComment: () => onReply(reply, profile),
+      ),
+    );
   }
 }
 

@@ -33,14 +33,14 @@ class WelcomePanel extends HookConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 12, 0),
+                padding: const EdgeInsets.fromLTRB(14, 12, 12, 8),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
                       child: Text(
                         'Welcome',
-                        style: LabTextStyles.semibold17.copyWith(color: c.white),
+                        style: LabTextStyles.heroTitle.copyWith(color: c.white),
                       ),
                     ),
                     GestureDetector(
@@ -69,7 +69,7 @@ class WelcomePanel extends HookConsumerWidget {
                 icon: LabIcons.profile,
                 title: 'Add a Profile',
                 description: 'To enjoy our social features',
-                padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
                 onTap: () => launchProfileOnboarding(context, ref),
               ),
               Container(height: LabStroke.thin, color: c.white16),
@@ -92,7 +92,7 @@ class _WelcomeOption extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.description,
-    this.padding = const EdgeInsets.fromLTRB(10, 8, 10, 8),
+    this.padding = const EdgeInsets.fromLTRB(10, 10, 10, 10),
     this.onTap,
   });
 
@@ -102,7 +102,7 @@ class _WelcomeOption extends StatelessWidget {
   final EdgeInsets padding;
   final VoidCallback? onTap;
 
-  static const double _iconBoxSize = 40;
+  static const double _iconBoxSize = 44;
 
   @override
   Widget build(BuildContext context) {
@@ -121,15 +121,14 @@ class _WelcomeOption extends StatelessWidget {
                 width: _iconBoxSize,
                 height: _iconBoxSize,
                 decoration: BoxDecoration(
-                  color: c.black33,
+                  color: c.white8,
                   borderRadius: BorderRadius.circular(LabRadius.r11),
                 ),
                 child: Center(
                   child: LabIcon(
                     icon,
-                    size: 20,
-                    thick: true,
-                    color: c.white33,
+                    size: 22,
+                    color: c.white66,
                   ),
                 ),
               ),
@@ -140,7 +139,7 @@ class _WelcomeOption extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: LabTextStyles.med13.copyWith(color: c.white66),
+                      style: LabTextStyles.med15.copyWith(color: c.white66),
                     ),
                     const SizedBox(height: 1),
                     Text(

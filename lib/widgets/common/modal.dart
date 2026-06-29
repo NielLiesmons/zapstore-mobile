@@ -248,7 +248,10 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TitleBlock(widget.title!, widget.description, c),
+                ModalTitleBlock(
+                  title: widget.title!,
+                  description: widget.description,
+                ),
                 const SizedBox(height: kModalInset),
                 widget.child,
               ],
@@ -412,22 +415,27 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _TitleBlock — title + optional description (matches .modal-title-block)
+// ModalTitleBlock — title + optional description (matches .modal-title-block)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TitleBlock extends StatelessWidget {
-  const _TitleBlock(this.title, this.description, this.c);
+/// Standard centred modal heading — same layout as [showModal]'s `title:` param.
+class ModalTitleBlock extends StatelessWidget {
+  const ModalTitleBlock({
+    super.key,
+    required this.title,
+    this.description,
+  });
 
   final String title;
   final String? description;
-  final LabColors c;
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).extension<LabColors>()!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         kModalInset,
-        kModalInset + 6,
+        kModalInset + 10,
         kModalInset,
         0,
       ),
