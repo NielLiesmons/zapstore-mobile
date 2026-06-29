@@ -51,7 +51,15 @@ void main() {
       ),
     );
 
-    await tester.drag(find.byType(GestureDetector), const Offset(0, 220));
+    await tester.drag(
+      find
+          .descendant(
+            of: find.byType(SpinKeySlotMachine),
+            matching: find.byType(GestureDetector),
+          )
+          .first,
+      const Offset(0, 220),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -64,8 +72,8 @@ void main() {
   });
 
   testWidgets('finale animation survives modal title swap', (tester) async {
-    final finaleActive = ValueNotifier(false);
     final revealed = ValueNotifier(false);
+    final finaleProgress = ValueNotifier(0.0);
     final slotKey = GlobalKey<SpinKeySlotMachineState>();
 
     await tester.pumpWidget(
@@ -75,19 +83,14 @@ void main() {
           body: Column(
             children: [
               ValueListenableBuilder<bool>(
-                valueListenable: finaleActive,
-                builder: (_, active, __) =>
-                    Text(active ? 'Great! 🎉' : 'Hey there!'),
-              ),
-              ValueListenableBuilder<bool>(
                 valueListenable: revealed,
-                builder: (_, showDesc, __) =>
-                    showDesc ? const Text('description') : const SizedBox(),
+                builder: (_, isRevealed, __) =>
+                    Text(isRevealed ? 'Great! 🎉' : 'Hey there!'),
               ),
               SpinKeySlotMachine(
                 key: slotKey,
                 initialNsec: sampleNsec,
-                onFinaleStarted: () => finaleActive.value = true,
+                onFinaleProgress: (t) => finaleProgress.value = t,
                 onFinaleComplete: () => revealed.value = true,
               ),
             ],
@@ -102,8 +105,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 260));
 
     expect(slotKey.currentState, same(stateRef));
-    expect(finaleActive.value, isTrue);
     expect(revealed.value, isFalse);
+    expect(finaleProgress.value, greaterThan(0.2));
     expect(stateRef.finaleProgress, greaterThan(0.2));
 
     await tester.pump(const Duration(milliseconds: 300));

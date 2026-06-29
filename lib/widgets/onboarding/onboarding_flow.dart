@@ -9,7 +9,6 @@ import 'package:zapstore/services/profile_pow_miner.dart';
 import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/key_generator.dart';
 import 'package:zapstore/services/notification_service.dart';
-import 'package:zapstore/widgets/common/modal.dart';
 import 'package:zapstore/widgets/onboarding/complete_profile_modal.dart';
 import 'package:zapstore/widgets/onboarding/new_profile_modal.dart';
 import 'package:zapstore/widgets/onboarding/spin_key_modal.dart';
@@ -31,14 +30,16 @@ void launchProfileOnboarding(BuildContext context, WidgetRef ref) {
     nsec: nsec,
     onContinue: (name) {
       if (!context.mounted) return;
+      final parentContext = context;
       showSpinKeyModal(
         context,
         profileName: name,
         nsec: nsec,
         miner: miner,
-        onCompleteProfile: (spinCtx) => _openCompleteProfile(
-          spinCtx,
-          ref,
+        onCompleteProfile: (spinContext) => _openCompleteProfile(
+          parentContext: parentContext,
+          spinContext: spinContext,
+          ref: ref,
           displayName: name,
           nsec: nsec,
           miner: miner,
@@ -56,21 +57,23 @@ void launchProfileOnboarding(BuildContext context, WidgetRef ref) {
   );
 }
 
-Future<void> _openCompleteProfile(
-  BuildContext spinContext,
-  WidgetRef ref, {
+Future<void> _openCompleteProfile({
+  required BuildContext parentContext,
+  required BuildContext spinContext,
+  required WidgetRef ref,
   required String displayName,
   required String nsec,
   required ProfilePowMiner miner,
 }) async {
-  ModalNestScope.setNested(spinContext, isOpen: true);
+  Navigator.of(spinContext).pop();
+
   try {
     if (!kOnboardingDeferSignIn) {
       await _ensureOnboardingSignIn(ref, nsec: nsec);
 
-      if (!spinContext.mounted) return;
+      if (!parentContext.mounted) return;
       if (ref.read(Signer.activePubkeyProvider) == null) {
-        spinContext.showError(
+        parentContext.showError(
           'Profile setup failed',
           description: 'Could not sign in with your new key.',
           technicalDetails: 'activePubkey is null after onboarding sign-in',
@@ -79,29 +82,25 @@ Future<void> _openCompleteProfile(
       }
     }
 
-    if (!spinContext.mounted) return;
+    if (!parentContext.mounted) return;
     final saved = await showCompleteProfileModal(
-      spinContext,
+      parentContext,
       initialName: displayName,
       miner: miner,
-      nestedModal: true,
+      nestedModal: false,
       publishOnSave: false,
     );
 
-    if (saved && spinContext.mounted) {
-      Navigator.of(spinContext).pop();
-      if (spinContext.mounted) spinContext.go('/');
+    if (saved && parentContext.mounted) {
+      Navigator.of(parentContext).pop();
+      if (parentContext.mounted) parentContext.go('/');
     }
   } catch (e) {
-    if (spinContext.mounted) {
-      spinContext.showError(
+    if (parentContext.mounted) {
+      parentContext.showError(
         'Profile setup failed',
         technicalDetails: '$e',
       );
-    }
-  } finally {
-    if (spinContext.mounted) {
-      ModalNestScope.setNested(spinContext, isOpen: false);
     }
   }
 }

@@ -24,6 +24,10 @@ const double kSpinKeyRevealedPanelWidth =
 const double kSpinKeyActiveRowWidth =
     kSpinKeySlotGridWidth + _kSpinKeyBorderSlack + 16 + 48;
 
+/// Reserved height for copy/download row under the reel grid (always allocated).
+const double kSpinKeyActionsRowHeight = 40.0;
+const double kSpinKeyActionsTopPadding = 12.0;
+
 const _totalHeight = 296.0;
 const _rowGap = 16.0;
 const _diskWidth = 56.0;
@@ -100,6 +104,7 @@ class SpinKeySlotMachine extends StatefulWidget {
     this.onSettled,
     this.settleDelay = _defaultSettleDelay,
     this.onFinaleStarted,
+    this.onFinaleProgress,
     this.onFinaleComplete,
   });
 
@@ -110,8 +115,11 @@ class SpinKeySlotMachine extends StatefulWidget {
   final void Function(String nsec)? onSettled;
   final Duration settleDelay;
 
-  /// Fired when the handle-out / panel-in finale begins (title + footer swap).
+  /// Fired when the handle-out / panel-in finale begins.
   final VoidCallback? onFinaleStarted;
+
+  /// 0→1 progress while the handle-out / panel-in finale runs.
+  final void Function(double t)? onFinaleProgress;
 
   /// Called once the handle-out / panel-in finale animation completes.
   final VoidCallback? onFinaleComplete;
@@ -182,7 +190,9 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
       curve: Curves.easeInOutCubic,
     );
     _finaleCtrl.addListener(() {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
+      widget.onFinaleProgress?.call(_finaleAnim.value);
     });
 
     if (widget.initialNsec != null && widget.initialNsec!.isNotEmpty) {
@@ -713,8 +723,9 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
     final c = Theme.of(context).extension<LabColors>()!;
     final t = _finaleAnim.value;
     final handleT = (1 - t).clamp(0.0, 1.0);
-    final handleWidth = 48.0 * handleT;
+    const handleWidth = 48.0;
     final handleGap = 16.0 * handleT;
+    final handleSlotWidth = handleWidth * handleT;
     final handleInteractive = !_isSpinning && !_hasSpun && t <= 0;
 
     final gridPanel = Container(
@@ -733,20 +744,19 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
       children: [
         gridPanel,
         SizedBox(width: handleGap),
-        if (handleT > 0.001)
+        if (handleSlotWidth > 0.5)
           SizedBox(
-            width: max(handleWidth, 0),
+            width: handleSlotWidth,
             height: _totalHeight,
-            child: ClipRect(
-              child: Align(
-                alignment: Alignment.centerRight,
-                widthFactor: handleT,
-                child: Opacity(
-                  opacity: handleT,
-                  child: IgnorePointer(
-                    ignoring: !handleInteractive,
-                    child: _buildHandle(c),
-                  ),
+            child: FittedBox(
+              fit: BoxFit.contain,
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                width: handleWidth,
+                height: _totalHeight,
+                child: IgnorePointer(
+                  ignoring: !handleInteractive,
+                  child: _buildHandle(c),
                 ),
               ),
             ),
@@ -764,14 +774,20 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
           width: rowWidth,
           child: Center(child: reelRow),
         ),
-        if (_finalePlayed || t > 0)
-          Padding(
-            padding: EdgeInsets.only(top: 16 * t),
-            child: SizedBox(
-              width: kSpinKeyRevealedPanelWidth,
-              child: SecretKeyActionsRow(nsec: _nsec, revealT: t),
+        Padding(
+          padding: const EdgeInsets.only(top: kSpinKeyActionsTopPadding),
+          child: SizedBox(
+            width: kSpinKeyRevealedPanelWidth,
+            height: kSpinKeyActionsRowHeight,
+            child: Opacity(
+              opacity: t.clamp(0.0, 1.0),
+              child: IgnorePointer(
+                ignoring: t < 0.85,
+                child: SecretKeyActionsRow(nsec: _nsec),
+              ),
             ),
           ),
+        ),
       ],
     );
   }

@@ -61,6 +61,10 @@ Future<T?> showModal<T>(
   /// When true the barrier is transparent — the parent modal (via
   /// [ModalNestScope]) provides dimming. Matches webapp `nestedModal`.
   bool nestedModal = false,
+
+  /// When false, content above a [footer] is not faded at the bottom scroll
+  /// edge (intended for compact modals whose body sits just above the footer).
+  bool footerEdgeFade = true,
 }) {
   final c = Theme.of(context).extension<LabColors>()!;
 
@@ -79,6 +83,7 @@ Future<T?> showModal<T>(
         footer: footer,
         fillHeight: fillHeight,
         maxHeightFactor: maxHeightFactor,
+        footerEdgeFade: footerEdgeFade,
         colors: c,
         child: builder(ctx),
       );
@@ -137,6 +142,7 @@ class _AppModalSurface extends StatefulWidget {
     this.footer,
     this.fillHeight = false,
     this.maxHeightFactor = 0.75,
+    this.footerEdgeFade = true,
   });
 
   final Widget child;
@@ -146,6 +152,7 @@ class _AppModalSurface extends StatefulWidget {
   final WidgetBuilder? footer;
   final bool fillHeight;
   final double maxHeightFactor;
+  final bool footerEdgeFade;
 
   @override
   State<_AppModalSurface> createState() => _AppModalSurfaceState();
@@ -277,14 +284,15 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
         builder: (_, offset, inner) {
           // Top fade reaches full intensity over 4 px after a 4 px trigger.
           final topT = ((offset - 4.0) / 4.0).clamp(0.0, 1.0);
-          final hasFooter = widget.footer != null;
+          final fadeFooterEdge =
+              widget.footer != null && widget.footerEdgeFade;
           return LayoutBuilder(
             builder: (context, constraints) {
               return ShaderMask(
                 shaderCallback: (bounds) {
                   final bh = bounds.height;
                   final ts = (40.0 / bh).clamp(0.0, 0.5);
-                  final bs = hasFooter
+                  final bs = fadeFooterEdge
                       ? ((bh - kCommentModalBottomFade) / bh).clamp(0.5, 1.0)
                       : 1.0;
                   return LinearGradient(
@@ -294,7 +302,7 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
                       Colors.black.withValues(alpha: 1.0 - topT),
                       Colors.black,
                       Colors.black,
-                      hasFooter ? Colors.transparent : Colors.black,
+                      fadeFooterEdge ? Colors.transparent : Colors.black,
                     ],
                     stops: [0.0, ts, bs, 1.0],
                   ).createShader(bounds);
@@ -319,7 +327,7 @@ class _AppModalSurfaceState extends State<_AppModalSurface>
         if (widget.fillHeight)
           Expanded(child: scrollableChild)
         else
-          Flexible(child: scrollableChild),
+          Flexible(fit: FlexFit.loose, child: scrollableChild),
 
         // ── Pinned footer ─────────────────────────────────────────────────
         if (widget.footer != null)

@@ -17,8 +17,7 @@ import 'package:zapstore/widgets/common/button.dart';
 import 'package:zapstore/widgets/common/input_field.dart';
 import 'package:zapstore/widgets/common/modal.dart';
 
-/// Profile editor — photo, name, and bio. Used for onboarding ("Complete
-/// Profile") and settings ("Edit Profile").
+/// Profile editor — photo, name, and bio. Used for onboarding and settings.
 ///
 /// Returns `true` when the user saved successfully.
 Future<bool> showEditProfileModal(
@@ -32,6 +31,7 @@ Future<bool> showEditProfileModal(
   bool publishOnSave = false,
   bool nestedModal = false,
   bool fillHeight = true,
+  bool footerEdgeFade = true,
   String saveButtonLabel = 'Save profile',
   bool deferSignIn = false,
 }) {
@@ -44,6 +44,7 @@ Future<bool> showEditProfileModal(
     title: title,
     description: description,
     fillHeight: fillHeight,
+    footerEdgeFade: footerEdgeFade,
     maxHeightFactor: fillHeight ? 0.88 : 0.75,
     footer: (ctx) => ValueListenableBuilder<VoidCallback?>(
       valueListenable: saveAction,
@@ -73,7 +74,7 @@ Future<bool> showEditProfileModal(
   });
 }
 
-/// Onboarding alias — [showEditProfileModal] with "Complete Profile" title.
+/// Onboarding alias — [showEditProfileModal] titled "Your Profile".
 Future<bool> showCompleteProfileModal(
   BuildContext context, {
   required String initialName,
@@ -83,13 +84,13 @@ Future<bool> showCompleteProfileModal(
 }) {
   return showEditProfileModal(
     context,
-    title: 'Complete Profile',
-    description: 'Add a photo and a short about so people recognize you.',
+    title: 'Your Profile',
     initialName: initialName,
     miner: miner,
     nestedModal: nestedModal,
     publishOnSave: publishOnSave,
     fillHeight: false,
+    footerEdgeFade: false,
     deferSignIn: kOnboardingDeferSignIn,
   );
 }
@@ -134,7 +135,9 @@ class _EditProfileContentState extends ConsumerState<_EditProfileContent> {
     _nameController = TextEditingController(text: widget.initialName);
     _aboutController = TextEditingController(text: widget.initialAbout);
     _pictureUrl = widget.initialPictureUrl;
-    widget.onSaveReady(saveProfile);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onSaveReady(saveProfile);
+    });
   }
 
   @override
