@@ -32,6 +32,7 @@ import '../widgets/latest_releases_container.dart';
 import '../widgets/search_app_card.dart';
 import '../utils/extensions.dart';
 import '../main.dart';
+import '../services/auth_session_service.dart';
 import '../services/package_manager/package_manager.dart';
 import '../services/updates_service.dart';
 import '../widgets/common/top_scroll_fader.dart';
@@ -1270,9 +1271,7 @@ class _HomeTopBarState extends ConsumerState<_HomeTopBar> {
     final restoringSession = authRestore.isLoading ||
         ((storedHint.valueOrNull ?? false) && !authRestore.hasValue);
     final profile = sessionActive
-        ? ref.watch(
-            Signer.activeProfileProvider(const LocalSource()),
-          )
+        ? ref.watch(safeActiveLocalProfileProvider)
         : null;
     final updateCount = ref.watch(updateCountProvider);
     final poller = ref.watch(updatePollerProvider);

@@ -62,4 +62,53 @@ void main() {
     FlutterError.onError = FlutterError.presentError;
     expect(errors, isEmpty);
   });
+
+  testWidgets('finale animation survives modal title swap', (tester) async {
+    final finaleActive = ValueNotifier(false);
+    final revealed = ValueNotifier(false);
+    final slotKey = GlobalKey<SpinKeySlotMachineState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(extensions: [LabColors.dark()]),
+        home: Scaffold(
+          body: Column(
+            children: [
+              ValueListenableBuilder<bool>(
+                valueListenable: finaleActive,
+                builder: (_, active, __) =>
+                    Text(active ? 'Great! 🎉' : 'Hey there!'),
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: revealed,
+                builder: (_, showDesc, __) =>
+                    showDesc ? const Text('description') : const SizedBox(),
+              ),
+              SpinKeySlotMachine(
+                key: slotKey,
+                initialNsec: sampleNsec,
+                onFinaleStarted: () => finaleActive.value = true,
+                onFinaleComplete: () => revealed.value = true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final stateRef = slotKey.currentState!;
+    stateRef.debugStartFinale();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+
+    expect(slotKey.currentState, same(stateRef));
+    expect(finaleActive.value, isTrue);
+    expect(revealed.value, isFalse);
+    expect(stateRef.finaleProgress, greaterThan(0.2));
+
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(revealed.value, isTrue);
+    expect(stateRef.finaleProgress, greaterThan(0.99));
+  });
 }

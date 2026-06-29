@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:models/models.dart';
+import 'package:zapstore/constants/app_constants.dart';
 import 'package:zapstore/services/onboarding_profile_service.dart';
 import 'package:zapstore/services/profile_pow_miner.dart';
 import 'package:zapstore/theme.dart';
@@ -21,8 +22,7 @@ import 'package:zapstore/widgets/common/modal.dart';
 ///
 /// Returns `true` when the user saved successfully.
 Future<bool> showEditProfileModal(
-  BuildContext context,
-  WidgetRef ref, {
+  BuildContext context, {
   required String title,
   String? description,
   required String initialName,
@@ -33,6 +33,7 @@ Future<bool> showEditProfileModal(
   bool nestedModal = false,
   bool fillHeight = true,
   String saveButtonLabel = 'Save profile',
+  bool deferSignIn = false,
 }) {
   final saving = ValueNotifier(false);
   final saveAction = ValueNotifier<VoidCallback?>(null);
@@ -57,12 +58,12 @@ Future<bool> showEditProfileModal(
       ),
     ),
     builder: (ctx) => _EditProfileContent(
-      ref: ref,
       initialName: initialName,
       initialAbout: initialAbout ?? '',
       initialPictureUrl: initialPictureUrl,
       miner: miner,
       publishOnSave: publishOnSave,
+      deferSignIn: deferSignIn,
       saving: saving,
       onSaveReady: (fn) => saveAction.value = fn,
     ),
@@ -74,8 +75,7 @@ Future<bool> showEditProfileModal(
 
 /// Onboarding alias — [showEditProfileModal] with "Complete Profile" title.
 Future<bool> showCompleteProfileModal(
-  BuildContext context,
-  WidgetRef ref, {
+  BuildContext context, {
   required String initialName,
   ProfilePowMiner? miner,
   bool nestedModal = false,
@@ -83,7 +83,6 @@ Future<bool> showCompleteProfileModal(
 }) {
   return showEditProfileModal(
     context,
-    ref,
     title: 'Complete Profile',
     description: 'Add a photo and a short about so people recognize you.',
     initialName: initialName,
@@ -91,27 +90,28 @@ Future<bool> showCompleteProfileModal(
     nestedModal: nestedModal,
     publishOnSave: publishOnSave,
     fillHeight: false,
+    deferSignIn: kOnboardingDeferSignIn,
   );
 }
 
 class _EditProfileContent extends ConsumerStatefulWidget {
   const _EditProfileContent({
-    required this.ref,
     required this.initialName,
     required this.initialAbout,
     this.initialPictureUrl,
     this.miner,
     required this.publishOnSave,
+    this.deferSignIn = false,
     required this.saving,
     required this.onSaveReady,
   });
 
-  final WidgetRef ref;
   final String initialName;
   final String initialAbout;
   final String? initialPictureUrl;
   final ProfilePowMiner? miner;
   final bool publishOnSave;
+  final bool deferSignIn;
   final ValueNotifier<bool> saving;
   final void Function(VoidCallback save) onSaveReady;
 
@@ -162,9 +162,18 @@ class _EditProfileContentState extends ConsumerState<_EditProfileContent> {
 
     try {
       final bytes = await file.readAsBytes();
+      if (widget.deferSignIn) {
+        if (!mounted) return;
+        setState(() {
+          _localPreview = bytes;
+          _pictureUrl = null;
+        });
+        return;
+      }
+
       final mime = file.mimeType ?? 'image/jpeg';
       final url = await uploadOnboardingProfileImage(
-        ref: widget.ref,
+        ref: ref,
         bytes: bytes,
         mimeType: mime,
       );
@@ -199,16 +208,23 @@ class _EditProfileContentState extends ConsumerState<_EditProfileContent> {
     setState(() => _error = null);
 
     try {
+      if (widget.deferSignIn) {
+        widget.miner?.stop();
+        widget.miner?.dispose();
+        if (mounted) Navigator.of(context).pop(true);
+        return;
+      }
+
       if (widget.publishOnSave && widget.miner != null) {
         await publishFinalOnboardingProfile(
-          ref: widget.ref,
+          ref: ref,
           displayName: name,
           about: _aboutController.text,
           pictureUrl: _pictureUrl,
           miner: widget.miner!,
         );
       } else {
-        final signer = widget.ref.read(Signer.activeSignerProvider);
+        final signer = ref.read(Signer.activeSignerProvider);
         if (signer == null) {
           throw Exception('Sign in to save your profile');
         }
@@ -220,7 +236,7 @@ class _EditProfileContentState extends ConsumerState<_EditProfileContent> {
           pictureUrl: _sanitizePictureUrl(_pictureUrl),
         );
         final signed = await partial.signWith(signer);
-        await widget.ref.storage.save({signed});
+        await ref.storage.save({signed});
         widget.miner?.stop();
         widget.miner?.dispose();
       }

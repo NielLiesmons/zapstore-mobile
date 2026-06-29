@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
-import 'package:zapstore/utils/extensions.dart';
-import 'package:zapstore/main.dart' show onSignInSuccess;
+import 'package:zapstore/constants/app_constants.dart';
+import 'package:zapstore/services/auth_session_service.dart';
 import 'package:zapstore/services/local_signer_service.dart';
 import 'package:zapstore/services/profile_pow_miner.dart';
+import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/key_generator.dart';
 import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/widgets/common/modal.dart';
@@ -64,21 +65,23 @@ Future<void> _openCompleteProfile(
 }) async {
   ModalNestScope.setNested(spinContext, isOpen: true);
   try {
-    await _ensureOnboardingSignIn(ref, nsec: nsec);
+    if (!kOnboardingDeferSignIn) {
+      await _ensureOnboardingSignIn(ref, nsec: nsec);
 
-    if (!spinContext.mounted) return;
-    if (ref.read(Signer.activePubkeyProvider) == null) {
-      spinContext.showError(
-        'Profile setup failed',
-        description: 'Could not sign in with your new key.',
-        technicalDetails: 'activePubkey is null after onboarding sign-in',
-      );
-      return;
+      if (!spinContext.mounted) return;
+      if (ref.read(Signer.activePubkeyProvider) == null) {
+        spinContext.showError(
+          'Profile setup failed',
+          description: 'Could not sign in with your new key.',
+          technicalDetails: 'activePubkey is null after onboarding sign-in',
+        );
+        return;
+      }
     }
 
+    if (!spinContext.mounted) return;
     final saved = await showCompleteProfileModal(
       spinContext,
-      ref,
       initialName: displayName,
       miner: miner,
       nestedModal: true,
@@ -103,16 +106,23 @@ Future<void> _openCompleteProfile(
   }
 }
 
+// ignore: unused_element — used when [kOnboardingDeferSignIn] is false.
 /// Local sign-in so the complete-profile modal can open without relay publish.
 Future<void> _ensureOnboardingSignIn(
   WidgetRef ref, {
   required String nsec,
 }) async {
-  if (ref.read(Signer.activePubkeyProvider) != null) return;
+  final existingPubkey = ref.read(Signer.activePubkeyProvider);
+  if (existingPubkey != null) {
+    await repairLocalProfilesForPubkey(ref.asRef, existingPubkey);
+    return;
+  }
 
   await ref.read(localSignerServiceProvider).saveNsec(nsec);
   final hex = KeyGenerator.nsecToHex(nsec);
   final signer = Bip340PrivateKeySigner(hex, ref.asRef);
-  await signer.signIn();
+  await signer.signIn(setAsActive: false);
+  await repairLocalProfilesForPubkey(ref.asRef, signer.pubkey);
+  signer.setAsActivePubkey();
   await onSignInSuccess(ref.asRef);
 }

@@ -353,6 +353,8 @@ final authRestoreProvider = FutureProvider<bool>((ref) async {
   await ref.watch(storageReadyProvider.future);
   final amber = ref.read(amberSignerProvider);
   try {
+    await prepareSessionRestore(ref, amber);
+    ref.invalidate(storedSessionHintProvider);
     return await restoreSession(ref, amber);
   } catch (e, stack) {
     debugPrint('authRestoreProvider failed: $e\n$stack');

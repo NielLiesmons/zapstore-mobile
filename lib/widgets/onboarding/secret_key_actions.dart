@@ -7,11 +7,31 @@ import 'package:zapstore/theme.dart';
 import 'package:zapstore/utils/icons.dart';
 import 'package:zapstore/utils/text_styles.dart';
 
+Widget _scaleInChild(double t, Widget child) {
+  final fade = Curves.easeOut.transform(t);
+  final scale = 0.84 + 0.16 * Curves.easeOutBack.transform(t);
+  return Opacity(
+    opacity: fade,
+    child: Transform.scale(
+      scale: scale,
+      alignment: Alignment.center,
+      child: child,
+    ),
+  );
+}
+
 /// Copy + download row shown under the spin-key reel grid after reveal.
 class SecretKeyActionsRow extends HookWidget {
-  const SecretKeyActionsRow({super.key, required this.nsec});
+  const SecretKeyActionsRow({
+    super.key,
+    required this.nsec,
+    this.revealT = 1.0,
+  });
 
   final String nsec;
+
+  /// 0–1 progress from the slot-machine finale (scale + fade in).
+  final double revealT;
 
   @override
   Widget build(BuildContext context) {
@@ -31,19 +51,25 @@ class SecretKeyActionsRow extends HookWidget {
     return Row(
       children: [
         Expanded(
-          child: _SecretKeyActionPanel(
-            icon: LabIcons.copy,
-            label: copied.value ? 'Copied' : 'Copy',
-            onTap: onCopy,
+          child: _scaleInChild(
+            revealT,
+            _SecretKeyActionPanel(
+              icon: LabIcons.copy,
+              label: copied.value ? 'Copied' : 'Copy',
+              onTap: revealT > 0.85 ? onCopy : null,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _SecretKeyActionPanel(
-            icon: LabIcons.download,
-            iconThick: true,
-            label: 'Download',
-            onTap: () => shareNsecBackup(nsec),
+          child: _scaleInChild(
+            revealT,
+            _SecretKeyActionPanel(
+              icon: LabIcons.download,
+              iconThick: true,
+              label: 'Download',
+              onTap: revealT > 0.85 ? () => shareNsecBackup(nsec) : null,
+            ),
           ),
         ),
       ],
@@ -61,7 +87,7 @@ class _SecretKeyActionPanel extends StatefulWidget {
 
   final String icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool iconThick;
 
   @override
@@ -74,14 +100,17 @@ class _SecretKeyActionPanelState extends State<_SecretKeyActionPanel> {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
+    final enabled = widget.onTap != null;
 
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
+      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: enabled
+          ? (_) {
+              setState(() => _pressed = false);
+              widget.onTap!();
+            }
+          : null,
+      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 100),

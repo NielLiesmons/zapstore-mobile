@@ -187,7 +187,6 @@ class _SignedInContent extends ConsumerWidget {
                 context.push('/profile/user/$activePubkey'),
             onEditProfile: () => showEditProfileModal(
               context,
-              ref,
               title: 'Edit Profile',
               initialName: activeProfile?.name?.trim() ?? '',
               initialAbout: activeProfile?.about,

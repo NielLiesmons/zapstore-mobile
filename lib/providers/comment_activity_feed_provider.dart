@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:models/models.dart';
 import 'package:zapstore/providers/activity_feed_notifier.dart';
@@ -99,40 +100,45 @@ class ActivityFeedRoots {
 
 final activityFeedRootsProvider =
     Provider.autoDispose<ActivityFeedRoots>((ref) {
-  final paged = ref.watch(communityActivityFeedProvider);
-  final visibleLimit = ref.watch(communityActivityVisibleLimitProvider);
-  final comments = List<Comment>.from(paged.combined)
-    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-  final visible = comments.take(visibleLimit);
+  try {
+    final paged = ref.watch(communityActivityFeedProvider);
+    final visibleLimit = ref.watch(communityActivityVisibleLimitProvider);
+    final comments = List<Comment>.from(paged.combined)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final visible = comments.take(visibleLimit);
 
-  final rootIds = <String>{};
-  for (final c in visible) {
-    final id = commentCardRootQueryId(c.event);
-    if (id != null) rootIds.add(id);
-  }
+    final rootIds = <String>{};
+    for (final c in visible) {
+      final id = commentCardRootQueryId(c.event);
+      if (id != null) rootIds.add(id);
+    }
 
-  if (rootIds.isEmpty) {
+    if (rootIds.isEmpty) {
+      return const ActivityFeedRoots(loading: false, byQueryId: {});
+    }
+
+    final state = ref.watch(
+      queryKinds(
+        ids: rootIds,
+        limit: rootIds.length,
+        source: kCommentCardRootSource,
+        subscriptionPrefix: 'activity-feed-roots-batch',
+      ),
+    );
+
+    final map = <String, Model>{};
+    for (final raw in state.models) {
+      if (raw is! Model) continue;
+      map[raw.id] = raw;
+      map[raw.event.id] = raw;
+    }
+
+    final loading = state is StorageLoading &&
+        map.keys.toSet().intersection(rootIds).length < rootIds.length;
+
+    return ActivityFeedRoots(loading: loading, byQueryId: map);
+  } catch (e, stack) {
+    debugPrint('activityFeedRootsProvider failed: $e\n$stack');
     return const ActivityFeedRoots(loading: false, byQueryId: {});
   }
-
-  final state = ref.watch(
-    queryKinds(
-      ids: rootIds,
-      limit: rootIds.length,
-      source: kCommentCardRootSource,
-      subscriptionPrefix: 'activity-feed-roots-batch',
-    ),
-  );
-
-  final map = <String, Model>{};
-  for (final raw in state.models) {
-    if (raw is! Model) continue;
-    map[raw.id] = raw;
-    map[raw.event.id] = raw;
-  }
-
-  final loading = state is StorageLoading &&
-      map.keys.toSet().intersection(rootIds).length < rootIds.length;
-
-  return ActivityFeedRoots(loading: loading, byQueryId: map);
 });

@@ -13,11 +13,16 @@ const _bech32Chars = 'QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L';
 /// Width of the four-disk reel grid inside [SpinKeySlotMachine].
 const double kSpinKeySlotGridWidth = 252.0;
 
-/// Revealed panel width — grid plus finale [SpinKeySlotMachine] padding.
-const double kSpinKeyRevealedPanelWidth = kSpinKeySlotGridWidth + 20.0;
+/// Extra width from 0.33px borders on disk rows.
+const double _kSpinKeyBorderSlack = 1.0;
 
-/// Grid + gap + handle — width while the lever is still on screen.
-const double kSpinKeyActiveRowWidth = kSpinKeySlotGridWidth + 16 + 48;
+/// Revealed panel width — grid plus finale [SpinKeySlotMachine] padding.
+const double kSpinKeyRevealedPanelWidth =
+    kSpinKeySlotGridWidth + _kSpinKeyBorderSlack + 20.0;
+
+/// Grid + gap + handle (+ slack for row borders).
+const double kSpinKeyActiveRowWidth =
+    kSpinKeySlotGridWidth + _kSpinKeyBorderSlack + 16 + 48;
 
 const _totalHeight = 296.0;
 const _rowGap = 16.0;
@@ -35,7 +40,10 @@ const _slotTop = (_totalHeight - _slotHeight) / 2;
 const _spinDurationMs = 3800;
 const _spinStaggerMs = 220;
 const _spinSequenceLength = 28;
-const _finaleAnimMs = 520;
+
+/// Finale duration — keep in sync with [_SpinKeyMorphFooter].
+const kSpinKeyFinaleAnimMs = 520;
+const _finaleAnimMs = kSpinKeyFinaleAnimMs;
 const _defaultSettleDelay = Duration(milliseconds: 1200);
 
 /// Opacity for nsec symbols in the center viewing window.
@@ -200,12 +208,22 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
     }
   }
 
+  @visibleForTesting
+  double get finaleProgress => _finaleAnim.value;
+
+  @visibleForTesting
+  void debugStartFinale() => _startFinaleAnimation();
+
   void _startFinaleAnimation() {
     if (_finalePlayed || _finaleCtrl.isAnimating) return;
     _finalePlayed = true;
-    widget.onFinaleStarted?.call();
     _finaleCtrl.forward(from: 0).then((_) {
       if (mounted) widget.onFinaleComplete?.call();
+    });
+    // Notify parent after the first animation tick so a title swap cannot
+    // remount this widget before [_finaleCtrl] starts advancing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onFinaleStarted?.call();
     });
   }
 
@@ -576,7 +594,7 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
       width: 48,
       height: _totalHeight,
       child: Stack(
-        clipBehavior: Clip.none,
+        clipBehavior: Clip.hardEdge,
         children: [
           Positioned(
             left: 8,
@@ -693,18 +711,18 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    final finaleT = _finaleAnim.value;
-    final handleT = (1 - finaleT).clamp(0.0, 1.0);
+    final t = _finaleAnim.value;
+    final handleT = (1 - t).clamp(0.0, 1.0);
     final handleWidth = 48.0 * handleT;
     final handleGap = 16.0 * handleT;
-    final handleInteractive = !_isSpinning && !_hasSpun && finaleT <= 0;
+    final handleInteractive = !_isSpinning && !_hasSpun && t <= 0;
 
     final gridPanel = Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: Color.lerp(Colors.transparent, c.white8, finaleT),
+        color: Color.lerp(Colors.transparent, c.white8, t),
       ),
-      padding: EdgeInsets.all(10 * finaleT),
+      padding: EdgeInsets.all(10 * t),
       child: _buildDiskGrid(c),
     );
 
@@ -736,10 +754,8 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
       ],
     );
 
-    // Spin row is wider than the revealed panel — never clamp both to 272px.
-    final rowWidth = handleT > 0.001
-        ? kSpinKeyActiveRowWidth
-        : kSpinKeyRevealedPanelWidth;
+    final rowWidth = kSpinKeyActiveRowWidth +
+        (kSpinKeyRevealedPanelWidth - kSpinKeyActiveRowWidth) * t;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -748,15 +764,12 @@ class SpinKeySlotMachineState extends State<SpinKeySlotMachine>
           width: rowWidth,
           child: Center(child: reelRow),
         ),
-        if (finaleT > 0.01)
+        if (_finalePlayed || t > 0)
           Padding(
-            padding: EdgeInsets.only(top: 16 * finaleT),
-            child: Opacity(
-              opacity: finaleT,
-              child: SizedBox(
-                width: kSpinKeyRevealedPanelWidth,
-                child: SecretKeyActionsRow(nsec: _nsec),
-              ),
+            padding: EdgeInsets.only(top: 16 * t),
+            child: SizedBox(
+              width: kSpinKeyRevealedPanelWidth,
+              child: SecretKeyActionsRow(nsec: _nsec, revealT: t),
             ),
           ),
       ],
