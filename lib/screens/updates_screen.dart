@@ -358,6 +358,7 @@ List<Widget> _buildNewTabSections({
     required List<App> apps,
     required String keyPrefix,
     List<App> updateAllApps = const [],
+    double extraTopPadding = 0,
   }) {
     if (apps.isEmpty) return;
     if (needsDivider) {
@@ -368,6 +369,7 @@ List<Widget> _buildNewTabSections({
         child: _UpdatesSectionHeader(
           title: title,
           updateAllApps: updateAllApps,
+          extraTopPadding: extraTopPadding,
         ),
       ),
     );
@@ -391,6 +393,7 @@ List<Widget> _buildNewTabSections({
     apps: manualUpdates,
     keyPrefix: 'manual',
     updateAllApps: manualUpdates,
+    extraTopPadding: 16,
   );
 
   return slivers;
@@ -400,10 +403,12 @@ class _UpdatesSectionHeader extends ConsumerWidget {
   const _UpdatesSectionHeader({
     required this.title,
     this.updateAllApps = const [],
+    this.extraTopPadding = 0,
   });
 
   final String title;
   final List<App> updateAllApps;
+  final double extraTopPadding;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -411,7 +416,7 @@ class _UpdatesSectionHeader extends ConsumerWidget {
     final showUpdateAll = updateAllApps.length >= 2;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
+      padding: EdgeInsets.fromLTRB(14, 4 + extraTopPadding, 14, 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

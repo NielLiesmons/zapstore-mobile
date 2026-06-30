@@ -144,63 +144,94 @@ class LabLabel extends StatelessWidget {
         : baseColor.withValues(alpha: 0.16);
     final textColor = (isSelected || isEmphasized) ? c.white : c.white66;
 
+    final double height;
+    final double houseWidth;
+    final double leftRadius;
+    final double paddingLeft;
+    final double selectedPaddingLeft;
     final double checkIconSize;
     final double checkGap;
     final TextStyle textStyle;
-    final double selectedPaddingLeft;
 
     switch (size) {
       case LabLabelSize.xs:
+        height = 20;
+        houseWidth = 14;
+        leftRadius = 5;
+        paddingLeft = 6;
+        selectedPaddingLeft = 4;
         checkIconSize = 8;
         checkGap = 2;
         textStyle = LabTextStyles.reg11;
-        selectedPaddingLeft = 4;
       case LabLabelSize.small:
+        height = 24;
+        houseWidth = 18;
+        leftRadius = 8;
+        paddingLeft = 8;
+        selectedPaddingLeft = 6;
         checkIconSize = 10;
         checkGap = 3;
         textStyle = LabTextStyles.reg11;
-        selectedPaddingLeft = 6;
       case LabLabelSize.defaultSize:
+        height = 32;
+        houseWidth = 24;
+        leftRadius = 12;
+        paddingLeft = 12;
+        selectedPaddingLeft = 8;
         checkIconSize = 12;
         checkGap = 5;
         textStyle = LabTextStyles.reg13;
-        selectedPaddingLeft = 8;
     }
 
-    final metrics = LabLabelMetrics.forSize(size);
     final effectivePaddingLeft =
-        isSelected ? selectedPaddingLeft : metrics.paddingLeft;
+        isSelected ? selectedPaddingLeft : paddingLeft;
 
     return GestureDetector(
       onTap: onTap,
-      child: IntrinsicWidth(
-        child: LabLabelChrome(
-          backgroundColor: bgColor,
-          size: size,
-          paddingLeft: effectivePaddingLeft,
-          maxBodyWidth: 200,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (isSelected) ...[
-                LabIcon(
-                  LabIcons.check,
-                  size: checkIconSize,
-                  color: textColor,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IntrinsicWidth(
+            child: Container(
+              height: height,
+              constraints: const BoxConstraints(maxWidth: 200),
+              padding: EdgeInsets.only(left: effectivePaddingLeft, right: 4),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(leftRadius),
+                  bottomLeft: Radius.circular(leftRadius),
                 ),
-                SizedBox(width: checkGap),
-              ],
-              Text(
-                text,
-                style: textStyle.copyWith(color: textColor),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-                softWrap: false,
               ),
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (isSelected) ...[
+                    LabIcon(
+                      LabIcons.check,
+                      size: checkIconSize,
+                      color: textColor,
+                    ),
+                    SizedBox(width: checkGap),
+                  ],
+                  Text(
+                    text,
+                    style: textStyle.copyWith(color: textColor),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+          LabelHouseTip(
+            color: bgColor,
+            height: height,
+            width: houseWidth,
+          ),
+        ],
       ),
     );
   }

@@ -256,16 +256,17 @@ class _VersionPill extends StatelessWidget {
   }
 }
 
-/// Divider between update rows.
+/// Divider between update rows — full screen width.
 class UpdateAppRowDivider extends StatelessWidget {
   const UpdateAppRowDivider({super.key});
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<LabColors>()!;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: UpdateAppRow.horizontalPadding),
-      child: Container(height: LabStroke.thin, color: c.white11),
+    return Container(
+      width: double.infinity,
+      height: LabStroke.thin,
+      color: c.white11,
     );
   }
 }
