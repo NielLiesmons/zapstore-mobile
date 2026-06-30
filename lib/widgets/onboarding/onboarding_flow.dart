@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:models/models.dart';
-import 'package:zapstore/constants/app_constants.dart';
-import 'package:zapstore/services/auth_session_service.dart';
-import 'package:zapstore/services/local_signer_service.dart';
 import 'package:zapstore/services/profile_pow_miner.dart';
-import 'package:zapstore/utils/extensions.dart';
 import 'package:zapstore/utils/key_generator.dart';
-import 'package:zapstore/services/notification_service.dart';
 import 'package:zapstore/widgets/onboarding/complete_profile_modal.dart';
 import 'package:zapstore/widgets/onboarding/new_profile_modal.dart';
 import 'package:zapstore/widgets/onboarding/spin_key_modal.dart';
@@ -39,9 +33,7 @@ void launchProfileOnboarding(BuildContext context, WidgetRef ref) {
         onCompleteProfile: (spinContext) => _openCompleteProfile(
           parentContext: parentContext,
           spinContext: spinContext,
-          ref: ref,
           displayName: name,
-          nsec: nsec,
           miner: miner,
         ),
         onUseExistingKey: () {
@@ -60,68 +52,22 @@ void launchProfileOnboarding(BuildContext context, WidgetRef ref) {
 Future<void> _openCompleteProfile({
   required BuildContext parentContext,
   required BuildContext spinContext,
-  required WidgetRef ref,
   required String displayName,
-  required String nsec,
   required ProfilePowMiner miner,
 }) async {
   Navigator.of(spinContext).pop();
 
-  try {
-    if (!kOnboardingDeferSignIn) {
-      await _ensureOnboardingSignIn(ref, nsec: nsec);
+  if (!parentContext.mounted) return;
+  final saved = await showCompleteProfileModal(
+    parentContext,
+    initialName: displayName,
+    miner: miner,
+    nestedModal: false,
+    publishOnSave: false,
+  );
 
-      if (!parentContext.mounted) return;
-      if (ref.read(Signer.activePubkeyProvider) == null) {
-        parentContext.showError(
-          'Profile setup failed',
-          description: 'Could not sign in with your new key.',
-          technicalDetails: 'activePubkey is null after onboarding sign-in',
-        );
-        return;
-      }
-    }
-
-    if (!parentContext.mounted) return;
-    final saved = await showCompleteProfileModal(
-      parentContext,
-      initialName: displayName,
-      miner: miner,
-      nestedModal: false,
-      publishOnSave: false,
-    );
-
-    if (saved && parentContext.mounted) {
-      Navigator.of(parentContext).pop();
-      if (parentContext.mounted) parentContext.go('/');
-    }
-  } catch (e) {
-    if (parentContext.mounted) {
-      parentContext.showError(
-        'Profile setup failed',
-        technicalDetails: '$e',
-      );
-    }
+  if (saved && parentContext.mounted) {
+    Navigator.of(parentContext).pop();
+    if (parentContext.mounted) parentContext.go('/');
   }
-}
-
-// ignore: unused_element — used when [kOnboardingDeferSignIn] is false.
-/// Local sign-in so the complete-profile modal can open without relay publish.
-Future<void> _ensureOnboardingSignIn(
-  WidgetRef ref, {
-  required String nsec,
-}) async {
-  final existingPubkey = ref.read(Signer.activePubkeyProvider);
-  if (existingPubkey != null) {
-    await repairLocalProfilesForPubkey(ref.asRef, existingPubkey);
-    return;
-  }
-
-  await ref.read(localSignerServiceProvider).saveNsec(nsec);
-  final hex = KeyGenerator.nsecToHex(nsec);
-  final signer = Bip340PrivateKeySigner(hex, ref.asRef);
-  await signer.signIn(setAsActive: false);
-  await repairLocalProfilesForPubkey(ref.asRef, signer.pubkey);
-  signer.setAsActivePubkey();
-  await onSignInSuccess(ref.asRef);
 }

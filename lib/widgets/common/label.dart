@@ -26,6 +26,98 @@ import 'package:zapstore/utils/text_styles.dart';
 
 enum LabLabelSize { defaultSize, small, xs }
 
+/// Layout tokens shared by [LabLabel] and label-shaped controls (e.g. forum
+/// post modal labels trigger).
+class LabLabelMetrics {
+  const LabLabelMetrics({
+    required this.height,
+    required this.houseWidth,
+    required this.leftRadius,
+    required this.paddingLeft,
+    required this.paddingRight,
+  });
+
+  final double height;
+  final double houseWidth;
+  final double leftRadius;
+  final double paddingLeft;
+  final double paddingRight;
+
+  static LabLabelMetrics forSize(LabLabelSize size) => switch (size) {
+        LabLabelSize.xs => const LabLabelMetrics(
+            height: 20,
+            houseWidth: 14,
+            leftRadius: 5,
+            paddingLeft: 6,
+            paddingRight: 4,
+          ),
+        LabLabelSize.small => const LabLabelMetrics(
+            height: 24,
+            houseWidth: 18,
+            leftRadius: 8,
+            paddingLeft: 8,
+            paddingRight: 4,
+          ),
+        LabLabelSize.defaultSize => const LabLabelMetrics(
+            height: 32,
+            houseWidth: 24,
+            leftRadius: 12,
+            paddingLeft: 12,
+            paddingRight: 4,
+          ),
+      };
+}
+
+/// Label body + house tip — same geometry as [LabLabel], arbitrary [child].
+class LabLabelChrome extends StatelessWidget {
+  const LabLabelChrome({
+    super.key,
+    required this.backgroundColor,
+    required this.child,
+    this.size = LabLabelSize.defaultSize,
+    this.paddingLeft,
+    this.maxBodyWidth,
+  });
+
+  final Color backgroundColor;
+  final Widget child;
+  final LabLabelSize size;
+  final double? paddingLeft;
+  final double? maxBodyWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = LabLabelMetrics.forSize(size);
+    final effectiveLeft = paddingLeft ?? m.paddingLeft;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          height: m.height,
+          constraints: maxBodyWidth != null
+              ? BoxConstraints(maxWidth: maxBodyWidth!)
+              : null,
+          padding: EdgeInsets.only(left: effectiveLeft, right: m.paddingRight),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.horizontal(
+              left: Radius.circular(m.leftRadius),
+            ),
+          ),
+          alignment: Alignment.centerLeft,
+          child: child,
+        ),
+        LabelHouseTip(
+          color: backgroundColor,
+          height: m.height,
+          width: m.houseWidth,
+        ),
+      ],
+    );
+  }
+}
+
 class LabLabel extends StatelessWidget {
   const LabLabel(
     this.text, {
@@ -52,100 +144,86 @@ class LabLabel extends StatelessWidget {
         : baseColor.withValues(alpha: 0.16);
     final textColor = (isSelected || isEmphasized) ? c.white : c.white66;
 
-    final double height;
-    final double houseWidth;
-    final double leftRadius;
-    final double paddingLeft;
-    final double selectedPaddingLeft;
     final double checkIconSize;
     final double checkGap;
     final TextStyle textStyle;
+    final double selectedPaddingLeft;
 
     switch (size) {
       case LabLabelSize.xs:
-        height = 20;
-        houseWidth = 14;
-        leftRadius = 5;
-        paddingLeft = 6;
-        selectedPaddingLeft = 4;
         checkIconSize = 8;
         checkGap = 2;
         textStyle = LabTextStyles.reg11;
+        selectedPaddingLeft = 4;
       case LabLabelSize.small:
-        height = 24;
-        houseWidth = 18;
-        leftRadius = 8;
-        paddingLeft = 8;
-        selectedPaddingLeft = 6;
         checkIconSize = 10;
         checkGap = 3;
-        // Slightly smaller than defaultSize (reg13) — matches webapp's 12px
-        // font-size for .size-small .label-text.
         textStyle = LabTextStyles.reg11;
+        selectedPaddingLeft = 6;
       case LabLabelSize.defaultSize:
-        height = 32;
-        houseWidth = 24;
-        leftRadius = 12;
-        paddingLeft = 12;
-        selectedPaddingLeft = 8;
         checkIconSize = 12;
         checkGap = 5;
         textStyle = LabTextStyles.reg13;
+        selectedPaddingLeft = 8;
     }
 
+    final metrics = LabLabelMetrics.forSize(size);
     final effectivePaddingLeft =
-        isSelected ? selectedPaddingLeft : paddingLeft;
+        isSelected ? selectedPaddingLeft : metrics.paddingLeft;
 
     return GestureDetector(
       onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Text content area — IntrinsicWidth forces the Container to hug
-          // its text content rather than expanding to the ConstrainedBox max.
-          IntrinsicWidth(
-            child: Container(
-              height: height,
-              constraints: const BoxConstraints(maxWidth: 200),
-              padding: EdgeInsets.only(left: effectivePaddingLeft, right: 4),
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(leftRadius),
-                  bottomLeft: Radius.circular(leftRadius),
+      child: IntrinsicWidth(
+        child: LabLabelChrome(
+          backgroundColor: bgColor,
+          size: size,
+          paddingLeft: effectivePaddingLeft,
+          maxBodyWidth: 200,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (isSelected) ...[
+                LabIcon(
+                  LabIcons.check,
+                  size: checkIconSize,
+                  color: textColor,
                 ),
+                SizedBox(width: checkGap),
+              ],
+              Text(
+                text,
+                style: textStyle.copyWith(color: textColor),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                softWrap: false,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Check icon — shown only when selected (webapp parity)
-                  if (isSelected) ...[
-                    LabIcon(
-                      LabIcons.check,
-                      size: checkIconSize,
-                      color: textColor,
-                    ),
-                    SizedBox(width: checkGap),
-                  ],
-                  Text(
-                    text,
-                    style: textStyle.copyWith(color: textColor),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                    softWrap: false,
-                  ),
-                ],
-              ),
-            ),
+            ],
           ),
-          // House / arrow shape
-          CustomPaint(
-            size: Size(houseWidth, height),
-            painter: _HouseShapePainter(color: bgColor, totalHeight: height),
-          ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+/// Label / tag arrow tip — webapp `labels-trigger-tip` SVG (24×32 reference).
+class LabelHouseTip extends StatelessWidget {
+  const LabelHouseTip({
+    super.key,
+    required this.color,
+    this.height = 32,
+    this.width = 24,
+  });
+
+  final Color color;
+  final double height;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(width, height),
+      painter: _HouseShapePainter(color: color, totalHeight: height),
     );
   }
 }

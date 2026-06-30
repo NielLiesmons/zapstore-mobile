@@ -131,9 +131,9 @@ const Set<String> kOnboardingProfileRelays = {kOnboardingProfileRelayGroup};
 /// Primal Blossom base URL for onboarding profile pictures.
 const kPrimalBlossomUrl = 'https://blossom.primal.net';
 
-/// Skip onboarding sign-in / local save so the name → spin → complete-profile
-/// UI can be tested without touching the session. Flip off before shipping.
-const kOnboardingDeferSignIn = false;
+/// Skip sign-in / publish during onboarding “Your Profile” so the flow is
+/// demoable without a live profile. Does not affect Amber / existing-key sign-in.
+const kOnboardingDeferSignIn = true;
 
 /// Amber signer package ID
 const kAmberPackageId = 'com.greenart7c3.nostrsigner';

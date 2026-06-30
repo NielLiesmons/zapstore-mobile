@@ -6,7 +6,7 @@ import 'package:zapstore/utils/paged_subscription_notifier.dart';
 /// Relay page size for activity feeds (webapp ACTIVITY_INITIAL_SEED_LIMIT ≈ 60).
 const int kActivityFeedPageSize = 60;
 
-/// Community-wide kind-1111 activity on the Zapstore relay.
+/// Community-wide kind-1111 activity on the Zapstore relay only.
 class CommunityActivityFeedNotifier extends PagedSubscriptionNotifier<Comment> {
   CommunityActivityFeedNotifier(super.ref);
 
