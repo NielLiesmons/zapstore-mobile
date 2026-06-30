@@ -108,26 +108,24 @@ class _UpdatesHeader extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    SizedBox(
-                      width: 168,
-                      child: Selector(
-                        initialIndex: tabIndex,
-                        white8Selection: true,
-                        containerRadius: kCommunitySelectorHeight / 2,
-                        tabs: [
-                          SelectorTab(
-                            label: 'New',
-                            count: newCount == 0 ? null : newCount,
-                          ),
-                          SelectorTab(
-                            label: 'Installed',
-                            count: categorized.upToDateApps.isEmpty
-                                ? null
-                                : categorized.upToDateApps.length,
-                          ),
-                        ],
-                        onChanged: onTabChanged,
-                      ),
+                    Selector(
+                      initialIndex: tabIndex,
+                      hugContent: true,
+                      white8Selection: true,
+                      containerRadius: kCommunitySelectorHeight / 2,
+                      tabs: [
+                        SelectorTab(
+                          label: 'New',
+                          count: newCount == 0 ? null : newCount,
+                        ),
+                        SelectorTab(
+                          label: 'Installed',
+                          count: categorized.upToDateApps.isEmpty
+                              ? null
+                              : categorized.upToDateApps.length,
+                        ),
+                      ],
+                      onChanged: onTabChanged,
                     ),
                   ],
                 ),

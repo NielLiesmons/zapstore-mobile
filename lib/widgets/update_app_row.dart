@@ -148,15 +148,22 @@ class _VersionPill extends StatelessWidget {
   final bool hasUpdate;
   final VoidCallback? onTap;
 
+  static const _kMaxVersionChars = 8;
+
+  String _trim(String value) {
+    if (value.length <= _kMaxVersionChars) return value;
+    return '${value.substring(0, _kMaxVersionChars - 1)}…';
+  }
+
   String _displayVersion(String? version, int? code, {required bool showCode}) {
     final trimmed = version?.trim();
     if (trimmed == null || trimmed.isEmpty) {
-      return code?.toString() ?? '';
+      return code == null ? '' : _trim(code.toString());
     }
     if (showCode && code != null) {
-      return '$trimmed ($code)';
+      return _trim('$trimmed ($code)');
     }
-    return trimmed;
+    return _trim(trimmed);
   }
 
   @override

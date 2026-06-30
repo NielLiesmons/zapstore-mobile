@@ -22,6 +22,7 @@ class Selector extends StatefulWidget {
     this.dark = false,
     this.white8Selection = false,
     this.containerRadius,
+    this.hugContent = false,
     this.onChanged,
   });
 
@@ -46,6 +47,9 @@ class Selector extends StatefulWidget {
 
   /// Outer container corner radius. Defaults to 14px (fully rounded pill use 21).
   final double? containerRadius;
+
+  /// When true, each tab sizes to its label + count instead of equal width.
+  final bool hugContent;
 
   final ValueChanged<int>? onChanged;
 
@@ -83,10 +87,12 @@ class _SelectorState extends State<Selector> {
         borderRadius: BorderRadius.circular(outerRadius),
       ),
       child: Row(
+        mainAxisSize:
+            widget.hugContent ? MainAxisSize.min : MainAxisSize.max,
         children: [
           for (int i = 0; i < widget.tabs.length; i++)
-            Expanded(
-              child: SelectorButton(
+            if (widget.hugContent)
+              SelectorButton(
                 selected: widget.tabs[i].selectedContent,
                 unselected: widget.tabs[i].unselectedContent,
                 isSelected: i == _selectedIndex,
@@ -95,12 +101,29 @@ class _SelectorState extends State<Selector> {
                 small: widget.small,
                 dark: widget.dark,
                 white8Selection: widget.white8Selection,
+                horizontalPadding: 12,
                 onTap: () {
                   setState(() => _selectedIndex = i);
                   widget.onChanged?.call(i);
                 },
+              )
+            else
+              Expanded(
+                child: SelectorButton(
+                  selected: widget.tabs[i].selectedContent,
+                  unselected: widget.tabs[i].unselectedContent,
+                  isSelected: i == _selectedIndex,
+                  emphasized: widget.emphasized,
+                  emphasizedDimmed: widget.emphasizedDimmed,
+                  small: widget.small,
+                  dark: widget.dark,
+                  white8Selection: widget.white8Selection,
+                  onTap: () {
+                    setState(() => _selectedIndex = i);
+                    widget.onChanged?.call(i);
+                  },
+                ),
               ),
-            ),
         ],
       ),
     );
@@ -119,6 +142,7 @@ class SelectorButton extends StatefulWidget {
     this.small = false,
     this.dark = false,
     this.white8Selection = false,
+    this.horizontalPadding = 0,
     this.onTap,
   });
 
@@ -136,6 +160,9 @@ class SelectorButton extends StatefulWidget {
 
   /// Matches [Selector.white8Selection] on a gray66 container.
   final bool white8Selection;
+
+  /// Inner horizontal padding — used when [Selector.hugContent] is true.
+  final double horizontalPadding;
 
   final VoidCallback? onTap;
 
@@ -167,6 +194,9 @@ class _SelectorButtonState extends State<SelectorButton> {
         duration: const Duration(milliseconds: 100),
         child: Container(
           height: height,
+          padding: widget.horizontalPadding > 0
+              ? EdgeInsets.symmetric(horizontal: widget.horizontalPadding)
+              : null,
           decoration: BoxDecoration(
             gradient: widget.isSelected && widget.emphasized
                 ? (widget.emphasizedDimmed ? c.blurple66 : c.blurple)
@@ -178,6 +208,7 @@ class _SelectorButtonState extends State<SelectorButton> {
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children:
                 widget.isSelected ? widget.selected : widget.unselected,
           ),
